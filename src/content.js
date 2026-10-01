@@ -1,6 +1,6 @@
 import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
-import { hideTotpBar, installQrPage, qrImageRect, selectQrRegion, showTotpBar } from "./qr-page.js";
+import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
 
 const UPSTREAM_USER = new Set(
   [...AutoFillConstants.UsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
@@ -268,6 +268,16 @@ function domDistance(a, b) {
   return all.indexOf(a) - all.indexOf(b);
 }
 
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text)));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function passwordsMatch(hash, password) {
+  if (!hash || !password) return false;
+  return hash === (await sha256Hex(password));
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== "fill") return false;
   // host must match the origin the background pinned the cred to, so site A's cred never lands on site B
@@ -279,10 +289,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: false, filled: false, error: "origin mismatch" });
     return true;
   }
-  fillCredentials(msg.username, msg.password, liveField(fillAnchor)).then((filled) => {
+  fillCredentials(msg.username, msg.password, liveField(fillAnchor)).then(async (filled) => {
     // a submit right after must not re-offer to save this existing login
     if (filled) {
-      lastAutofill = { host: location.hostname, username: msg.username, password: msg.password, at: Date.now() };
+      let passwordHash = "";
+      try {
+        if (msg.password) passwordHash = await sha256Hex(msg.password);
+      } catch {}
+      lastAutofill = {
+        host: location.hostname,
+        username: msg.username,
+        passwordHash,
+        at: Date.now(),
+      };
       sendResponse({ ok: true, filled: true });
       return;
     }
@@ -324,11 +343,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (suggestionEl && typeof lockedResume === "function") lockedResume();
       return false;
     }
-    case "findTotpUri": {
-      if (window !== window.top) return false;
-      sendResponse({ uris: findTotpUris() });
-      return true;
-    }
     case "showSaveBar": {
       if (window !== window.top) return false;
       showSaveBar(msg);
@@ -341,11 +355,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     case "qrImageRect": {
       sendResponse({ rect: qrImageRect() });
-      return true;
-    }
-    case "startQrSelect": {
-      if (window !== window.top) return false;
-      selectQrRegion().then((rect) => sendResponse(rect ? { ok: true, rect } : { ok: true, cancelled: true }));
       return true;
     }
     case "showTotpBar": {
@@ -1007,7 +1016,7 @@ function liveField(field) {
   return anchorPwField(document) || field;
 }
 
-function fillGeneratedPassword(field, pw) {
+async function fillGeneratedPassword(field, pw) {
   field = liveField(field);
   const targets = new Set([field]);
   for (const p of Array.from(document.querySelectorAll('input[type="password"]')).filter(isFillable)) {
@@ -1019,7 +1028,9 @@ function fillGeneratedPassword(field, pw) {
     setValue(t, pw);
     everPassword.add(t);
   }
-  lastGenerated = { host: location.hostname, password: pw, at: Date.now() };
+  try {
+    lastGenerated = { host: location.hostname, passwordHash: await sha256Hex(pw), at: Date.now() };
+  } catch {}
 }
 
 // More than six saved logins scrolls inside the menu. Search is a case-insensitive
@@ -1441,27 +1452,6 @@ async function buildOneTimeCodeSuggestion(field) {
   positionBox();
 }
 
-// no image or QR scanning here, on purpose
-function findTotpUris() {
-  const found = [];
-  const add = (s) => {
-    s = (s || "").trim();
-    if (/^(apple-)?otpauth:\/\/[^\s"'<>]+$/i.test(s) && !found.includes(s) && found.length < 3) found.push(s);
-  };
-  for (const a of document.querySelectorAll('a[href^="otpauth://"], a[href^="apple-otpauth://"]')) add(a.getAttribute("href"));
-  for (const i of document.querySelectorAll("input, textarea")) if (/^(apple-)?otpauth:/i.test(i.value || "")) add(i.value);
-  const re = /(?:apple-)?otpauth:\/\/[^\s"'<>]+/gi;
-  const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
-  let n;
-  let budget = 5000; // keeps a huge page cheap
-  while ((n = walker.nextNode()) && budget-- > 0) {
-    const t = n.nodeValue;
-    if (!t || t.length < 12 || !/otpauth:/i.test(t)) continue;
-    for (const m of t.match(re) || []) add(m);
-  }
-  return found;
-}
-
 function onShortcut() {
   const a = deepActiveElement();
   if (a instanceof HTMLInputElement && isVisible(a) && frameIsSafe()) {
@@ -1551,7 +1541,7 @@ async function onFocusIn(e) {
       lastAutofill &&
       lastAutofill.host === location.hostname &&
       Date.now() - lastAutofill.at < 8000 &&
-      (v === (lastAutofill.username || "") || v === (lastAutofill.password || ""));
+      (v === (lastAutofill.username || "") || (await passwordsMatch(lastAutofill.passwordHash, v)));
     if (justOurs) {
       removeSuggestion();
       return;
@@ -1701,25 +1691,33 @@ async function maybeOfferSave(scope) {
   const cred = collectSubmittedCredentials(scope);
   if (!cred || !cred.password) return;
 
-  const genPw =
-    lastGenerated && Date.now() - lastGenerated.at < 600000 ? lastGenerated.password : null;
-  const generated = !!genPw && (cred.allPasswords || []).includes(genPw);
-  const savePassword = generated ? genPw : cred.password;
+  let generated = false;
+  let savePassword = cred.password;
+  if (lastGenerated && lastGenerated.passwordHash && Date.now() - lastGenerated.at < 600000) {
+    for (const candidate of cred.allPasswords || []) {
+      if (await passwordsMatch(lastGenerated.passwordHash, candidate)) {
+        generated = true;
+        savePassword = candidate;
+        break;
+      }
+    }
+  }
 
   // a login we just autofilled unchanged is not a save
   if (
     !generated &&
     lastAutofill &&
     lastAutofill.host === location.hostname &&
-    lastAutofill.password === cred.password &&
-    Date.now() - lastAutofill.at < 300000
+    lastAutofill.passwordHash &&
+    Date.now() - lastAutofill.at < 300000 &&
+    (await passwordsMatch(lastAutofill.passwordHash, cred.password))
   ) {
     console.debug("[PassBridge] save skipped: recently autofilled");
     return;
   }
 
   // 15s covers the click+submit+Enter burst ("shows up twice" fix)
-  const key = `${location.hostname} ${cred.username || savePassword}`;
+  const key = `${location.hostname} ${cred.username || ""}`;
   const now = Date.now();
   if (key === lastSaveKey && now - lastSaveAt < 15000) return;
   lastSaveKey = key;

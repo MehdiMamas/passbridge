@@ -4,8 +4,8 @@ import { createRoot } from "react-dom/client";
 const DEFAULTS = {
   inlineMenuVisibility: "on-focus",
   autofillOnPageLoad: false,
-  copyTotpAfterFill: true,
-  clipboardClearMs: 30000,
+  copyTotpAfterFill: false,
+  clipboardClearMs: 10000,
   enableContextMenu: true,
   enableBadge: true,
   askToSave: true,
@@ -75,6 +75,10 @@ function OptionsApp() {
   useEffect(() => {
     chrome.storage.local.get(DEFAULTS, (saved) => {
       const next = { ...DEFAULTS, ...saved };
+      if (!Number(next.clipboardClearMs)) {
+        next.clipboardClearMs = DEFAULTS.clipboardClearMs;
+        chrome.storage.local.set({ clipboardClearMs: next.clipboardClearMs });
+      }
       setSettings(next);
       setExcludedText((next.excludedDomains || []).join("\n"));
       setBlockedText((next.blockedDomains || []).join("\n"));
@@ -141,13 +145,15 @@ function OptionsApp() {
           onBlur={() => persist({ excludedDomains: lines(excludedText) })}
         />
         {check("copyTotpAfterFill", "Copy verification code after fill")}
-        <Row label="Clear clipboard">
+        <Row
+          label="Clear clipboard"
+          note="Windows clipboard history and clipboard apps keep their own copy until you turn history off."
+        >
           <select
             value={String(settings.clipboardClearMs)}
             onChange={(e) => persist({ clipboardClearMs: Number(e.target.value) })}
             className="rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] px-2 py-1"
           >
-            <option value="0">Never</option>
             <option value="10000">10 seconds</option>
             <option value="20000">20 seconds</option>
             <option value="30000">30 seconds</option>

@@ -9,7 +9,7 @@ const ok = (n, c, d) => { results.push({ n, c }); console.log(`${c ? "PASS" : "F
 const ctx = await chromium.launchPersistentContext("/tmp/op-otp-" + Date.now(), {
   headless: false, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--headless=new", "--no-first-run"],
 });
-const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }).catch(() => null));
+ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }).catch(() => null));
 const box = (page) => page.locator('[data-passbridge="suggestions"]');
 const txt = async (page) => (await box(page).count()) ? (await box(page).innerText()).replace(/\s+/g, " ").trim() : "";
 
@@ -44,35 +44,6 @@ const txt = async (page) => (await box(page).count()) ? (await box(page).innerTe
   await page.close();
 }
 
-// issue #2: a real click on a row must not fall through to a link behind the dropdown
-{
-  const page = await ctx.newPage();
-  await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(300);
-  await page.focus('input[name="username"]');
-  await page.waitForTimeout(600);
-  const row = box(page).locator("text=test@example.com");
-  const r = await row.boundingBox();
-  ok("clickthrough: row is up", !!r, "no row");
-  if (r) {
-    await page.evaluate(({ x, y, w, h }) => {
-      const a = document.createElement("a");
-      a.href = "#clicked-through";
-      a.id = "behind";
-      a.textContent = "forgot password";
-      Object.assign(a.style, { position: "fixed", left: x + "px", top: y + "px", width: w + "px", height: h + "px", zIndex: "2147483646", display: "block", background: "pink" });
-      document.body.appendChild(a);
-    }, { x: r.x, y: r.y, w: r.width, h: r.height });
-    await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
-    await page.waitForTimeout(500);
-    const hash = await page.evaluate(() => location.hash);
-    const val = await page.inputValue('input[name="username"]');
-    ok("clickthrough: click did not reach the link behind", hash !== "#clicked-through", `hash="${hash}"`);
-    ok("clickthrough: the row still filled", val === "test@example.com", `value="${val}"`);
-  }
-  await page.close();
-}
-
 {
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
@@ -82,36 +53,6 @@ const txt = async (page) => (await box(page).count()) ? (await box(page).innerTe
   const t = await txt(page);
   ok("login field: no code row", /test@example\.com/.test(t) && !/Verification code/.test(t), `got "${t}"`);
   await page.close();
-}
-
-if (sw) {
-  const page = await ctx.newPage();
-  await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(300);
-  await page.click("body");
-  await page.waitForTimeout(200);
-  await sw.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({ url: "*://127.0.0.1/login-standard.html" });
-    await chrome.tabs.sendMessage(tab.id, { type: "shortcut" });
-  });
-  await page.waitForTimeout(600);
-  const focused = await page.evaluate(() => document.activeElement?.name || "");
-  ok("shortcut: focuses the login field", focused === "username", `active="${focused}"`);
-  ok("shortcut: offer appears", /test@example\.com/.test(await txt(page)), await txt(page));
-  await page.close();
-
-  const setup = await ctx.newPage();
-  await setup.goto(`${BASE}/totp-setup.html`, { waitUntil: "domcontentloaded" });
-  await setup.waitForTimeout(300);
-  const found = await sw.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({ url: "*://127.0.0.1/totp-setup.html" });
-    return chrome.tabs.sendMessage(tab.id, { type: "findTotpUri" }, { frameId: 0 });
-  });
-  ok("findTotpUri: link found", found?.uris?.[0] === "otpauth://totp/Acme:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Acme", JSON.stringify(found));
-  ok("findTotpUri: text copy deduped, second uri from text", found?.uris?.length === 2 && /issuer=Other/.test(found.uris[1]), JSON.stringify(found));
-  await setup.close();
-} else {
-  ok("service worker available for shortcut/findTotpUri checks", false, "no service worker");
 }
 
 await ctx.close();

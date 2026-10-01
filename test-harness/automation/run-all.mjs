@@ -15,7 +15,7 @@ if (!process.env.OP_PW) {
 const DRIVERS = [
   ["PIN handshake (SRP math + challenge lifecycle)", "pin-session.test.mjs"],
   ["Windows helper quirks (string MSG, string SMSG)", "windows-host.test.mjs"],
-  ["UI suite (login/OTP/forum, offer flow)", "drive.mjs"],
+  ["UI suite (login/OTP/forum, offer flow, click-through, shortcut)", "drive.mjs"],
   ["Adversarial (false positives: search/tag/checkout)", "drive-adversarial.mjs"],
   ["Test bench (positive + negative on one page)", "drive-bench.mjs"],
   ["Anchor (fill the field you acted on)", "drive-anchor.mjs"],
@@ -26,7 +26,7 @@ const DRIVERS = [
   ["PIN flow (wrong code errors, right code unlocks)", "drive-pin.mjs"],
   ["Iframe login (same-origin frame shows dropdown)", "drive-iframe.mjs"],
   ["Cross-origin iframe shows NO offer (leak closed)", "drive-xorigin.mjs"],
-  ["Verification codes (TOTP rows, split-box fill, shortcut, otpauth finder)", "drive-otp.mjs"],
+  ["Verification codes (TOTP rows, split-box fill)", "drive-otp.mjs"],
   ["Inline menu host (closed shadow, field icon)", "drive-menu.mjs"],
   ["Adapter unit (fill script, port names)", "unit.test.mjs"],
 ];

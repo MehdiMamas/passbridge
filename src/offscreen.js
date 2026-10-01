@@ -1,18 +1,48 @@
 import jsQR from "jsqr";
 
 let timer = null;
+let pending = "";
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+function fromExtensionPage(sender) {
+  return sender?.id === chrome.runtime.id && sender.tab == null;
+}
+
+async function clearIfUnchanged(expected) {
+  if (!expected) return;
+  try {
+    const current = await navigator.clipboard.readText();
+    if (current === expected) await navigator.clipboard.writeText("");
+  } catch {}
+  if (pending === expected) pending = "";
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === "offscreenClear") {
+    if (!fromExtensionPage(sender)) {
+      sendResponse({ ok: false, error: "forbidden" });
+      return false;
+    }
+    if (timer) clearTimeout(timer);
+    timer = null;
+    const expected = pending;
+    clearIfUnchanged(expected).then(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (msg?.type === "offscreenCopy") {
+    if (!fromExtensionPage(sender)) {
+      sendResponse({ ok: false, error: "forbidden" });
+      return false;
+    }
     const text = String(msg.text || "");
-    const clearMs = Number(msg.clearMs) || 0;
+    const clearMs = Number(msg.clearMs) || 10000;
     navigator.clipboard.writeText(text).then(() => {
+      pending = text;
       if (timer) clearTimeout(timer);
-      if (clearMs > 0) {
-        timer = setTimeout(() => {
-          navigator.clipboard.writeText("").catch(() => {});
-        }, clearMs);
-      }
+      timer = setTimeout(() => {
+        const expected = pending;
+        timer = null;
+        clearIfUnchanged(expected);
+      }, clearMs);
       sendResponse({ ok: true });
     }).catch(() => sendResponse({ ok: false }));
     return true;

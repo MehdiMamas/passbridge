@@ -57,6 +57,52 @@ await withExt(UNLOCKED, "unlocked", async (ctx) => {
   await page.waitForTimeout(400);
   check(`unlocked/forum-newsletter: no dropdown`, (await box(page).count()) === 0, "false positive on newsletter");
   await page.close();
+
+  const clickPage = await ctx.newPage();
+  await clickPage.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
+  await clickPage.waitForTimeout(300);
+  await clickPage.focus('input[name="username"]');
+  await clickPage.waitForTimeout(600);
+  const row = box(clickPage).locator("text=test@example.com");
+  const r = await row.boundingBox();
+  check("clickthrough: row is up", !!r, "no row");
+  if (r) {
+    await clickPage.evaluate(({ x, y, w, h }) => {
+      const a = document.createElement("a");
+      a.href = "#clicked-through";
+      a.id = "behind";
+      a.textContent = "forgot password";
+      Object.assign(a.style, { position: "fixed", left: x + "px", top: y + "px", width: w + "px", height: h + "px", zIndex: "2147483646", display: "block", background: "pink" });
+      document.body.appendChild(a);
+    }, { x: r.x, y: r.y, w: r.width, h: r.height });
+    await clickPage.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+    await clickPage.waitForTimeout(500);
+    const hash = await clickPage.evaluate(() => location.hash);
+    const filled = await clickPage.inputValue('input[name="username"]');
+    check("clickthrough: click did not reach the link behind", hash !== "#clicked-through", `hash="${hash}"`);
+    check("clickthrough: the row still filled", filled === "test@example.com", `value="${filled}"`);
+  }
+  await clickPage.close();
+
+  const sw = ctx.serviceWorkers()[0];
+  if (sw) {
+    const shortcutPage = await ctx.newPage();
+    await shortcutPage.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
+    await shortcutPage.waitForTimeout(300);
+    await shortcutPage.click("body");
+    await shortcutPage.waitForTimeout(200);
+    await sw.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: "*://127.0.0.1/login-standard.html" });
+      await chrome.tabs.sendMessage(tab.id, { type: "shortcut" });
+    });
+    await shortcutPage.waitForTimeout(600);
+    const focused = await shortcutPage.evaluate(() => document.activeElement?.name || "");
+    check("shortcut: focuses the login field", focused === "username", `active="${focused}"`);
+    check("shortcut: offer appears", /test@example\.com/.test(await txt(shortcutPage)), await txt(shortcutPage));
+    await shortcutPage.close();
+  } else {
+    check("service worker available for shortcut checks", false, "no service worker");
+  }
 });
 
 await withExt(LOCKED, "locked", async (ctx) => {

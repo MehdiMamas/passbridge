@@ -32,7 +32,7 @@ Override paths with env vars if needed:
 
 | Driver | Checks |
 |---|---|
-| `drive.mjs` | Offer on login fields; nothing on OTP/newsletter; locked shows PIN field |
+| `drive.mjs` | Offer on login fields; nothing on OTP/newsletter; locked shows PIN field; click does not fall through the row; shortcut focuses the login field |
 | `drive-adversarial.mjs` | No dropdown on search/tag(Instagram)/comment/checkout/profile; mixed page only on login |
 | `drive-bench.mjs` | The combined testbench page, positives + negatives |
 | `drive-anchor.mjs` | Fill targets the field you acted on, not another form |
@@ -41,6 +41,6 @@ Override paths with env vars if needed:
 | `drive-clickjack.mjs` | A hidden/offscreen password field is NOT filled |
 | `drive-multi.mjs` | Chooser lists multiple saved logins |
 | `drive-pin.mjs` | Wrong PIN shows error; right PIN unlocks + fills |
-| `drive-otp.mjs` | Verification-code row on OTP fields; split six-box and single-field fill; no code row on login fields; shortcut focuses the login field; `otpauth://` finder on a 2FA setup page |
+| `drive-otp.mjs` | Verification-code row on OTP fields; split six-box and single-field fill; no code row on login fields |
 
 Outputs screenshots to `shots/` (gitignored).

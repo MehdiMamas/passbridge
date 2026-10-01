@@ -28,6 +28,7 @@ client.onStateChange((s) => {
   if (s !== State.Unlocked) {
     pwCacheClear();
     otpByTab.clear();
+    dropHeldOffers();
   }
   broadcast({ type: "state", state: s });
 });
@@ -138,7 +139,7 @@ function queuePendingSave(save) {
   const k = `${save.host} ${(save.detected || "").toLowerCase()}`;
   const i = pendingSaves.findIndex((p) => `${p.host} ${(p.detected || "").toLowerCase()}` === k);
   if (i >= 0) pendingSaves.splice(i, 1);
-  pendingSaves.push(save);
+  pendingSaves.push({ ...save, at: Date.now() });
   while (pendingSaves.length > 10) pendingSaves.shift();
 }
 async function flushPendingSaves() {
@@ -147,6 +148,7 @@ async function flushPendingSaves() {
   const settings = await getSettings();
   for (const s of batch) {
     try {
+      if (!secretFresh(s)) continue;
       if (hostBlocked(s.host, settings.excludedDomains)) continue;
       let existing = [];
       try {
@@ -233,7 +235,8 @@ async function readPasswordForFrame(tabId, frameUrl, username) {
 const lastFillByTab = new Map();
 
 // re-filling the same login skips a second Touch ID, apple prompts every read
-const PW_CACHE_TTL_MS = 120_000;
+const PW_CACHE_TTL_MS = 15_000;
+const SECRET_HOLD_MS = 120_000;
 const pwCache = new Map();
 function pwCacheKey(host, username) {
   return `${host}\n${(username || "").toLowerCase()}`;
@@ -270,6 +273,7 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (a.name !== KEEPALIVE_ALARM) return;
   // touching an extension API resets the idle timer
   chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError);
+  sweepExpiredSecrets();
 });
 
 async function ensureConnected() {
@@ -484,9 +488,48 @@ async function ensureOffscreen() {
 
 async function copyText(text) {
   const settings = await getSettings();
-  const clearMs = Number(settings.clipboardClearMs) || 0;
+  const clearMs = Number(settings.clipboardClearMs) || 10000;
   await ensureOffscreen();
   await chrome.runtime.sendMessage({ type: "offscreenCopy", text: text || "", clearMs }).catch(() => {});
+}
+
+async function clearClipboard() {
+  if (!(await chrome.offscreen.hasDocument())) return;
+  await chrome.runtime.sendMessage({ type: "offscreenClear" }).catch(() => {});
+}
+
+function secretFresh(entry) {
+  return !!entry && Date.now() - entry.at < SECRET_HOLD_MS;
+}
+
+function dropHeldOffers() {
+  for (const tabId of saveOffers.keys()) {
+    chrome.tabs.sendMessage(tabId, { type: "hideSaveBar" }, { frameId: 0 }).catch(() => {});
+  }
+  for (const tabId of totpOffers.keys()) {
+    chrome.tabs.sendMessage(tabId, { type: "hideTotpBar" }, { frameId: 0 }).catch(() => {});
+  }
+  saveOffers.clear();
+  totpOffers.clear();
+}
+
+function sweepExpiredSecrets() {
+  const now = Date.now();
+  for (const [tabId, offer] of saveOffers) {
+    if (now - offer.at < SECRET_HOLD_MS) continue;
+    saveOffers.delete(tabId);
+    chrome.tabs.sendMessage(tabId, { type: "hideSaveBar" }, { frameId: 0 }).catch(() => {});
+  }
+  for (let i = pendingSaves.length - 1; i >= 0; i--) {
+    if (!secretFresh(pendingSaves[i])) pendingSaves.splice(i, 1);
+  }
+}
+
+async function forgetSecrets() {
+  pwCacheClear();
+  dropHeldOffers();
+  pendingSaves.length = 0;
+  await clearClipboard();
 }
 
 async function handOffTotp(offer) {
@@ -516,27 +559,15 @@ async function showTotpBar(tabId, payload) {
 async function scanQrFromMenu(info, tab) {
   if (!tab?.id || !tab.url || !/^https?:/i.test(tab.url)) return;
   let rect = null;
-  if (info.menuItemId === "pb-qr-select") {
-    let sel;
-    try {
-      sel = await chrome.tabs.sendMessage(tab.id, { type: "startQrSelect" }, { frameId: 0 });
-    } catch {
-      await showTotpBar(tab.id, { mode: "error", error: "Couldn't start a selection on this page." });
-      return;
-    }
-    if (!sel?.ok || sel.cancelled) return;
-    rect = sel.rect;
-  } else {
-    try {
-      const resp = await chrome.tabs.sendMessage(tab.id, { type: "qrImageRect" }, { frameId: info.frameId ?? 0 });
-      rect = resp?.rect || null;
-    } catch {
-      rect = null;
-    }
-    if (!rect) {
-      await showTotpBar(tab.id, { mode: "error", error: "Right-click the image again, then scan it." });
-      return;
-    }
+  try {
+    const resp = await chrome.tabs.sendMessage(tab.id, { type: "qrImageRect" }, { frameId: info.frameId ?? 0 });
+    rect = resp?.rect || null;
+  } catch {
+    rect = null;
+  }
+  if (!rect) {
+    await showTotpBar(tab.id, { mode: "error", error: "Right-click the image again, then scan it." });
+    return;
   }
   if (!rect || rect.w < 8 || rect.h < 8) {
     await showTotpBar(tab.id, { mode: "error", error: "No QR code in that area." });
@@ -634,11 +665,9 @@ async function rebuildContextMenu(tab) {
     chrome.contextMenus.create({ id: "pb-user", parentId: "pb-root", title: "Copy username", contexts: ["editable", "page"] });
     chrome.contextMenus.create({ id: "pb-pass", parentId: "pb-root", title: "Copy password", contexts: ["editable", "page"] });
     chrome.contextMenus.create({ id: "pb-otp", parentId: "pb-root", title: "Copy verification code", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-gen", parentId: "pb-root", title: "Generate password", contexts: ["editable"] });
-    chrome.contextMenus.create({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page", "image"] });
-    chrome.contextMenus.create({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["editable", "page", "image"] });
-    chrome.contextMenus.create({ id: "pb-qr-select", parentId: "pb-root", title: "Select a QR code…", contexts: ["editable", "page", "image"] });
-    chrome.contextMenus.create({ id: "pb-qr-image-top", title: "PassBridge: Scan this image for a verification code", contexts: ["image"] });
+    chrome.contextMenus.create({ id: "pb-gen", parentId: "pb-root", title: "Generate password", contexts: ["editable", "page"] });
+    chrome.contextMenus.create({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page"] });
+    chrome.contextMenus.create({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["image"] });
     if (!client.ready || !tab?.url) return;
     client.getLoginNamesForURL(tab.id, tab.url).then((logins) => {
       menuLogins = uniqueByUsername(orderByMru(registrableHost(tab.url), logins || [])).slice(0, 8);
@@ -664,7 +693,7 @@ function clearBadges() {
 
 chrome.commands?.onCommand.addListener(async (command) => {
   if (command === "lock-vault") {
-    pwCacheClear();
+    await forgetSecrets();
     client.disconnect();
     menuLogins = [];
     clearBadges();
@@ -687,7 +716,7 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
     await copyText(generateApplePassword());
     return;
   }
-  if (info.menuItemId === "pb-qr-image" || info.menuItemId === "pb-qr-image-top" || info.menuItemId === "pb-qr-select") {
+  if (info.menuItemId === "pb-qr-image") {
     await scanQrFromMenu(info, tab);
     return;
   }
@@ -767,6 +796,11 @@ try {
 
 chrome.tabs?.onRemoved.addListener((tabId) => {
   totpOffers.delete(tabId);
+  saveOffers.delete(tabId);
+  for (let i = pendingSaves.length - 1; i >= 0; i--) {
+    if (pendingSaves[i].tabId === tabId) pendingSaves.splice(i, 1);
+  }
+  pwCacheClear();
 });
 chrome.tabs?.onUpdated.addListener((tabId, info) => {
   if (!info.url || !totpOffers.has(tabId)) return;
@@ -981,7 +1015,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "confirmSave": {
           const offer = sender.tab?.id != null ? saveOffers.get(sender.tab.id) : null;
-          if (!offer) return sendResponse({ ok: false, error: "nothing to save" });
+          if (!secretFresh(offer)) {
+            if (sender.tab?.id != null) saveOffers.delete(sender.tab.id);
+            return sendResponse({ ok: false, error: "nothing to save" });
+          }
           saveOffers.delete(sender.tab.id);
           await ensureConnected();
           await client.saveLogin(offer.tabId, offer.frameUrl, offer.target, offer.password);
@@ -1292,6 +1329,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
 
         case "disconnect":
+          await forgetSecrets();
           client.disconnect();
           sendResponse({ ok: true, state: client.state });
           break;

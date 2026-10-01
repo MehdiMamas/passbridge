@@ -3,8 +3,8 @@
 export const SETTINGS_DEFAULTS = {
   inlineMenuVisibility: "on-focus",
   autofillOnPageLoad: false,
-  copyTotpAfterFill: true,
-  clipboardClearMs: 30000,
+  copyTotpAfterFill: false,
+  clipboardClearMs: 10000,
   enableContextMenu: true,
   enableBadge: true,
   askToSave: true,
@@ -18,8 +18,11 @@ export const SETTINGS_DEFAULTS = {
 export function getSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(SETTINGS_DEFAULTS, (o) => {
-      if (chrome.runtime.lastError) resolve({ ...SETTINGS_DEFAULTS });
-      else resolve({ ...SETTINGS_DEFAULTS, ...o });
+      const settings = chrome.runtime.lastError
+        ? { ...SETTINGS_DEFAULTS }
+        : { ...SETTINGS_DEFAULTS, ...o };
+      if (!Number(settings.clipboardClearMs)) settings.clipboardClearMs = SETTINGS_DEFAULTS.clipboardClearMs;
+      resolve(settings);
     });
   });
 }
