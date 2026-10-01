@@ -13,6 +13,19 @@ PassBridge is a fork of [Open Passwords](https://github.com/ManiForoughi2/open-p
 
 Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension is attached to each [release](https://github.com/MehdiMamas/open-passwords/releases). Unzip it and load that folder unpacked.
 
+<p align="center">
+  <img src="docs/images/popup-light.png" width="300" alt="PassBridge popup with saved logins for the current site">
+  <img src="docs/images/popup-dark.png" width="300" alt="The same popup in dark mode">
+</p>
+
+<p align="center">
+  <img src="docs/images/inline-menu.png" width="440" alt="Inline menu open on a sign-in form, with the PassBridge icon in the email field">
+</p>
+
+<p align="center">
+  <img src="docs/images/save-bar.png" width="380" alt="Save prompt. Confirming it opens Apple's own save sheet.">
+</p>
+
 ## What you get
 
 - An inline menu on login fields, with an icon in the field, keyboard navigation, and a top-layer popover the page cannot cover.
