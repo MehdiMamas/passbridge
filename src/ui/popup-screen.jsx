@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 function StatusDot({ state }) {
   const color =
@@ -8,26 +8,61 @@ function StatusDot({ state }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={label} />;
 }
 
+function IconButton({ label, onClick, children }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="5.5" r="2.25" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.5 13.25c.6-2.1 2.3-3.25 4.5-3.25s3.9 1.15 4.5 3.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function KeyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="5.5" cy="8" r="2.75" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 8h5.25M11.5 8v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function CodeRow({ row, onCopy, onFillCode }) {
   const [shown, setShown] = useState("");
   const [busy, setBusy] = useState(false);
+  const label = row.source === "totp" ? `Verification code for ${row.domain || "this site"}` : "Code from Messages";
   return (
-    <li className="flex items-center justify-between gap-2 rounded-2xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] px-2.5 py-2">
-      <span className="text-[13px]">
-        {row.source === "totp" ? `Verification code for ${row.domain || "this site"}` : "Code from Messages"}
-        {row.username && <span className="block text-[11px] opacity-60">{row.username}</span>}
+    <li className="flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] px-2 py-1">
+      <span className="min-w-0 flex-1 truncate text-[13px]">
+        {label}
+        {row.username && <span className="opacity-60"> · {row.username}</span>}
       </span>
-      <span className="flex items-center gap-2">
-        <button type="button" className="text-xs text-accent" onClick={() => onCopy("otp", row)}>
-          Copy
-        </button>
+      <span className="flex shrink-0 items-center gap-1">
         {shown ? (
           <span className="font-mono text-sm tracking-widest">{shown}</span>
         ) : (
+          <IconButton label="Copy verification code" onClick={() => onCopy("otp", row)}>
+            <KeyIcon />
+          </IconButton>
+        )}
+        {!shown && (
           <button
             type="button"
             disabled={busy}
-            className="rounded-full bg-[color-mix(in_srgb,var(--color-accent)_12%,Canvas)] px-3 py-1 text-xs font-semibold text-accent disabled:opacity-50"
+            className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
             onClick={async () => {
               setBusy(true);
               const res = await onFillCode(row);
@@ -67,32 +102,31 @@ export function PopupScreen({
   onLookup,
   onOpenApp,
   onLock,
-  onNewLogin,
-  onSetupTotp,
   onRefresh,
   onSettings,
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
   const win = os === "win";
+  const unlocked = state === "unlocked";
 
   async function submitPin(value) {
     const ok = await onVerify(value);
     if (!ok) setPin("");
   }
 
-  useEffect(() => {
-    if (pin.trim().length === 6) submitPin(pin.trim());
-    // submitPin closes over onVerify; depending on it resubmits the same code
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pin]);
+  function onPinChange(value) {
+    const next = value.replace(/\D/g, "").slice(0, 6);
+    setPin(next);
+    if (next.length === 6) submitPin(next);
+  }
 
   return (
-    <div className="flex min-h-[240px] w-[340px] flex-col bg-[Canvas] text-[CanvasText]">
-      <header className="flex items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2.5">
+    <div className={`flex w-[340px] flex-col overflow-hidden bg-[Canvas] text-[CanvasText] ${unlocked ? "max-h-[480px]" : "min-h-[240px]"}`}>
+      <header className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2.5">
         <img src="../icons/icon48.png" alt="" width="20" height="20" />
         <h1 className="flex-1 text-sm font-semibold tracking-tight">PassBridge</h1>
-        {(state === "unlocked" || state === "needs_pin") && (
+        {(unlocked || state === "needs_pin") && (
           <button
             type="button"
             className="rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-2 py-0.5 text-base"
@@ -107,7 +141,25 @@ export function PopupScreen({
         )}
         <StatusDot state={state} />
       </header>
-      <main className="flex flex-1 flex-col gap-2 px-3 py-3">
+      {unlocked && (
+        <div className="shrink-0 px-3 pt-2">
+          <input
+            value={query}
+            onChange={(e) => {
+              const next = e.target.value;
+              setQuery(next);
+              onLookup(next.trim());
+            }}
+            placeholder="Look up another site"
+            aria-label="Look up another site"
+            autoComplete="off"
+            spellCheck={false}
+            className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1.5 text-[13px]"
+          />
+          {site && <p className="mt-2 truncate text-[13px] font-semibold">{site}</p>}
+        </div>
+      )}
+      <main className={`flex flex-col gap-2 px-3 py-2 ${unlocked ? "min-h-0 flex-1 overflow-y-auto" : "flex-1"}`}>
         {state === "no_helper" && (
           <p className="text-[13px] leading-snug text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
             {win
@@ -131,7 +183,7 @@ export function PopupScreen({
             </p>
             <input
               value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onChange={(e) => onPinChange(e.target.value)}
               inputMode="numeric"
               autoComplete="one-time-code"
               placeholder="••••••"
@@ -153,52 +205,39 @@ export function PopupScreen({
             {pinError && <p className="text-[13px] text-danger">{pinError}</p>}
           </form>
         )}
-        {state === "unlocked" && (
+        {unlocked && (
           <>
-            <p className="text-[13px] font-semibold">{site}</p>
             {logins.length === 0 && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">No saved passwords for this site.</p>}
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col gap-1">
               {logins.map((login) => (
-                <li key={login.username} className="rounded-2xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] p-2.5">
-                  <div className="mb-2 flex items-center gap-2">
+                <li
+                  key={login.username}
+                  className="flex items-center gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1"
+                >
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
                     {showFavicons && site && (
-                      <img alt="" width="16" height="16" className="h-4 w-4 rounded" src={`https://icons.duckduckgo.com/ip3/${site}.ico`} />
+                      <img alt="" width="16" height="16" className="h-4 w-4 shrink-0 rounded" src={`https://icons.duckduckgo.com/ip3/${site}.ico`} />
                     )}
                     <span className="truncate text-[13px] font-medium">{login.username || "(no username)"}</span>
-                  </div>
-                  <button type="button" className="w-full rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white" onClick={() => onFill(login)}>
+                  </span>
+                  <IconButton label="Copy username" onClick={() => onCopy("username", login)}>
+                    <UserIcon />
+                  </IconButton>
+                  <IconButton label="Copy password" onClick={() => onCopy("password", login)}>
+                    <KeyIcon />
+                  </IconButton>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
+                    onClick={() => onFill(login)}
+                  >
                     Fill
                   </button>
-                  <div className="mt-1.5 flex gap-3">
-                    <button type="button" className="text-xs text-accent" onClick={() => onCopy("username", login)}>
-                      Copy username
-                    </button>
-                    <button type="button" className="text-xs text-accent" onClick={() => onCopy("password", login)}>
-                      Copy password
-                    </button>
-                  </div>
                 </li>
               ))}
             </ul>
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                onLookup(query.trim());
-              }}
-            >
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Look up another site"
-                className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1.5 text-[13px]"
-              />
-              <button type="submit" className="text-[13px] text-accent">
-                Search
-              </button>
-            </form>
             {codes.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
+              <ul className="flex flex-col gap-1">
                 {codes.map((row) => (
                   <CodeRow key={row.id} row={row} onCopy={onCopy} onFillCode={onFillCode} />
                 ))}
@@ -207,37 +246,35 @@ export function PopupScreen({
             {note && (
               <p className={`text-xs ${noteTone === "danger" ? "text-danger" : noteTone === "ok" ? "text-ok" : "opacity-70"}`}>{note}</p>
             )}
-            <div className="flex flex-col items-start">
-              <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search")}>
-                Open in Passwords app
-              </button>
-              {caps?.newPasswordSheet && (
-                <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("new")}>
-                  New login in Passwords app…
-                </button>
-              )}
-              {caps?.setUpTotp && (
-                <button type="button" className="py-1 text-xs text-accent" onClick={onSetupTotp}>
-                  Set up verification code in Passwords…
-                </button>
-              )}
-            </div>
           </>
         )}
       </main>
-      <footer className="flex items-center justify-between border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2">
-        {state === "unlocked" ? (
-          <button type="button" className="text-xs text-accent" onClick={onLock}>
-            Lock
-          </button>
-        ) : (
-          <span />
+      <footer className="flex shrink-0 flex-col border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2">
+        {unlocked && (
+          <div className="flex flex-col items-start pb-1">
+            <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search")}>
+              Open in Passwords app
+            </button>
+            {caps?.newPasswordSheet && (
+              <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("new")}>
+                New login in Passwords app…
+              </button>
+            )}
+          </div>
         )}
-        <button type="button" className="text-xs text-accent" onClick={onSettings}>
-          Settings
-        </button>
+        <div className="flex items-center justify-between">
+          {unlocked ? (
+            <button type="button" className="text-xs text-accent" onClick={onLock}>
+              Lock
+            </button>
+          ) : (
+            <span />
+          )}
+          <button type="button" className="text-xs text-accent" onClick={onSettings}>
+            Settings
+          </button>
+        </div>
       </footer>
     </div>
   );
 }
-

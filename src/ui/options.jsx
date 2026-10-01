@@ -1,17 +1,5 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { send } from "./chrome.js";
-
-const CHECKS = [
-  ["autofillOnPageLoad", "Autofill on page load", "Off by default. A single match can ask for Touch ID or Windows Hello as the page opens."],
-  ["copyTotpAfterFill", "Copy verification code after fill", ""],
-  ["enableContextMenu", "Context menu", ""],
-  ["enableBadge", "Badge count on the toolbar icon", ""],
-  ["showAnimations", "Fill animation", ""],
-  ["showFavicons", "Website icons", ""],
-  ["askToSave", "Ask to save a new login", ""],
-  ["askToUpdate", "Ask to update an existing login", ""],
-];
 
 const DEFAULTS = {
   inlineMenuVisibility: "on-focus",
@@ -27,7 +15,6 @@ const DEFAULTS = {
   excludedDomains: [],
   blockedDomains: [],
   hidePasskeys: false,
-  autoPair: false,
 };
 
 function Row({ label, note, children }) {
@@ -42,15 +29,38 @@ function Row({ label, note, children }) {
   );
 }
 
-function Switch({ checked, onChange, disabled }) {
+function Switch({ checked, onChange }) {
   return (
     <input
       type="checkbox"
       checked={!!checked}
-      disabled={disabled}
       onChange={(e) => onChange(e.target.checked)}
       className="h-4 w-4 shrink-0 accent-ok"
     />
+  );
+}
+
+function Section({ title, children, className = "" }) {
+  return (
+    <section className={className}>
+      <h2 className="mb-1 text-xs font-semibold tracking-wide uppercase opacity-60">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function DomainList({ label, note, value, onChange, onBlur }) {
+  return (
+    <label className="block py-2.5 text-[13px]">
+      {label}
+      <span className="mb-1 block text-[11px] opacity-60">{note}</span>
+      <textarea
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        className="mt-1 min-h-16 w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] p-2"
+      />
+    </label>
   );
 }
 
@@ -58,10 +68,9 @@ function OptionsApp() {
   const [settings, setSettings] = useState(DEFAULTS);
   const [excludedText, setExcludedText] = useState("");
   const [blockedText, setBlockedText] = useState("");
-  const [policy, setPolicy] = useState({ disabled: true, hidden: false, note: "needs native/install.sh or native/windows/install.ps1" });
-  const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true, note: "" });
-  const [address, setAddress] = useState({ shown: false, checked: false, disabled: true, note: "" });
-  const [autoNote, setAutoNote] = useState("");
+  const [policy, setPolicy] = useState({ ready: false, available: false, hidden: false });
+  const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
+  const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
 
   useEffect(() => {
     chrome.storage.local.get(DEFAULTS, (saved) => {
@@ -71,8 +80,8 @@ function OptionsApp() {
       setBlockedText((next.blockedDomains || []).join("\n"));
     });
     sendPolicy("get").then((r) => {
-      if (r.error || !r.ok) return;
-      setPolicy({ disabled: false, hidden: !!r.hidden, note: r.note || "" });
+      if (r.error || !r.ok) setPolicy({ ready: true, available: false, hidden: false });
+      else setPolicy({ ready: true, available: true, hidden: !!r.hidden });
     });
     readPrivacy("passwordSavingEnabled", setBubble);
     readPrivacy("autofillAddressEnabled", setAddress);
@@ -84,14 +93,21 @@ function OptionsApp() {
     chrome.storage.local.set(partial);
   }
 
+  function check(id, label, note) {
+    return (
+      <Row key={id} label={label} note={note}>
+        <Switch checked={settings[id]} onChange={(on) => persist({ [id]: on })} />
+      </Row>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
       <header className="mb-6 flex items-center gap-2">
         <img src="../icons/icon48.png" alt="" width="28" height="28" />
         <h1 className="text-lg font-semibold">PassBridge</h1>
       </header>
-      <section>
-        <h2 className="mb-1 text-xs font-semibold tracking-wide uppercase opacity-60">Autofill</h2>
+      <Section title="Autofill">
         <Row label="Inline menu">
           <select
             value={settings.inlineMenuVisibility}
@@ -103,11 +119,28 @@ function OptionsApp() {
             <option value="off">Off</option>
           </select>
         </Row>
-        {CHECKS.map(([id, label, note]) => (
-          <Row key={id} label={label} note={note}>
-            <Switch checked={settings[id]} onChange={(on) => persist({ [id]: on })} />
-          </Row>
-        ))}
+        {check("autofillOnPageLoad", "Autofill on page load", "Off by default. A single match can ask for Touch ID or Windows Hello as the page opens.")}
+        {check("showAnimations", "Fill animation")}
+        {check("showFavicons", "Website icons")}
+        <DomainList
+          label="Blocked domains"
+          note="One hostname per line. No inline menu on these sites."
+          value={blockedText}
+          onChange={(e) => setBlockedText(e.target.value)}
+          onBlur={() => persist({ blockedDomains: lines(blockedText) })}
+        />
+      </Section>
+      <Section title="Saving" className="mt-6">
+        {check("askToSave", "Ask to save a new login")}
+        {check("askToUpdate", "Ask to update an existing login")}
+        <DomainList
+          label="Excluded domains"
+          note="One hostname per line. PassBridge will not offer to save these."
+          value={excludedText}
+          onChange={(e) => setExcludedText(e.target.value)}
+          onBlur={() => persist({ excludedDomains: lines(excludedText) })}
+        />
+        {check("copyTotpAfterFill", "Copy verification code after fill")}
         <Row label="Clear clipboard">
           <select
             value={String(settings.clipboardClearMs)}
@@ -122,76 +155,44 @@ function OptionsApp() {
             <option value="300000">5 minutes</option>
           </select>
         </Row>
+      </Section>
+      <Section title="Browser" className="mt-6">
+        {check("enableContextMenu", "Context menu")}
+        {check("enableBadge", "Badge count on the toolbar icon")}
         <p className="py-2">
           <button type="button" className="text-[13px] text-accent" onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}>
             Keyboard shortcuts
           </button>
         </p>
-      </section>
-      <section className="mt-6">
-        <h2 className="mb-1 text-xs font-semibold tracking-wide uppercase opacity-60">Save prompts</h2>
-        <label className="mb-3 block text-[13px]">
-          Excluded domains
-          <span className="mb-1 block text-[11px] opacity-60">One hostname per line. PassBridge will not offer to save these.</span>
-          <textarea
-            value={excludedText}
-            onChange={(e) => setExcludedText(e.target.value)}
-            onBlur={() => persist({ excludedDomains: lines(excludedText) })}
-            className="mt-1 min-h-16 w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] p-2"
-          />
-        </label>
-        <label className="block text-[13px]">
-          Blocked domains
-          <span className="mb-1 block text-[11px] opacity-60">One hostname per line. No inline menu on these sites.</span>
-          <textarea
-            value={blockedText}
-            onChange={(e) => setBlockedText(e.target.value)}
-            onBlur={() => persist({ blockedDomains: lines(blockedText) })}
-            className="mt-1 min-h-16 w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] p-2"
-          />
-        </label>
-      </section>
-      <section className="mt-6">
-        <h2 className="mb-1 text-xs font-semibold tracking-wide uppercase opacity-60">This browser</h2>
-        {bubble.shown && (
-          <Row label="Hide browser save-password bubble" note={bubble.note}>
-            <Switch checked={bubble.checked} disabled={bubble.disabled} onChange={(on) => setPrivacy("passwordSavingEnabled", on, setBubble, "suppressSaveBubble")} />
+        {bubble.shown && !bubble.disabled && (
+          <Row label="Hide Chrome's save-password bubble">
+            <Switch checked={bubble.checked} onChange={(on) => setPrivacy("passwordSavingEnabled", on, setBubble, "suppressSaveBubble")} />
           </Row>
         )}
-        <Row label="Hide browser password manager entirely" note={policy.note}>
-          <Switch
-            checked={policy.hidden}
-            disabled={policy.disabled}
-            onChange={async (on) => {
-              const r = await sendPolicy(on ? "set" : "clear");
-              if (r.error || !r.ok) setPolicy((p) => ({ ...p, note: r.error || "helper failed" }));
-              else setPolicy({ disabled: false, hidden: !!r.hidden, note: r.note || "" });
-            }}
-          />
-        </Row>
-        {address.shown && (
-          <Row label="Hide browser autofill suggestions" note={address.note}>
-            <Switch checked={address.checked} disabled={address.disabled} onChange={(on) => setPrivacy("autofillAddressEnabled", on, setAddress, "suppressAddressAutofill")} />
+        {policy.ready && policy.available && (
+          <Row label="Hide Chrome's password manager">
+            <Switch
+              checked={policy.hidden}
+              onChange={async (on) => {
+                const r = await sendPolicy(on ? "set" : "clear");
+                if (r.error || !r.ok) setPolicy({ ready: true, available: false, hidden: false });
+                else setPolicy({ ready: true, available: true, hidden: !!r.hidden });
+              }}
+            />
           </Row>
         )}
-        <Row label="Hide passkey autofill">
-          <Switch checked={settings.hidePasskeys} onChange={(on) => persist({ hidePasskeys: on })} />
-        </Row>
-        <Row label="Enter the pairing code for me" note={autoNote}>
-          <Switch
-            checked={settings.autoPair}
-            onChange={async (on) => {
-              persist({ autoPair: on });
-              if (!on) {
-                setAutoNote("");
-                return;
-              }
-              const r = await send({ type: "autoPairCheck" });
-              setAutoNote(r?.ok ? "Pairing code reader is available." : r?.error || "the reader could not reach the pairing window");
-            }}
-          />
-        </Row>
-      </section>
+        {policy.ready && !policy.available && (
+          <p className="py-2 text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
+            Install the optional helper to hide Chrome's password manager.
+          </p>
+        )}
+        {address.shown && !address.disabled && (
+          <Row label="Hide Chrome's address suggestions">
+            <Switch checked={address.checked} onChange={(on) => setPrivacy("autofillAddressEnabled", on, setAddress, "suppressAddressAutofill")} />
+          </Row>
+        )}
+        {check("hidePasskeys", "Hide passkey autofill")}
+      </Section>
     </div>
   );
 }
@@ -219,7 +220,7 @@ function readPrivacy(name, setRow) {
   pref.get({}, (d) => {
     if (chrome.runtime.lastError || !d) return;
     const controllable = d.levelOfControl === "controllable_by_this_extension" || d.levelOfControl === "controlled_by_this_extension";
-    setRow({ shown: true, checked: d.value === false, disabled: !controllable, note: controllable ? "" : "controlled elsewhere" });
+    setRow({ shown: true, checked: d.value === false, disabled: !controllable });
   });
 }
 

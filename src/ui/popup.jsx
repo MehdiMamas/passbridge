@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "./chrome.js";
 import { PopupScreen } from "./popup-screen.jsx";
@@ -15,8 +15,9 @@ function PopupApp() {
   const [noteTone, setNoteTone] = useState("");
   const [pinError, setPinError] = useState("");
   const [showFavicons, setShowFavicons] = useState(true);
-  const [tab, setTab] = useState(null);
   const [lookupUrl, setLookupUrl] = useState(null);
+  const lookupGen = useRef(0);
+  const lookupTimer = useRef(0);
 
   function showNote(text, tone) {
     setNote(text || "");
@@ -24,14 +25,38 @@ function PopupApp() {
   }
 
   async function loadUnlocked() {
+    const gen = ++lookupGen.current;
     const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-    setTab(active || null);
+    if (gen !== lookupGen.current) return;
     setLookupUrl(null);
     const host = active?.url ? new URL(active.url).hostname : "";
     setSite(host);
     const res = await send({ type: "getLogins", tabId: active?.id, url: active?.url });
+    if (gen !== lookupGen.current) return;
     setLogins(res?.ok ? res.logins || [] : []);
     const codeRes = await send({ type: "getOneTimeCodes" });
+    if (gen !== lookupGen.current) return;
+    setCodes(codeRes?.rows || []);
+  }
+
+  async function runLookup(raw) {
+    if (!raw) {
+      await loadUnlocked();
+      return;
+    }
+    const gen = ++lookupGen.current;
+    const res = await send({ type: "lookupLogins", url: raw });
+    if (gen !== lookupGen.current) return;
+    if (!res?.ok) {
+      showNote(res?.error || "Couldn't look up that site.", "danger");
+      return;
+    }
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    setLookupUrl(url);
+    setSite(res.host || raw);
+    setLogins(res.logins || []);
+    const codeRes = await send({ type: "getOneTimeCodes", url });
+    if (gen !== lookupGen.current) return;
     setCodes(codeRes?.rows || []);
   }
 
@@ -77,6 +102,7 @@ function PopupApp() {
     chrome.runtime.onMessage.addListener(onMsg);
     return () => {
       dead = true;
+      window.clearTimeout(lookupTimer.current);
       chrome.runtime.onMessage.removeListener(onMsg);
     };
   }, []);
@@ -133,19 +159,11 @@ function PopupApp() {
         if (!res?.ok) showNote(res?.error || "nothing to copy", "danger");
         else showNote("Copied", "ok");
       }}
-      onLookup={async (raw) => {
-        if (!raw) return;
-        const res = await send({ type: "lookupLogins", url: raw });
-        if (!res?.ok) {
-          showNote(res?.error || "Couldn't look up that site.", "danger");
-          return;
-        }
-        const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-        setLookupUrl(url);
-        setSite(res.host || raw);
-        setLogins(res.logins || []);
-        const codeRes = await send({ type: "getOneTimeCodes", url });
-        setCodes(codeRes?.rows || []);
+      onLookup={(raw) => {
+        window.clearTimeout(lookupTimer.current);
+        lookupTimer.current = window.setTimeout(() => {
+          void runLookup(raw);
+        }, 300);
       }}
       onOpenApp={async (mode) => {
         await send({ type: "openPasswordsApp", mode, url: mode === "search" ? lookupUrl || undefined : undefined });
@@ -156,25 +174,6 @@ function PopupApp() {
         setState("connecting");
         const res = await send({ type: "getState" });
         await bootFrom(res);
-      }}
-      onNewLogin={() => {}}
-      onSetupTotp={async () => {
-        if (!tab?.id) {
-          showNote("no verification-code setup link on this page", "danger");
-          return;
-        }
-        try {
-          const found = await chrome.tabs.sendMessage(tab.id, { type: "findTotpUri" }, { frameId: 0 });
-          const uri = found?.uris?.[0];
-          if (!uri) {
-            showNote("no verification-code setup link on this page", "danger");
-            return;
-          }
-          await send({ type: "openPasswordsApp", mode: "totp", uri });
-          window.close();
-        } catch {
-          showNote("no verification-code setup link on this page", "danger");
-        }
       }}
       onRefresh={async () => {
         if (state === "needs_pin") {

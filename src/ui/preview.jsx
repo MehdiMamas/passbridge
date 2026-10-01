@@ -12,9 +12,16 @@ const screens = [
       state: "unlocked",
       site: "accounts.example",
       showFavicons: false,
-      logins: [{ username: "ada@example.com" }, { username: "grace@example.com" }],
+      logins: [
+        { username: "ada@example.com" },
+        { username: "grace@example.com" },
+        { username: "ada.lovelace@example.com" },
+        { username: "grace.hopper@example.com" },
+        { username: "radia@example.com" },
+        { username: "katherine@example.com" },
+      ],
       codes: [{ id: 0, source: "totp", domain: "accounts.example", username: "ada@example.com" }],
-      caps: { newPasswordSheet: true, setUpTotp: true },
+      caps: { newPasswordSheet: true },
     },
   ],
 ];
@@ -37,8 +44,6 @@ function Frame({ title, scheme, props }) {
         onLookup={noop}
         onOpenApp={noop}
         onLock={noop}
-        onNewLogin={noop}
-        onSetupTotp={noop}
         onRefresh={noop}
         onSettings={noop}
         {...props}

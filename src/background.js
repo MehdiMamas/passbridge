@@ -32,16 +32,8 @@ client.onStateChange((s) => {
   broadcast({ type: "state", state: s });
 });
 
-// one attempt per challenge, never a retry loop, a wrong read burns the code. only when the
-// user asks for a code (popup, unlock click), never at browser launch
+// the pairing-window reader stays installed, but nothing drives it on its own
 const AUTOPAIR_HOST = "com.passbridge.autopair";
-const TOTP_SETUP_HOST = "com.passbridge.totpsetup";
-let autoPairBusy = false;
-let autoPairError = null;
-
-function autoPairEnabled() {
-  return new Promise((r) => chrome.storage.local.get({ autoPair: false }, (o) => r(!!o.autoPair)));
-}
 
 function autoPairMsg(body) {
   return new Promise((resolve) => {
@@ -54,39 +46,6 @@ function autoPairMsg(body) {
       resolve({ ok: false, error: String(e?.message ?? e) });
     }
   });
-}
-
-async function tryAutoPair(reason) {
-  if (autoPairBusy || client.state !== State.NeedsPin) return false;
-  if (!(await autoPairEnabled())) return false;
-  autoPairBusy = true;
-  try {
-    // reuse a code already on screen rather than replacing it under the user
-    await withTimeout(client.requestChallenge({ ifNeeded: true }), 8000, "challenge timed out");
-    const res = await autoPairMsg({ action: "read", timeoutMs: 6000 });
-    if (!res.ok || !res.code) {
-      autoPairError = res.error || "no code visible";
-      console.debug("[PassBridge] auto-pair skipped:", autoPairError, reason);
-      return false;
-    }
-    await withTimeout(client.verifyPin(res.code), 8000, "verification timed out");
-    autoPairError = null;
-    if (client.ready) {
-      flushPendingSaves();
-      // only the active tab can have the inline PIN box open
-      try {
-        const tab = await activeTab();
-        if (tab?.id != null) chrome.tabs.sendMessage(tab.id, { type: "unlocked" }).catch(() => {});
-      } catch (_) {}
-    }
-    return client.ready;
-  } catch (e) {
-    autoPairError = String(e?.message ?? e);
-    console.debug("[PassBridge] auto-pair failed:", autoPairError, reason);
-    return false;
-  } finally {
-    autoPairBusy = false;
-  }
 }
 
 client.onOneTimeCodeAvailable(async () => {
@@ -530,60 +489,19 @@ async function copyText(text) {
   await chrome.runtime.sendMessage({ type: "offscreenCopy", text: text || "", clearMs }).catch(() => {});
 }
 
-function totpSetupMsg(body) {
-  return new Promise((resolve) => {
-    try {
-      chrome.runtime.sendNativeMessage(TOTP_SETUP_HOST, body, (r) => {
-        if (chrome.runtime.lastError || !r || typeof r !== "object") {
-          resolve({ ok: false, filled: false, reason: "helper" });
-          return;
-        }
-        resolve({ ok: !!r.ok, filled: !!r.filled, reason: typeof r.reason === "string" ? r.reason : "" });
-      });
-    } catch {
-      resolve({ ok: false, filled: false, reason: "helper" });
-    }
-  });
-}
-
-function totpResultDetail(res) {
-  if (res?.filled) return "Passwords has the key on the matching login.";
-  if (res?.reason === "many") return "More than one login matched. The setup key is on the clipboard.";
-  return "Setup key copied. Paste it in Passwords if the app did not take it.";
-}
-
 async function handOffTotp(offer) {
   const secret = otpAuthSecret(offer?.uri);
-  const copiedDetail = secret ? totpResultDetail({}) : "Couldn't copy a setup key.";
+  const detail = secret
+    ? "Setup key copied. Paste it in Passwords if the app did not take it."
+    : "Couldn't copy a setup key.";
   try {
     if (secret) await copyText(secret);
     await ensureConnected();
     client.launchPasswordsApp({ totpUri: offer.uri, totpPageUrl: offer.pageUrl });
   } catch {
-    return { ok: true, copied: !!secret, filled: false, detail: copiedDetail };
+    return { ok: true, copied: !!secret, filled: false, detail };
   }
-  let filled = false;
-  let reason = "";
-  await platformReady;
-  if (platformOs === "win" && secret) {
-    const res = await totpSetupMsg({
-      action: "attach",
-      secret,
-      issuer: offer.issuer || "",
-      account: offer.account || "",
-      host: registrableHost(offer.pageUrl || "") || "",
-      usernames: Array.isArray(offer.usernames) ? offer.usernames.slice(0, 8) : [],
-      timeoutMs: 15000,
-    });
-    filled = !!res?.filled;
-    reason = typeof res?.reason === "string" ? res.reason : "";
-  }
-  return {
-    ok: true,
-    copied: !!secret,
-    filled,
-    detail: secret ? totpResultDetail({ filled, reason }) : "Couldn't copy a setup key.",
-  };
+  return { ok: true, copied: !!secret, filled: false, detail };
 }
 
 async function showTotpBar(tabId, payload) {
@@ -1158,7 +1076,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               newPasswordSheet: client.canOpenPasswordsAppToNewPasswordSheet,
               setUpTotp: client.canSetUpTotp,
             },
-            autoPairError,
           });
           break;
 
@@ -1259,8 +1176,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               } catch (_) {}
             }, 700);
           }
-          // not awaited, the UI shows its PIN box while auto-pair reads the code
-          tryAutoPair("request");
           sendResponse({ ok: true, state: client.state, hasChallenge: client.hasChallenge });
           break;
         }
