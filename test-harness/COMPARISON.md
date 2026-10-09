@@ -13,7 +13,7 @@ pops Apple's "Enable AutoFill" balloon on every box.
 
 1. Serve the folder (don't use `file://`, managers behave more like production over HTTP):
    ```bash
-   cd "open-passwords/test-harness"
+   cd "passbridge/test-harness"
    ./serve.sh          # or: python3 -m http.server 8765
    ```
    Then open http://localhost:8765/

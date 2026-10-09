@@ -11,3 +11,6 @@ __pycache__/
 *.pyc
 
 test-harness/automation/.builds/
+
+# git worktrees
+.worktrees/

@@ -15,8 +15,8 @@ You need:
 - Git
 
 ```bash
-git clone https://github.com/MehdiMamas/open-passwords.git
-cd open-passwords
+git clone https://github.com/MehdiMamas/passbridge.git
+cd passbridge
 npm install
 npm run build
 ```
@@ -55,8 +55,8 @@ You need:
 In Git Bash or PowerShell:
 
 ```bash
-git clone https://github.com/MehdiMamas/open-passwords.git
-cd open-passwords
+git clone https://github.com/MehdiMamas/passbridge.git
+cd passbridge
 npm install
 npm run build
 ```
