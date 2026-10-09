@@ -9,9 +9,9 @@
   macOS and Windows. Not affiliated with Apple or Bitwarden.
 </p>
 
-PassBridge is a fork of [Open Passwords](https://github.com/ManiForoughi2/open-passwords). It speaks Apple's native-messaging protocol (`com.apple.passwordmanager`) so the live vault stays in iCloud, and it takes field detection lists from [Bitwarden's browser extension](https://github.com/bitwarden/clients). How to pull a newer Bitwarden, au2001, or open-passwords commit is in [UPSTREAMS.md](UPSTREAMS.md).
+PassBridge started as a fork of [Open Passwords](https://github.com/ManiForoughi2/open-passwords). It speaks Apple's native-messaging protocol (`com.apple.passwordmanager`) so the live vault stays in iCloud, and it takes field detection lists from [Bitwarden's browser extension](https://github.com/bitwarden/clients). How to pull a newer Bitwarden, au2001, or open-passwords commit is in [UPSTREAMS.md](UPSTREAMS.md).
 
-Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension is attached to each [release](https://github.com/MehdiMamas/open-passwords/releases). Unzip it and load that folder unpacked.
+Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension is attached to each [release](https://github.com/MehdiMamas/passbridge/releases). Unzip it and load that folder unpacked.
 
 <p align="center">
   <img src="docs/images/popup-light.png" width="300" alt="PassBridge popup with saved logins for the current site">
@@ -43,7 +43,7 @@ Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension 
 
 ## Credits
 
-- [ManiForoughi2/open-passwords](https://github.com/ManiForoughi2/open-passwords) (Apache-2.0), the client this fork starts from.
+- [ManiForoughi2/open-passwords](https://github.com/ManiForoughi2/open-passwords) (Apache-2.0), the client PassBridge started from.
 - [au2001/icloud-passwords-firefox](https://github.com/au2001/icloud-passwords-firefox) (Apache-2.0), the protocol implementation in `src/apple/`.
 - [bitwarden/clients](https://github.com/bitwarden/clients) (GPL-3.0), the autofill field lists. Snapshot under `vendor/bitwarden/`. Nothing from `bitwarden_license/` is included.
 - [Open Runde](https://github.com/lauridskern/open-runde) (SIL OFL 1.1), the interface font. The license text is in `fonts/OFL.txt`.

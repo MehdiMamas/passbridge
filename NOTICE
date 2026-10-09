@@ -1,7 +1,7 @@
 PassBridge
 Copyright 2026 the PassBridge contributors
 
-PassBridge is a fork of Open Passwords, retargeted at Bitwarden's autofill
+PassBridge started as a fork of Open Passwords, retargeted at Bitwarden's autofill
 behavior while still reading the live Apple Passwords vault.
 
 Upstream client (Apache-2.0):
