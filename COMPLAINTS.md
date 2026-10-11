@@ -21,7 +21,7 @@ Legend: ✅ fixed · 🟡 partial · ⛔ inherent (no extension can fix)
 | 7 | Breaks Google Pay / payment autofill | Apple's "disable Chrome autofill" also kills credit-card and address autofill | suppresses only `passwordSavingEnabled`; Chrome's payment and address autofill keep working | ✅ |
 | 8 | Two-step (username then password) logins fail | doesn't re-detect the dynamically-shown password field | `autocomplete="username"` plus page-wide password detection handles Google/Microsoft-style two-step. verified in the UI suite | ✅ |
 | 9 | Fills, but login fails until you edit a char | programmatic fill doesn't dispatch `input`/`change`, so the page's JS never sees the value | dispatches real `input` and `change` events on every fill. verified: events fire on both fields | ✅ |
-| 10 | Subdomain / domain-matching failures | strict exact-host matching | passes the full hostname to the helper, which does Apple's own associated-domain matching | 🟡 |
+| 10 | Subdomain / domain-matching failures | strict exact-host matching | passes the full hostname to the helper, which does Apple's own associated-domain matching. on a subdomain it also asks for the site itself, so account.apple.com lists apple.com logins | 🟡 |
 | 11 | Popup obscures the screen / can't dismiss | overlay z-index and positioning bugs, premature dismissal | the dropdown anchors under the field, closes on outside-click/scroll/resize, and never covers the field | ✅ |
 | 12 | "Never save" flag stuck, unclearable off-Mac | no UI to clear it | saving goes through Apple's native save sheet (since v0.26), so the "never save" flag lives in the Passwords app where you can clear it | 🟡 |
 | 13 | Save-new-password auto-saves without consent | aggressive auto-capture | offers to save after a login or password change (since v0.26) and hands off to Apple's native save sheet; nothing is stored without a click | ✅ |
@@ -52,6 +52,8 @@ Legend: ✅ fixed · 🟡 partial · ⛔ inherent (no extension can fix)
 
 - a settings control that clears Apple's "never save" flag from inside the browser (#12). Saving already goes through Apple's sheet.
 
-Every ✅ above is backed by an automated test in `test-harness/automation/`. Totals
-at last run: 22/22 adversarial, 17/17 UI, 4/4 PIN, plus multi-account, input-events
-(#9), and clickjacking (#18).
+Every ✅ above is backed by an automated test in `test-harness/automation/`: the
+adversarial, UI, multi-account, input-events (#9) and clickjacking (#18) suites, run
+with `node test-harness/automation/run-all.mjs`, and the PIN session test
+(`pin-session.test.mjs`, 14/14). The adversarial and UI totals quoted above are from
+an earlier run; run-all prints the current ones.

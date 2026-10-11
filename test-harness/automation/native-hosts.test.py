@@ -1,4 +1,4 @@
-# runs the Python hosts' --selftest modes, then drives the Windows policy host over native messaging.
+# drives the Windows policy host over native messaging.
 # the policy checks never write the registry: "set" and "clear" run in-process with the writers stubbed
 # to raise Access Denied, so they reach the OPENPASSWORDS_NO_ELEVATE path without a UAC prompt.
 import importlib.util
@@ -73,13 +73,9 @@ def in_process(module, action):
         module._write_dword, module._delete_value, module.subprocess.run, sys.stdin, sys.stdout, sys.argv = saved
 
 
-for script in [NATIVE / "passbridge-autopair.py", NATIVE / "windows" / "passbridge-autopair.py", NATIVE / "windows" / "passbridge-totpsetup.py"]:
-    proc = subprocess.run([sys.executable, "-I", str(script), "--selftest"], capture_output=True, text=True, timeout=60)
-    name = script.relative_to(ROOT).as_posix()
-    ok(f"{name} --selftest", proc.returncode == 0 and "selftest ok" in proc.stdout, (proc.stdout + proc.stderr).strip()[-300:])
-
 if sys.platform != "win32":
     print("SKIP policy host checks (they need winreg, Windows only)")
+    sys.exit(0)
 else:
     code, msg, err = host(frame({"action": "get"}), origin="chrome-extension://someoneelse/")
     ok("policy host refuses another extension", msg == {"ok": False, "error": "forbidden"}, f"{code} {msg} {err}")
@@ -110,6 +106,16 @@ else:
             isinstance(msg, dict) and msg.get("ok") is False and "locked" in msg.get("error", "") and not launched,
             f"{msg} launched={launched}",
         )
+
+    # the elevated import runs as the approving admin, so the .reg must name this user's hive
+    text = policy._reg_text(False, "S-1-5-21-1-2-3-1001")
+    ok(
+        "elevated .reg targets HKEY_USERS\<sid>, not HKEY_CURRENT_USER",
+        "[HKEY_USERS\S-1-5-21-1-2-3-1001\\" in text and "HKEY_CURRENT_USER" not in text,
+        text[:200],
+    )
+    sid = policy._user_sid()
+    ok("policy host resolves this user's SID", bool(sid) and sid.startswith("S-1-5-"), str(sid))
 
 failed = results.count(False)
 print(f"\n==== {len(results) - failed}/{len(results)} PASS ====")

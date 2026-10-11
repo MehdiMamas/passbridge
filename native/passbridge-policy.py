@@ -102,4 +102,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # uninstall.sh asks this before it says the password manager is back
+    if sys.argv[1:] == ["--forced"]:
+        sys.exit(0 if is_forced() else 3)
     main()
