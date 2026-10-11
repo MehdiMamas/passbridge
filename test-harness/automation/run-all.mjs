@@ -23,7 +23,7 @@ const DRIVERS = [
   ["Inline menu host (closed shadow, field icon)", "drive-menu.mjs"],
   ["Login list (search, scroll cap, keyboard)", "drive-login-list.mjs"],
   ["Popup UI preview (8 screens render)", "drive-ui-preview.mjs"],
-  ["Adapter unit (fill script, port names)", "unit.test.mjs"],
+  ["Unit (matching, otpauth, protocol, SRP)", "unit.test.mjs"],
 ];
 
 if (!existsSync(join(HERE, ".builds", "unlocked"))) {
