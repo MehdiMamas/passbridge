@@ -1,4 +1,5 @@
-// User-facing defaults. Content scripts repeat this object because they are not modules.
+// User-facing defaults, the one copy: background imports it, content.js gets it bundled,
+// options.jsx reads and writes against it.
 
 export const SETTINGS_DEFAULTS = {
   inlineMenuVisibility: "on-focus",
@@ -13,6 +14,10 @@ export const SETTINGS_DEFAULTS = {
   blockedDomains: [],
   showAnimations: true,
   showFavicons: true,
+  hidePasskeys: false,
+  // Chrome's own save-password bubble and address autofill, switched through chrome.privacy
+  suppressSaveBubble: true,
+  suppressAddressAutofill: false,
 };
 
 export function getSettings() {
