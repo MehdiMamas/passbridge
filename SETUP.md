@@ -93,6 +93,7 @@ On some PCs `HKCU\Software\Policies` is locked. Then the setting asks for a UAC 
 2. Focusing a username or password field shows a PassBridge menu. A search box or a comment box does not.
 3. Choosing a row fills the form. A one-time-code field offers a verification code only when the vault has one for that site.
 4. Saving a new password shows a bar at the top of the page, then Apple's own save sheet.
+5. Right-clicking a setup QR code and choosing "Scan this image for a verification code" shows a bar. After "Choose a login", PassBridge opens the Passwords app and copies nothing. "Copy setup key" copies the key only when you click it; paste it in Passwords, then clear your clipboard history. PassBridge forgets the key after the copy, a dismiss, or 2 minutes.
 
 Shortcuts (change them at `chrome://extensions/shortcuts`):
 

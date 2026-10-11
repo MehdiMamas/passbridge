@@ -803,6 +803,8 @@ chrome.windows?.onFocusChanged.addListener((windowId) => {
   if (windowId !== chrome.windows.WINDOW_ID_NONE) refreshActiveTab();
 });
 chrome.tabs?.onUpdated.addListener((tabId, info) => {
+  // a navigated tab drops its old count for free; it is looked up again once it is active
+  if (info.url) chrome.action.setBadgeText({ text: "", tabId }).catch(() => {});
   if (info.status !== "complete") return;
   focusedTab()
     .then((tab) => {
