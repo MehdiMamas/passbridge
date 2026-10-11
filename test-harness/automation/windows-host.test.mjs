@@ -1,7 +1,8 @@
 // iCloud for Windows speaks the same SRP session, with two encoding quirks:
 // MSG (and sometimes ErrCode) arrive as strings, and SMSG arrives as a JSON string.
 
-import { webcrypto } from "node:crypto";
+import { createCipheriv, randomBytes, webcrypto } from "node:crypto";
+import { appleServer, big, bytes } from "./srp-reference.mjs";
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
@@ -12,61 +13,9 @@ const ok = (name, cond, detail = "") => {
 };
 
 const SRC = new URL("../../src/apple/", import.meta.url);
-const crypt = await import(new URL("crypto.js", SRC));
-const { sha256, bigIntToBytes, bytesToBigInt, padBytes, utf8ToBytes, mod, powmod } = crypt;
 
-const N = BigInt(
-  "0x" +
-    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AAAC42DAD33170D04507A33A85521ABDF1CBA64ECFB850458DBEF0A8AEA71575D060C7DB3970F85A6E1E4C7ABF5AE8CDB0933D71E8C94E04A25619DCEE3D2261AD2EE6BF12FFA06D98A0864D87602733EC86A64521F2B18177B200CBBE117577A615D6C770988C0BAD946E208E24FA074E5AB3143DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF",
-);
-const NB = 384;
-const g = 5n;
-
-class SrpServer {
-  constructor({ pin, salt }) {
-    this.pin = pin;
-    this.salt = salt;
-  }
-  async start(username, A) {
-    this.username = username;
-    this.A = A;
-    const innerHash = await sha256(utf8ToBytes(username + ":" + this.pin));
-    const x = bytesToBigInt(await sha256(this.salt, innerHash));
-    this.v = powmod(g, x, N);
-    this.b = bytesToBigInt(crypt.randomBytes(32));
-    const k = bytesToBigInt(await sha256(bigIntToBytes(N), padBytes(bigIntToBytes(g), NB)));
-    this.B = mod(mod(k * this.v, N) + powmod(g, this.b, N), N);
-    return { B: this.B, s: this.salt };
-  }
-  async sharedKey() {
-    const u = bytesToBigInt(
-      await sha256(padBytes(bigIntToBytes(this.A), NB), padBytes(bigIntToBytes(this.B), NB)),
-    );
-    const S = powmod(mod(this.A * powmod(this.v, u, N), N), this.b, N);
-    return bytesToBigInt(await sha256(bigIntToBytes(S)));
-  }
-  async expectedM() {
-    const K = await this.sharedKey();
-    const hN = await sha256(bigIntToBytes(N));
-    const hg = await sha256(padBytes(bigIntToBytes(g), NB));
-    const xored = new Uint8Array(hN.length);
-    for (let i = 0; i < hN.length; i++) xored[i] = hN[i] ^ hg[i];
-    return sha256(
-      xored,
-      await sha256(utf8ToBytes(this.username)),
-      this.salt,
-      bigIntToBytes(this.A),
-      bigIntToBytes(this.B),
-      padBytes(bigIntToBytes(K), 32),
-    );
-  }
-  async hamk(m) {
-    const K = await this.sharedKey();
-    return sha256(bigIntToBytes(this.A), m, padBytes(bigIntToBytes(K), 32));
-  }
-}
-
-function makeWindowsHost({ pin, salt }) {
+// verify: "check" grades M, or forces a reply: { ErrCode, HAMK: "valid" | "forged" }
+function makeWindowsHost({ pin, salt, verify = "check" }) {
   const state = { server: null, live: false, username: "" };
   const port = {
     onMessage: { addListener: (fn) => port._listeners.push(fn) },
@@ -80,17 +29,16 @@ function makeWindowsHost({ pin, salt }) {
   const reply = (m) => port._listeners.forEach((fn) => fn(m));
   const b64 = (o) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
   const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
-  const hex = (bytes) => "0x" + crypt.bytesToHex(bytes);
-  const unhex = (s) => crypt.hexToBytes(String(s).replace(/^0x/, ""));
+  const wire = (b) => "0x" + Buffer.from(b).toString("hex");
+  const unwire = (s) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
+  const verdict = (pake, fields) => reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: "3", ...fields }) } });
 
-  async function encryptReply(obj) {
-    const keyBytes = padBytes(bigIntToBytes(await state.server.sharedKey()), 32).slice(0, 16);
-    const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt"]);
-    const iv = crypt.randomBytes(16);
-    const ct = new Uint8Array(
-      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, utf8ToBytes(JSON.stringify(obj))),
-    );
-    return crypt.concatBytes(iv, ct);
+  // AES-128-GCM under the first half of K, sent as iv || ciphertext || tag
+  function encryptReply(obj) {
+    const iv = randomBytes(16);
+    const c = createCipheriv("aes-128-gcm", state.server.K.subarray(0, 16), iv);
+    const ct = Buffer.concat([c.update(JSON.stringify(obj), "utf8"), c.final()]);
+    return Buffer.concat([iv, ct, c.getAuthTag()]);
   }
 
   async function handle(msg) {
@@ -106,20 +54,19 @@ function makeWindowsHost({ pin, salt }) {
       });
     }
     if (msg.cmd === 4) {
-      const blob = await encryptReply({
+      const blob = encryptReply({
         STATUS: 0,
         Entries: [{ USR: "ada@example.com", sites: ["example.com"] }],
       });
-      const smsg = JSON.stringify({ TID: state.username, SDATA: hex(blob) });
+      const smsg = JSON.stringify({ TID: state.username, SDATA: wire(blob) });
       return reply({ cmd: 4, payload: { SMSG: smsg } });
     }
     if (msg.cmd !== 2) return;
     const pake = unb64(msg.msg.PAKE);
     if (msg.msg.QID === "m0") {
       state.username = pake.TID;
-      state.server = new SrpServer({ pin, salt });
+      state.server = appleServer({ username: pake.TID, pin, salt, A: big(unwire(pake.A)), b: big(randomBytes(32)) });
       state.live = true;
-      const { B, s } = await state.server.start(pake.TID, bytesToBigInt(unhex(pake.A)));
       return reply({
         cmd: 2,
         payload: {
@@ -128,62 +75,100 @@ function makeWindowsHost({ pin, salt }) {
             MSG: "1",
             PROTO: 1,
             VER: "1.0",
-            B: hex(bigIntToBytes(B)),
-            s: hex(s),
+            B: wire(bytes(state.server.B)),
+            s: wire(salt),
           }),
         },
       });
     }
-    if (!state.live) {
-      return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: "3", ErrCode: "1" }) } });
-    }
-    const expected = await state.server.expectedM();
-    const got = unhex(pake.M);
+    if (!state.live) return verdict(pake, { ErrCode: "1" });
     state.live = false;
-    if (Buffer.compare(Buffer.from(expected), Buffer.from(got)) !== 0) {
-      return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: "3", ErrCode: "1" }) } });
+    if (verify !== "check") {
+      const hamk = verify.HAMK === "forged" ? randomBytes(32) : state.server.HAMK;
+      return verdict(pake, { ErrCode: verify.ErrCode, HAMK: wire(hamk) });
     }
-    const hamk = await state.server.hamk(got);
-    return reply({
-      cmd: 2,
-      payload: { PAKE: b64({ TID: pake.TID, MSG: "3", ErrCode: "0", HAMK: hex(hamk) }) },
-    });
+    if (Buffer.compare(state.server.M, unwire(pake.M)) !== 0) return verdict(pake, { ErrCode: "1" });
+    return verdict(pake, { ErrCode: "0", HAMK: wire(state.server.HAMK) });
   }
 
   globalThis.chrome = { runtime: { connectNative: () => port, lastError: undefined } };
   return state;
 }
 
-const salt = crypt.randomBytes(16);
-if (salt[0] === 0) salt[0] = 0x7f;
-makeWindowsHost({ pin: "123456", salt });
-const { ApplePasswords } = await import(new URL(`protocol.js?windows=${Math.random()}`, SRC));
-const client = new ApplePasswords();
-await client.connect();
-ok("windows capabilities omit the passwords-app sheet", client.canOpenPasswordsAppToNewPasswordSheet === false);
-ok("windows capabilities include one-time codes", client.canFillOneTimeCodes === true);
-ok("windows capabilities include totp setup", client.canSetUpTotp === true);
+const plainSalt = () => {
+  const s = randomBytes(16);
+  if (s[0] === 0) s[0] = 0x7f;
+  return s;
+};
 
-await client.requestChallenge();
-let err = null;
-await client.verifyPin("123456").catch((e) => (err = e));
-ok("string MSG and string ErrCode still unlock", client.state === "unlocked" && !err, String(err?.message));
-
-let names = null;
-let listErr = null;
-try {
-  names = await client.getLoginNamesForURL(1, "https://example.com/login");
-} catch (e) {
-  listErr = e;
+async function freshClient(opts) {
+  makeWindowsHost({ pin: "123456", salt: plainSalt(), ...opts });
+  const { ApplePasswords } = await import(new URL(`protocol.js?windows=${Math.random()}`, SRC));
+  const client = new ApplePasswords();
+  await client.connect();
+  await client.requestChallenge();
+  return client;
 }
-ok(
-  "string SMSG still lists logins",
-  names?.[0]?.username === "ada@example.com" && !listErr,
-  listErr ? String(listErr.message) : JSON.stringify(names),
-);
+
+async function verify(client, pin) {
+  let err = null;
+  await client.verifyPin(pin).catch((e) => (err = e));
+  return err;
+}
+
+{
+  const client = await freshClient();
+  ok("windows capabilities omit the passwords-app sheet", client.canOpenPasswordsAppToNewPasswordSheet === false);
+  ok("windows capabilities include one-time codes", client.canFillOneTimeCodes === true);
+  ok("windows capabilities include totp setup", client.canSetUpTotp === true);
+
+  const err = await verify(client, "123456");
+  ok("string MSG and string ErrCode still unlock", client.state === "unlocked" && !err, String(err?.message));
+
+  let names = null;
+  let listErr = null;
+  try {
+    names = await client.getLoginNamesForURL(1, "https://example.com/login");
+  } catch (e) {
+    listErr = e;
+  }
+  ok(
+    "string SMSG still lists logins",
+    names?.[0]?.username === "ada@example.com" && !listErr,
+    listErr ? String(listErr.message) : JSON.stringify(names),
+  );
+}
+
+{
+  const client = await freshClient();
+  const err = await verify(client, "000000");
+  ok(
+    'wrong PIN (string ErrCode "1") is rejected as an incorrect code',
+    client.state !== "unlocked" && /incorrect/i.test(String(err?.message)),
+    `state=${client.state} err=${err?.message}`,
+  );
+}
+
+{
+  const client = await freshClient({ verify: { ErrCode: "2", HAMK: "valid" } });
+  const err = await verify(client, "123456");
+  ok(
+    'any other ErrCode ("2") is rejected even with a valid HAMK',
+    client.state !== "unlocked" && /verification error 2/.test(String(err?.message)),
+    `state=${client.state} err=${err?.message}`,
+  );
+}
+
+{
+  const client = await freshClient({ verify: { ErrCode: "0", HAMK: "forged" } });
+  const err = await verify(client, "123456");
+  ok(
+    'ErrCode "0" with a forged HAMK is rejected',
+    client.state !== "unlocked" && /HAMK/.test(String(err?.message)),
+    `state=${client.state} err=${err?.message}`,
+  );
+}
 
 const failed = results.filter((r) => !r.cond).length;
-if (failed) {
-  console.error(`${failed} failed`);
-  process.exit(1);
-}
+console.log(`\n==== ${results.length - failed}/${results.length} PASS ====`);
+process.exit(failed ? 1 : 0);

@@ -1,39 +1,26 @@
 // a foreign sub-frame must never get an offer (confused deputy via all_frames)
-import { fileURLToPath } from "url";
-const pw = await import(process.env.OP_PW || "/tmp/op-test/node_modules/playwright/index.js");
-const { chromium } = pw.default || pw;
-const EXT = process.env.OP_EXT || fileURLToPath(new URL("./.builds/unlocked", import.meta.url));
-const BASE = process.env.OP_BASE || "http://127.0.0.1:8799";
+// openpw.test resolves to 127.0.0.1 through the launch flags in lib.mjs
+import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 
-const ctx = await chromium.launchPersistentContext("/tmp/op-xo-" + Date.now(), {
-  headless: false,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--headless=new", "--no-first-run"],
+await main(async () => {
+  const ctx = await launchExtension(build("unlocked"));
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
+  const foreign = new URL("/iframe-pages/iframe-login.html", BASE);
+  foreign.hostname = "openpw.test";
+  await page.evaluate((src) => {
+    const f = document.createElement("iframe");
+    f.id = "xf";
+    f.style = "width:600px;height:300px";
+    f.src = src;
+    document.body.appendChild(f);
+  }, foreign.href);
+  await page.waitForTimeout(1200);
+  const xframe = page.frames().find((f) => f.url().includes("openpw.test") && f.url().includes("iframe-login"));
+  const field = xframe?.locator('input[name="username"], input[autocomplete="username"], input[type="text"]').first();
+  if (!ok("cross-origin frame loaded", xframe && (await field.count()) > 0, "frame did not load, so nothing was tested")) return;
+  await field.focus().catch(() => {});
+  await page.waitForTimeout(700);
+  const dd = await xframe.locator('[data-passbridge="suggestions"]').count();
+  ok("cross-origin iframe shows NO offer (leak closed)", dd === 0, `got an offer (${dd})`);
 });
-ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }).catch(() => null));
-const page = await ctx.newPage();
-await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
-await page.evaluate(() => {
-  const f = document.createElement("iframe");
-  f.id = "xf";
-  f.style = "width:600px;height:300px";
-  f.src = "http://openpw.test:8799/iframe-pages/iframe-login.html";
-  document.body.appendChild(f);
-});
-await page.waitForTimeout(1200);
-const xframe = page.frames().find((f) => f.url().includes("openpw.test") && f.url().includes("iframe-login"));
-if (!xframe) {
-  console.log("PASS (cross-origin frame did not load; no offer possible)");
-  await ctx.close();
-  process.exit(0);
-}
-await xframe
-  .locator('input[name="username"], input[autocomplete="username"], input[type="text"]')
-  .first()
-  .focus()
-  .catch(() => {});
-await page.waitForTimeout(700);
-const dd = await xframe.locator('[data-passbridge="suggestions"]').count();
-const pass = dd === 0;
-console.log(pass ? "PASS cross-origin iframe shows NO offer (leak closed)" : `FAIL cross-origin iframe got an offer (${dd})`);
-await ctx.close();
-process.exit(pass ? 0 : 1);
