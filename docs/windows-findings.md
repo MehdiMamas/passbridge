@@ -61,11 +61,11 @@ A client-hello (`m0`) was accepted. The server hello PAKE fields were:
 | `B`, `s` | hex strings with a `0x` prefix | `shouldUseBase64` was absent, so hex is correct |
 | `ErrCode` | absent on success | |
 
-The PIN itself never travels in this reply. The helper shows it in the Windows UI. This probe did not type the code, so it did not unlock the vault, fill a login, or observe a Windows Hello prompt. A wrong or string `ErrCode` on the verify step is covered by `test-harness/automation/windows-host.test.mjs`.
+The PIN itself never travels in this reply. The helper shows it in the Windows UI. This probe did not type the code, so it did not unlock the vault, fill a login, or observe a Windows Hello prompt. `test-harness/automation/windows-host.test.mjs` (part of `npm test`) replays these string fields against a mock helper and covers the verify step: a wrong PIN (`ErrCode: "1"`), any other `ErrCode` even with a valid `HAMK`, and a forged `HAMK` are all rejected.
 
 ## Policy key
 
-Creating `HKCU\Software\Policies\Google\Chrome` (and the Edge, Brave, Chromium, and Vivaldi equivalents) returned Access Denied for this user. Existing keys under `HKCU\Software\Policies` are only `Microsoft` and `Power`. The policy host writes the DWORD directly when it can. When it cannot, it asks Windows to import a `.reg` file with a UAC prompt, the same shape as the macOS profile approval. The automated check skips that prompt (`OPENPASSWORDS_NO_ELEVATE=1`) and confirms the host returns an error instead of crashing.
+Creating `HKCU\Software\Policies\Google\Chrome` (and the Edge, Brave, Chromium, and Vivaldi equivalents) returned Access Denied for this user. Existing keys under `HKCU\Software\Policies` are only `Microsoft` and `Power`. The policy host writes the DWORD directly when it can. When it cannot, it asks Windows to import a `.reg` file with a UAC prompt, the same shape as the macOS profile approval. `test-harness/automation/native-hosts.test.py` (run by `npm test` when Python 3 is on PATH, Windows only for this part) stubs the registry writes to fail with Access Denied, sets `OPENPASSWORDS_NO_ELEVATE=1` so no UAC prompt appears, and confirms `set` and `clear` return an error instead of crashing. It never writes the real registry.
 
 ## Pairing-code reader
 
