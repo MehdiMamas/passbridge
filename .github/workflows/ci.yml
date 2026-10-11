@@ -27,5 +27,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      # unit, pin-session, windows-host and the Python host self-tests (the policy host checks need Windows)
+      # unit, pin-session and windows-host; the Python policy host checks need Windows and skip here
       - run: npm test
