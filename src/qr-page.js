@@ -43,6 +43,8 @@ export function qrImageRect() {
     w: r.width,
     h: r.height,
     dpr: window.devicePixelRatio || 1,
+    // inside a cross-origin frame the offset is unknown, so the whole capture is scanned instead
+    whole: !off.known,
   };
 }
 
@@ -99,6 +101,8 @@ export function showTotpBar(payload) {
       usernames: payload.usernames || [],
       error: payload.error || "",
       filled: !!payload.filled,
+      launched: !!payload.launched,
+      hasKey: !!payload.hasKey,
       detail: payload.detail || "",
     }, "*");
   };
@@ -124,8 +128,18 @@ export function showTotpBar(payload) {
       chrome.runtime.sendMessage({ type: "confirmTotp" }, (resp) => {
         void chrome.runtime.lastError;
         showTotpBar(resp?.ok
-          ? { mode: "copied", filled: !!resp.filled, detail: resp.detail || "" }
+          ? { mode: "handed", launched: !!resp.launched, hasKey: !!resp.hasKey, detail: resp.detail || "" }
           : { mode: "error", error: resp?.error || "Couldn't add a verification code." });
+      });
+      return;
+    }
+    if (action === "copyKey") {
+      pending = true;
+      chrome.runtime.sendMessage({ type: "copyTotpKey" }, (resp) => {
+        void chrome.runtime.lastError;
+        showTotpBar(resp?.ok
+          ? { mode: "copied" }
+          : { mode: "error", error: resp?.error || "Couldn't copy the setup key." });
       });
       return;
     }

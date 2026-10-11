@@ -55,10 +55,29 @@ function render(data) {
     requestAnimationFrame(reportHeight);
     return;
   }
+  if (data.mode === "handed") {
+    root.append(
+      line(data.launched ? "Sent to Passwords" : "Couldn't open Passwords", "font-weight:650;margin-bottom:4px"),
+      line(
+        data.detail || "Finish adding the code in Passwords. If it did not take the code, copy the setup key and paste it there.",
+        "opacity:.7;margin-bottom:8px",
+      ),
+    );
+    // only on an explicit click: Windows clipboard history and cloud clipboard keep what was copied
+    if (data.hasKey) root.append(line("The setup key is a secret. Clipboard history may keep it after PassBridge clears it.", "opacity:.7;font-size:12px;margin-bottom:12px"));
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:8px;justify-content:flex-end";
+    if (data.hasKey) row.append(button("Copy setup key", "copyKey", false));
+    row.append(button("OK", "cancel", true));
+    root.append(row);
+    reportHeight();
+    requestAnimationFrame(reportHeight);
+    return;
+  }
   if (data.mode === "copied") {
     root.append(
       line(data.filled ? "Verification code added" : "Setup key copied", "font-weight:650;margin-bottom:4px"),
-      line(data.detail || "Paste it in Passwords if the app did not take it.", "opacity:.7;margin-bottom:12px"),
+      line(data.detail || "Paste it in Passwords, then clear your clipboard history.", "opacity:.7;margin-bottom:12px"),
     );
     const row = document.createElement("div");
     row.style.cssText = "display:flex;justify-content:flex-end";
