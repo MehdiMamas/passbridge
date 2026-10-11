@@ -27,21 +27,24 @@ npm run build
 2. Turn on Developer mode.
 3. Click Load unpacked and choose the `dist` folder inside the clone (not the repo root).
 4. Confirm the extension id is `pejdijmoenmkgeppbflobdenhhabjlaj`.
-5. Click the toolbar icon. Your Mac shows a 6-digit code. Type it once. Optional: Settings, then "Enter the pairing code for me", after the helper below is installed.
+5. Click the toolbar icon. Your Mac shows a 6-digit code. Type it once.
 
 Check it: open a site that has a saved login, click the username field, pick the row. macOS may ask for Touch ID. That prompt is the vault, not a bug.
 
 ### Optional macOS helper
 
-This installs the "hide Chrome's password manager" profile and the pairing-code reader.
+This adds the "Hide Chrome's password manager" setting. Turning it on installs a configuration profile that you approve once in System Settings.
+
+The helper runs on `/usr/bin/python3`, which is only a stub until the Xcode Command Line Tools are installed. Install them first if you haven't:
 
 ```bash
+xcode-select --install
 ./native/install.sh
 ```
 
 Quit Chrome with Cmd+Q and reopen it. Then open PassBridge settings.
 
-`./native/uninstall.sh` removes the helper. It also removes older `com.openpasswords.*` registrations from before the PassBridge rename.
+`./native/uninstall.sh` removes the helper. If the password-manager profile is still installed, it tries to remove it and otherwise opens System Settings > General > Device Management so you can remove "PassBridge - Hide Browser Password Manager" yourself. It only says the password manager is restored once the profile is gone. It also removes older `com.openpasswords.*` registrations from before the PassBridge rename, and the pairing-code reader that earlier versions installed.
 
 ## Windows
 
@@ -78,9 +81,11 @@ Git Bash strips unquoted backslashes, so `.\native\windows\install.ps1` becomes 
 
 The installer points Chrome at the WindowsApps alias for `iCloudPasswordsExtensionHelper.exe`, which is more reliable than the protected package path. Details from the machine this was probed on are in [docs/windows-findings.md](docs/windows-findings.md).
 
-`native/windows/uninstall.ps1` removes the PassBridge host keys and the older `com.openpasswords.*` keys. It does not remove iCloud for Windows.
+`native/windows/uninstall.ps1` removes the PassBridge host keys and the older `com.openpasswords.*` keys, and clears the password-manager policy if PassBridge set it. It does not remove iCloud for Windows.
 
-Python is needed for the policy toggle, the pairing-code reader, and the verification-code setup helper. Filling passwords does not need Python. If the pairing toast does not expose its text, type the code. If Passwords does not take a scanned setup key, it is copied so you can paste it.
+Python is needed only for the "Hide Chrome's password manager" setting. Filling passwords does not need Python. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
+
+On some PCs `HKCU\Software\Policies` is locked. Then the setting asks for a UAC approval and imports the policy into your own user hive, even when a different administrator account approves it.
 
 ## Is it working?
 

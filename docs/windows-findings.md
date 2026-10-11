@@ -66,7 +66,3 @@ The PIN itself never travels in this reply. The helper shows it in the Windows U
 ## Policy key
 
 Creating `HKCU\Software\Policies\Google\Chrome` (and the Edge, Brave, Chromium, and Vivaldi equivalents) returned Access Denied for this user. Existing keys under `HKCU\Software\Policies` are only `Microsoft` and `Power`. The policy host writes the DWORD directly when it can. When it cannot, it asks Windows to import a `.reg` file with a UAC prompt, the same shape as the macOS profile approval. The automated check skips that prompt (`OPENPASSWORDS_NO_ELEVATE=1`) and confirms the host returns an error instead of crashing.
-
-## Pairing-code reader
-
-`native/windows/passbridge-autopair.py` walks top-level UI Automation windows whose title mentions iCloud, Passwords, or a notification, and pulls a 6-digit code out of their text. On this PC the UI Automation assembly loaded (`check` returned ok). A `read` with no toast on screen returned `no pairing toast with a 6-digit code was visible`. Windows toasts often do not expose their body even when they are visible. When they don't, the code is typed by hand. The toggle stays off unless `install.ps1` has registered the host.
