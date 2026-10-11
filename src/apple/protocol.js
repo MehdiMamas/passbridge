@@ -1,3 +1,4 @@
+// @ts-check
 // ported from au2001/icloud-passwords-firefox (Apache-2.0), see NOTICE
 
 import { SRPSession, SecretSessionVersion, MSGType } from "./srp.js";
@@ -34,12 +35,12 @@ function asInt(v) {
 }
 // past this we re-prompt instead of verifying against a code the user lost track of
 const CHALLENGE_TTL_MS = 3 * 60_000;
+// password and code reads may wait on Touch ID or Windows Hello, but never forever: a stuck read holds the lock
+const USER_AUTH_TIMEOUT_MS = 2 * 60_000;
 
 // callers show "new code" wording for this, retyping the old code can never work
 function challengeError(message) {
-  const e = new Error(message);
-  e.code = "challenge_reissued";
-  return e;
+  return Object.assign(new Error(message), { code: "challenge_reissued" });
 }
 
 // numbering matches the helper's own ExtensionCommand enum (and apple's extension)
@@ -97,11 +98,16 @@ function normalizeOtpEntries(entries) {
 
 export class ApplePasswords {
   constructor() {
+    /** @type {chrome.runtime.Port | undefined} */
     this.port = undefined;
+    /** @type {SRPSession | undefined} */
     this.session = undefined;
+    /** @type {Record<string, any> | undefined} */
     this.capabilities = undefined;
     this.state = State.Disconnected;
+    /** @type {Map<number, { resolve: (m: any) => void, reject: (e: Error) => void, timer: ReturnType<typeof setTimeout> | null }>} */
     this._waiters = new Map();
+    /** @type {(state: string) => void} */
     this._onState = () => {};
     this._onOneTimeCode = () => {};
     this._challengeAt = 0;
@@ -111,6 +117,11 @@ export class ApplePasswords {
     this._lock = Promise.resolve();
   }
 
+  /**
+   * @template T
+   * @param {() => T | Promise<T>} fn
+   * @returns {Promise<T>}
+   */
   _withLock(fn) {
     const run = this._lock.then(fn, fn);
     this._lock = run.then(
@@ -160,10 +171,12 @@ export class ApplePasswords {
   }
 
   _send(cmd, body = {}, timeoutMs = 5000) {
-    if (!this.port) throw new Error("connection closed");
+    const port = this.port;
+    if (!port) throw new Error("connection closed");
     // a second request on the same cmd would steal the first one's reply
     if (this._waiters.has(cmd)) return Promise.reject(new Error("another request is already in flight"));
     return new Promise((resolve, reject) => {
+      /** @type {{ resolve: (m: any) => void, reject: (e: Error) => void, timer: ReturnType<typeof setTimeout> | null }} */
       const entry = { resolve, reject, timer: null };
       entry.timer =
         timeoutMs == null
@@ -174,13 +187,23 @@ export class ApplePasswords {
             }, timeoutMs);
       this._waiters.set(cmd, entry);
       try {
-        this.port.postMessage({ cmd, ...body });
+        port.postMessage({ cmd, ...body });
       } catch (e) {
         if (entry.timer) clearTimeout(entry.timer);
         if (this._waiters.get(cmd) === entry) this._waiters.delete(cmd);
         reject(e);
       }
     });
+  }
+
+  // a request that can never be answered must not hold the lock for every later one
+  _rejectWaiters(reason) {
+    const waiters = [...this._waiters.values()];
+    this._waiters.clear();
+    for (const w of waiters) {
+      if (w.timer) clearTimeout(w.timer);
+      w.reject(new Error(reason));
+    }
   }
 
   _dispatch(message) {
@@ -205,6 +228,7 @@ export class ApplePasswords {
   connect() {
     if (this.port) return Promise.resolve();
     if (this._connectPending) return this._connectPending;
+    /** @type {Promise<void>} */
     const pending = new Promise((resolve, reject) => {
       let port;
       try {
@@ -221,6 +245,7 @@ export class ApplePasswords {
         if (owned) {
           this.port = undefined;
           this.session = undefined;
+          this._rejectWaiters("connection closed");
         }
         if (this._dropping) {
           this._dropping = false;
@@ -234,15 +259,16 @@ export class ApplePasswords {
 
       this._send(Command.GET_CAPABILITIES)
         .then((reply) => {
-          this.capabilities = reply.capabilities ?? {};
+          const capabilities = reply.capabilities ?? {};
+          this.capabilities = capabilities;
           // helper negotiates the version per handshake via PROTO, so only reject an explicit non-RFC demand
           if (
-            this.capabilities.secretSessionVersion !== undefined &&
-            this.capabilities.secretSessionVersion !== SecretSessionVersion.SRPWithRFCVerification
+            capabilities.secretSessionVersion !== undefined &&
+            capabilities.secretSessionVersion !== SecretSessionVersion.SRPWithRFCVerification
           ) {
             return reject(new Error("unsupported capabilities (expected SRP RFC verification)"));
           }
-          this.session = new SRPSession(this.capabilities.shouldUseBase64);
+          this.session = new SRPSession(capabilities.shouldUseBase64);
           this._setState(State.NeedsPin);
           resolve();
         })
@@ -271,6 +297,7 @@ export class ApplePasswords {
     const port = this.port;
     this.port = undefined;
     this.session = undefined;
+    this._rejectWaiters("connection closed");
     if (port) {
       this._dropping = true;
       try { port.disconnect(); } catch (_) {}
@@ -302,19 +329,26 @@ export class ApplePasswords {
     return p;
   }
 
+  // the session a request started on, a disconnect between awaits clears this.session
+  _liveSession() {
+    if (!this.session) throw new Error("connection closed");
+    return this.session;
+  }
+
   async _issueChallenge() {
-    this.session.serverPublicKey = undefined;
-    this.session.salt = undefined;
-    this.session.sharedKey = undefined;
+    const session = this._liveSession();
+    session.serverPublicKey = undefined;
+    session.salt = undefined;
+    session.sharedKey = undefined;
     this._challengeGen++;
 
     const reply = await this._send(Command.HANDSHAKE, {
       msg: {
         QID: "m0",
         PAKE: jsonToBase64({
-          TID: this.session.username,
+          TID: session.username,
           MSG: MSGType.ClientKeyExchange,
-          A: this.session.serialize(this.session.clientPublicKeyBytes),
+          A: session.serialize(session.clientPublicKeyBytes),
           VER: VERSION,
           PROTO: [SecretSessionVersion.SRPWithRFCVerification],
         }),
@@ -323,14 +357,14 @@ export class ApplePasswords {
     });
 
     const pake = JSON.parse(bytesToUtf8(base64ToBytes(reply.payload.PAKE)));
-    if (pake.TID !== this.session.username) throw new Error("challenge for another session");
+    if (pake.TID !== session.username) throw new Error("challenge for another session");
     if (pake.ErrCode !== undefined) throw new Error(`server hello error ${pake.ErrCode}`);
     if (pake.MSG.toString() !== MSGType.ServerKeyExchange.toString()) throw new Error("unexpected server message");
     if (asInt(pake.PROTO) !== SecretSessionVersion.SRPWithRFCVerification) throw new Error("unsupported protocol");
 
-    const B = bytesToBigInt(this.session.deserialize(pake.B));
-    const s = this.session.deserialize(pake.s);
-    this.session.setServerPublicKey(B, s);
+    const B = bytesToBigInt(session.deserialize(pake.B));
+    const s = session.deserialize(pake.s);
+    session.setServerPublicKey(B, s);
     this._challengeAt = Date.now();
     this._setState(State.NeedsPin);
     return true;
@@ -347,40 +381,39 @@ export class ApplePasswords {
     return this._withLock(async () => {
       // re-issued while queued, typed code is for the old prompt
       if (gen !== this._challengeGen) throw challengeError(freshCodeMessage());
+      const session = this._liveSession();
       try {
-        await this.session.setSharedKey(pin);
-        const m = await this.session.computeM();
+        await session.setSharedKey(pin);
+        const m = await session.computeM();
 
         const reply = await this._send(Command.HANDSHAKE, {
           msg: {
             QID: "m2",
             PAKE: jsonToBase64({
-              TID: this.session.username,
+              TID: session.username,
               MSG: MSGType.ClientVerification,
-              M: this.session.serialize(m, false),
+              M: session.serialize(m, false),
             }),
           },
         });
 
         const pake = JSON.parse(bytesToUtf8(base64ToBytes(reply.payload.PAKE)));
-        if (pake.TID !== this.session.username) throw new Error("verification for another session");
+        if (pake.TID !== session.username) throw new Error("verification for another session");
         if (pake.MSG.toString() !== MSGType.ServerVerification.toString()) throw new Error("unexpected server message");
         const errCode = asInt(pake.ErrCode);
         if (errCode === 1) throw new Error("Incorrect code");
         if (errCode !== 0 && errCode !== undefined) throw new Error(`verification error ${pake.ErrCode}`);
 
-        const hamk = await this.session.computeHMAC(m);
-        if (!constantTimeEqual(this.session.deserialize(pake.HAMK), hamk))
+        const hamk = await session.computeHMAC(m);
+        if (!constantTimeEqual(session.deserialize(pake.HAMK), hamk))
           throw new Error("server HAMK mismatch");
 
         this._setState(State.Unlocked);
       } catch (e) {
         // helper burns the challenge on a failed verify, drop it so the next attempt gets a fresh prompt
-        if (this.session) {
-          this.session.sharedKey = undefined;
-          this.session.serverPublicKey = undefined;
-          this.session.salt = undefined;
-        }
+        session.sharedKey = undefined;
+        session.serverPublicKey = undefined;
+        session.salt = undefined;
         this._challengeAt = 0;
         throw e;
       }
@@ -388,11 +421,13 @@ export class ApplePasswords {
   }
 
   async _encryptedQuery(cmd, tabId, hostname, payloadBody, timeoutMs, frameId = 0) {
-    const sdata = this.session.serialize(await this.session.encrypt(payloadBody));
+    const session = this._liveSession();
+    const sdata = session.serialize(await session.encrypt(payloadBody));
+    /** @type {Record<string, any>} */
     const body = {
       tabId,
       frameId,
-      payload: { QID: QueryId[cmd], SMSG: JSON.stringify({ TID: this.session.username, SDATA: sdata }) },
+      payload: { QID: QueryId[cmd], SMSG: JSON.stringify({ TID: session.username, SDATA: sdata }) },
     };
     // one-time-code queries carry their URLs inside the encrypted body
     if (hostname != null) body.url = hostname;
@@ -400,8 +435,8 @@ export class ApplePasswords {
 
     let smsg = reply.payload.SMSG;
     if (typeof smsg === "string") smsg = JSON.parse(smsg);
-    if (smsg.TID !== this.session.username) throw new Error("response for another session");
-    const data = await this.session.decrypt(this.session.deserialize(smsg.SDATA));
+    if (smsg.TID !== session.username) throw new Error("response for another session");
+    const data = await session.decrypt(session.deserialize(smsg.SDATA));
     return JSON.parse(bytesToUtf8(data));
   }
 
@@ -436,7 +471,7 @@ export class ApplePasswords {
         tabId,
         outerUrl,
         { ACT: Action.SEARCH, URL: searchUrl, USR: loginName.username },
-        null, // no timeout, helper may require Touch ID here
+        USER_AUTH_TIMEOUT_MS, // the helper may wait on Touch ID here
       );
       if (res.STATUS === QueryStatus.Success) {
         const e = (res.Entries ?? [])[0];
@@ -455,8 +490,9 @@ export class ApplePasswords {
     if (!password) throw new Error("no password to save");
     const { hostname } = new URL(url);
     return this._withLock(async () => {
-      const sdata = this.session.serialize(
-        await this.session.encrypt({
+      const session = this._liveSession();
+      const sdata = session.serialize(
+        await session.encrypt({
           ACT: Action.MAYBE_ADD,
           URL: "",
           USR: "",
@@ -471,7 +507,7 @@ export class ApplePasswords {
         frameId: 0,
         payload: {
           QID: "CmdNewAccount4URL",
-          SMSG: JSON.stringify({ TID: this.session.username, SDATA: sdata }),
+          SMSG: JSON.stringify({ TID: session.username, SDATA: sdata }),
         },
       };
       // ack is empty and confirmation happens in the native prompt, so a slow ack is not an error
@@ -498,19 +534,20 @@ export class ApplePasswords {
     });
   }
 
-  // read at pick time so a code listed earlier isnt filled after it rotated. no timeout, may need Touch ID
+  // read at pick time so a code listed earlier isnt filled after it rotated. may wait on Touch ID
   async readOneTimeCode(tabId, frameId, frameUrls, username) {
     if (!this.ready) throw new Error("not unlocked");
     const body = { ACT: Action.SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
     if (username) body.username = username;
     return this._withLock(async () => {
-      const res = await this._encryptedQuery(Command.DID_FILL_ONE_TIME_CODE, tabId, null, body, null, frameId);
+      const res = await this._encryptedQuery(Command.DID_FILL_ONE_TIME_CODE, tabId, null, body, USER_AUTH_TIMEOUT_MS, frameId);
       if (res.STATUS === QueryStatus.Success) return normalizeOtpEntries(res.Entries);
       if (res.STATUS === QueryStatus.NoResults) return [];
       throw queryStatusError(res.STATUS);
     });
   }
 
+  /** @param {{ searchUrl?: string, newPasswordUrl?: string, totpUri?: string, totpPageUrl?: string }} [opts] */
   launchPasswordsApp({ searchUrl, newPasswordUrl, totpUri, totpPageUrl } = {}) {
     if (!this.port) throw new Error("not connected");
     const msg = { cmd: Command.LAUNCH_PASSWORDS_APP };
@@ -537,6 +574,7 @@ export class ApplePasswords {
     } catch (_) {}
     this.port = undefined;
     this.session = undefined;
+    this._rejectWaiters("connection closed");
     this._setState(State.Disconnected);
   }
 }

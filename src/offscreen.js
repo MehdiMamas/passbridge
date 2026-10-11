@@ -117,6 +117,7 @@ function readQr(img, x, y, w, h, scale) {
 
 async function decodeQr(dataUrl, rect) {
   const img = await loadImage(dataUrl);
+  if (rect?.whole) return readQr(img, 0, 0, img.width, img.height, 1);
   const dpr = Number(rect?.dpr) || 1;
   const pad = 16 * dpr;
   let x = Math.floor((Number(rect?.x) || 0) * dpr - pad);

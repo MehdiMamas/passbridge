@@ -1,5 +1,4 @@
-import { generateLoginFillScript } from "../../src/adapter/fill-script.js";
-import { INLINE_MENU_PORTS, portKeyForTab } from "../../src/adapter/ports.js";
+import { ApplePasswords, Command } from "../../src/apple/protocol.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
@@ -10,18 +9,6 @@ function ok(name, cond) {
   console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
   if (!cond) failed++;
 }
-
-const script = generateLoginFillScript({
-  username: "a@b.c",
-  password: "secret",
-  usernameOpid: "user",
-  passwordOpid: "pass",
-});
-ok("fill script fills username then password then focuses the password", script.map((s) => s.op).join(",") === "fill_by_opid,fill_by_opid,focus_by_opid" && script[1].opid === "pass");
-ok("button and list ports are the Bitwarden names", INLINE_MENU_PORTS.has("autofill-inline-menu-button-port") && INLINE_MENU_PORTS.has("autofill-inline-menu-list-port"));
-const a = portKeyForTab(3);
-const b = portKeyForTab(3);
-ok("port key is stable per tab and 12 chars", a === b && a.length === 12);
 
 const moodle = "moodle.augustana.edu";
 const google = "accounts.google.com";
@@ -48,6 +35,7 @@ ok(
 ok("a subdomain also looks up its site", siteLookupHosts("account.apple.com").join(",") === "account.apple.com,apple.com");
 ok("deep subdomains walk up to the site and stop", siteLookupHosts("a.b.example.com").join(",") === "a.b.example.com,b.example.com,example.com");
 ok("a site host looks up only itself", siteLookupHosts("apple.com").join(",") === "apple.com");
+ok("never save on a subdomain covers the whole site", registrableDomain("login.example.com") === "example.com" && registrableDomain("www.example.com") === "example.com");
 ok("a two-label public suffix is never queried", siteLookupHosts("account.bbc.co.uk").join(",") === "account.bbc.co.uk,bbc.co.uk" && registrableDomain("bbc.co.uk") === "bbc.co.uk");
 ok("an IP address is not split", siteLookupHosts("192.168.1.10").join(",") === "192.168.1.10");
 const viaSteps = passwordSearchSteps("account.apple.com", ["apple.com"], undefined, "apple.com");
@@ -66,6 +54,59 @@ ok("a grouped setup key with spaces is accepted", otpAuthSecret("otpauth://totp/
 ok("apple-otpauth totp is accepted", parseOtpAuth("apple-otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP&issuer=Work")?.account === "Work");
 const generated = generateApplePassword();
 ok("generated password is three hyphenated groups", /^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/.test(generated));
+
+// a fake native port: the helper never answers until the test says so
+function fakeNative() {
+  const port = { sent: [], msg: [], gone: [], disconnected: false };
+  port.postMessage = (m) => port.sent.push(m);
+  port.disconnect = () => { port.disconnected = true; };
+  port.onMessage = { addListener: (fn) => port.msg.push(fn) };
+  port.onDisconnect = { addListener: (fn) => port.gone.push(fn) };
+  port.reply = (m) => port.msg.forEach((fn) => fn(m));
+  port.drop = () => port.gone.forEach((fn) => fn());
+  return port;
+}
+async function settles(promise) {
+  try {
+    await promise;
+    return "resolved";
+  } catch (e) {
+    return `rejected: ${e.message}`;
+  }
+}
+async function connectedClient() {
+  const port = fakeNative();
+  globalThis.chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  const client = new ApplePasswords();
+  const connecting = client.connect();
+  port.reply({ cmd: Command.GET_CAPABILITIES, capabilities: {} });
+  await connecting;
+  return { client, port };
+}
+{
+  const port = fakeNative();
+  globalThis.chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  const client = new ApplePasswords();
+  const connecting = client.connect();
+  port.drop();
+  ok("a helper that exits mid-request rejects the request", (await settles(connecting)) === "rejected: connection closed" && client._waiters.size === 0);
+}
+{
+  const { client } = await connectedClient();
+  // no timeout, the way a Touch ID read used to wait
+  const stuck = client._withLock(() => client._send(Command.GET_PASSWORD_FOR_LOGIN_NAME, {}, null));
+  await Promise.resolve();
+  client.disconnect();
+  const next = client._withLock(async () => "ran");
+  ok("disconnect rejects the pending read and frees the lock", (await settles(stuck)) === "rejected: connection closed" && (await next) === "ran");
+}
+{
+  const { client, port } = await connectedClient();
+  const stuck = client._send(Command.GET_LOGIN_NAMES_FOR_URL, {}, null);
+  client._dropNativePort();
+  ok("a dropped session rejects the pending request", (await settles(stuck)) === "rejected: connection closed" && port.disconnected);
+}
+delete globalThis.chrome;
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

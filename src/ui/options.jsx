@@ -1,21 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-
-const DEFAULTS = {
-  inlineMenuVisibility: "on-focus",
-  autofillOnPageLoad: false,
-  copyTotpAfterFill: false,
-  clipboardClearMs: 10000,
-  enableContextMenu: true,
-  enableBadge: true,
-  askToSave: true,
-  askToUpdate: true,
-  showAnimations: true,
-  showFavicons: true,
-  excludedDomains: [],
-  blockedDomains: [],
-  hidePasskeys: false,
-};
+import { SETTINGS_DEFAULTS as DEFAULTS } from "../settings.js";
 
 function Row({ label, note, children }) {
   return (
