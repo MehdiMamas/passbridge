@@ -68,7 +68,7 @@ function OptionsApp() {
   const [settings, setSettings] = useState(DEFAULTS);
   const [excludedText, setExcludedText] = useState("");
   const [blockedText, setBlockedText] = useState("");
-  const [policy, setPolicy] = useState({ ready: false, available: false, hidden: false });
+  const [policy, setPolicy] = useState({ ready: false, available: false, hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
 
@@ -84,8 +84,8 @@ function OptionsApp() {
       setBlockedText((next.blockedDomains || []).join("\n"));
     });
     sendPolicy("get").then((r) => {
-      if (r.error || !r.ok) setPolicy({ ready: true, available: false, hidden: false });
-      else setPolicy({ ready: true, available: true, hidden: !!r.hidden });
+      if (r.missing) setPolicy({ ready: true, available: false, hidden: false, message: "" });
+      else setPolicy({ ready: true, available: true, hidden: !!r.hidden, message: r.ok ? "" : r.error || "" });
     });
     readPrivacy("passwordSavingEnabled", setBubble);
     readPrivacy("autofillAddressEnabled", setAddress);
@@ -130,8 +130,11 @@ function OptionsApp() {
           label="Blocked domains"
           note="One hostname per line. No inline menu on these sites."
           value={blockedText}
-          onChange={(e) => setBlockedText(e.target.value)}
-          onBlur={() => persist({ blockedDomains: lines(blockedText) })}
+          onChange={(e) => {
+            setBlockedText(e.target.value);
+            persist({ blockedDomains: domainLines(e.target.value) });
+          }}
+          onBlur={() => setBlockedText(domainLines(blockedText).join("\n"))}
         />
       </Section>
       <Section title="Saving" className="mt-6">
@@ -141,8 +144,11 @@ function OptionsApp() {
           label="Excluded domains"
           note="One hostname per line. PassBridge will not offer to save these."
           value={excludedText}
-          onChange={(e) => setExcludedText(e.target.value)}
-          onBlur={() => persist({ excludedDomains: lines(excludedText) })}
+          onChange={(e) => {
+            setExcludedText(e.target.value);
+            persist({ excludedDomains: domainLines(e.target.value) });
+          }}
+          onBlur={() => setExcludedText(domainLines(excludedText).join("\n"))}
         />
         {check("copyTotpAfterFill", "Copy verification code after fill")}
         <Row
@@ -181,11 +187,15 @@ function OptionsApp() {
               checked={policy.hidden}
               onChange={async (on) => {
                 const r = await sendPolicy(on ? "set" : "clear");
-                if (r.error || !r.ok) setPolicy({ ready: true, available: false, hidden: false });
-                else setPolicy({ ready: true, available: true, hidden: !!r.hidden });
+                if (r.missing) setPolicy({ ready: true, available: false, hidden: false, message: "" });
+                else if (!r.ok) setPolicy((p) => ({ ...p, message: r.error || "Couldn't change the policy." }));
+                else setPolicy({ ready: true, available: true, hidden: !!r.hidden, message: r.note || "Fully quit and reopen the browser to apply this." });
               }}
             />
           </Row>
+        )}
+        {policy.ready && policy.available && policy.message && (
+          <p className="pb-2 text-[12px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">{policy.message}</p>
         )}
         {policy.ready && !policy.available && (
           <p className="py-2 text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
@@ -203,15 +213,30 @@ function OptionsApp() {
   );
 }
 
-function lines(value) {
-  return value.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+// hostBlocked compares bare hostnames, so https://example.com/ or *.example.com would never match
+function domainLines(value) {
+  const out = [];
+  for (const line of value.split(/[\n,]+/)) {
+    const d = line
+      .trim()
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
+      .replace(/[/?#].*$/, "")
+      .replace(/:\d+$/, "")
+      .replace(/^\*\./, "")
+      .replace(/^\.+|\.+$/g, "");
+    if (d && !out.includes(d)) out.push(d);
+  }
+  return out;
 }
 
 function sendPolicy(action) {
   return new Promise((resolve) => {
     try {
       chrome.runtime.sendNativeMessage("com.passbridge.policy", { action }, (resp) => {
-        if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+        // only a missing host means the helper isn't installed, other errors keep the toggle
+        const err = chrome.runtime.lastError?.message;
+        if (err) resolve({ error: err, missing: /not found|forbidden|native messaging host/i.test(err) });
         else resolve(resp || { error: "no reply" });
       });
     } catch (err) {

@@ -7,12 +7,47 @@ function fromExtensionPage(sender) {
   return sender?.id === chrome.runtime.id && sender.tab == null;
 }
 
-async function clearIfUnchanged(expected) {
-  if (!expected) return;
+// an offscreen page never has focus, so navigator.clipboard rejects here.
+// execCommand works with the CLIPBOARD reason and the clipboardWrite/clipboardRead permissions.
+function writeClipboard(text) {
+  const area = document.createElement("textarea");
+  area.value = text || " ";
+  document.body.append(area);
+  area.select();
+  // the copy event sets the exact text, an empty string included
+  const onCopy = (e) => {
+    e.clipboardData.setData("text/plain", text);
+    e.preventDefault();
+  };
+  document.addEventListener("copy", onCopy, { once: true });
+  let ok = false;
   try {
-    const current = await navigator.clipboard.readText();
-    if (current === expected) await navigator.clipboard.writeText("");
+    ok = document.execCommand("copy");
+  } finally {
+    document.removeEventListener("copy", onCopy);
+    area.remove();
+  }
+  return ok;
+}
+
+function readClipboard() {
+  const area = document.createElement("textarea");
+  document.body.append(area);
+  area.focus();
+  let ok = false;
+  try {
+    ok = document.execCommand("paste");
   } catch {}
+  const value = area.value;
+  area.remove();
+  return ok ? value : null;
+}
+
+// leave the clipboard alone when the user copied something else since
+function clearIfUnchanged(expected) {
+  if (!expected) return;
+  const current = readClipboard();
+  if (current === null || current === expected) writeClipboard("");
   if (pending === expected) pending = "";
 }
 
@@ -24,9 +59,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     if (timer) clearTimeout(timer);
     timer = null;
-    const expected = pending;
-    clearIfUnchanged(expected).then(() => sendResponse({ ok: true }));
-    return true;
+    clearIfUnchanged(pending);
+    sendResponse({ ok: true });
+    return false;
   }
   if (msg?.type === "offscreenCopy") {
     if (!fromExtensionPage(sender)) {
@@ -35,17 +70,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     const text = String(msg.text || "");
     const clearMs = Number(msg.clearMs) || 10000;
-    navigator.clipboard.writeText(text).then(() => {
-      pending = text;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        const expected = pending;
-        timer = null;
-        clearIfUnchanged(expected);
-      }, clearMs);
-      sendResponse({ ok: true });
-    }).catch(() => sendResponse({ ok: false }));
-    return true;
+    let ok = false;
+    try {
+      ok = writeClipboard(text);
+    } catch {}
+    if (!ok) {
+      sendResponse({ ok: false, error: "Couldn't write to the clipboard." });
+      return false;
+    }
+    pending = text;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      clearIfUnchanged(pending);
+    }, clearMs);
+    sendResponse({ ok: true });
+    return false;
   }
   if (msg?.type !== "offscreenDecodeQr") return false;
   decodeQr(msg.dataUrl, msg.rect)

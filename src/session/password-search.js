@@ -37,7 +37,9 @@ export function bestRelatedHost(frameHost, sites) {
 // Page hostname first. After that misses, Apple's extension retries with the record's
 // first website as the outer url. Further misses search each other website on that
 // same helper response, then a parent or child host with the frame as the outer url.
-export function passwordSearchSteps(frameHost, sites, pathUrl) {
+// viaHost is the parent domain whose list returned the login (apple.com on account.apple.com),
+// searched first because the page host never lists that login.
+export function passwordSearchSteps(frameHost, sites, pathUrl, viaHost) {
   const steps = [];
   const push = (search, envelope) => {
     const s = search || frameHost;
@@ -46,6 +48,10 @@ export function passwordSearchSteps(frameHost, sites, pathUrl) {
     if (steps.some((step) => step.search === s && step.envelope === e)) return;
     steps.push({ search: s, envelope: e });
   };
+  if (viaHost && viaHost !== frameHost) {
+    push(viaHost, viaHost);
+    push(viaHost, frameHost);
+  }
   push(frameHost, frameHost);
   if (pathUrl && pathUrl !== frameHost) push(pathUrl, frameHost);
   const hosts = siteHosts(sites);

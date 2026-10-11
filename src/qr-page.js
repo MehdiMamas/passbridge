@@ -75,8 +75,8 @@ export function showTotpBar(payload) {
   shadow.appendChild(iframe);
   Object.assign(host.style, {
     position: "fixed",
-    top: "12px",
-    right: "12px",
+    // the popover UA style sets inset:0, which pins a fixed-width box to the left
+    inset: "12px 12px auto auto",
     margin: "0",
     padding: "0",
     border: "none",
