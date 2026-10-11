@@ -3,6 +3,7 @@ import { INLINE_MENU_PORTS, portKeyForTab } from "../../src/adapter/ports.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
+import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 
 let failed = 0;
 function ok(name, cond) {
@@ -44,11 +45,24 @@ ok(
     childSteps.some((s) => s.envelope === "augustana.edu" && s.search === "login.augustana.edu"),
 );
 
+ok("a subdomain also looks up its site", siteLookupHosts("account.apple.com").join(",") === "account.apple.com,apple.com");
+ok("deep subdomains walk up to the site and stop", siteLookupHosts("a.b.example.com").join(",") === "a.b.example.com,b.example.com,example.com");
+ok("a site host looks up only itself", siteLookupHosts("apple.com").join(",") === "apple.com");
+ok("a two-label public suffix is never queried", siteLookupHosts("account.bbc.co.uk").join(",") === "account.bbc.co.uk,bbc.co.uk" && registrableDomain("bbc.co.uk") === "bbc.co.uk");
+ok("an IP address is not split", siteLookupHosts("192.168.1.10").join(",") === "192.168.1.10");
+const viaSteps = passwordSearchSteps("account.apple.com", ["apple.com"], undefined, "apple.com");
+ok(
+  "a login listed under the parent site is searched there first",
+  viaSteps[0].search === "apple.com" && viaSteps[0].envelope === "apple.com" &&
+    viaSteps[1].search === "apple.com" && viaSteps[1].envelope === "account.apple.com",
+);
+
 const otp = parseOtpAuth("otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub");
 ok("otpauth keeps issuer and account and hides the secret from the label", otp?.issuer === "GitHub" && otp?.account === "alice@example.com" && !("secret" in otp));
 ok("setup key is the base32 secret without padding", otpAuthSecret(otp.uri) === "JBSWY3DPEHPK3PXP" && otpAuthSecret("otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP====") === "JBSWY3DPEHPK3PXP");
 ok("a non-setup link has no setup key", otpAuthSecret("https://example.com/?secret=JBSWY3DPEHPK3PXP") === "");
 ok("wifi and migration QR codes are not setup links", parseOtpAuth("WIFI:S:cafe;T:WPA;P:secret;;") === null && parseOtpAuth("otpauth-migration://offline?data=abc") === null);
+ok("a grouped setup key with spaces is accepted", otpAuthSecret("otpauth://totp/Work?secret=JBSW%20Y3DP%20EHPK%203PXP") === "JBSWY3DPEHPK3PXP");
 ok("apple-otpauth totp is accepted", parseOtpAuth("apple-otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP&issuer=Work")?.account === "Work");
 const generated = generateApplePassword();
 ok("generated password is three hyphenated groups", /^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/.test(generated));

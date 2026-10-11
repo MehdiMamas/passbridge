@@ -11,7 +11,8 @@ export function parseOtpAuth(raw) {
   const proto = url.protocol.toLowerCase();
   if (proto !== "otpauth:" && proto !== "apple-otpauth:") return null;
   if (url.hostname.toLowerCase() !== "totp") return null;
-  const secret = url.searchParams.get("secret") || "";
+  // sites often print the key in groups ("JBSW Y3DP EHPK 3PXP"), so spaces and hyphens are not part of it
+  const secret = cleanSecret(url.searchParams.get("secret"));
   if (!/^[A-Za-z2-7]+=*$/.test(secret) || secret.replace(/=+$/, "").length < 8) return null;
   const pathLabel = safeDecode(url.pathname.replace(/^\//, "")).trim();
   let issuer = safeDecode(url.searchParams.get("issuer") || "").trim();
@@ -30,12 +31,16 @@ export function otpAuthSecret(raw) {
   if (!parsed) return "";
   let secret = "";
   try {
-    secret = new URL(parsed.uri).searchParams.get("secret") || "";
+    secret = cleanSecret(new URL(parsed.uri).searchParams.get("secret"));
   } catch {
     return "";
   }
   if (!/^[A-Za-z2-7]+=*$/.test(secret) || secret.replace(/=+$/, "").length < 8) return "";
   return secret.replace(/=+$/, "");
+}
+
+function cleanSecret(s) {
+  return String(s || "").replace(/[\s-]+/g, "");
 }
 
 function safeDecode(s) {

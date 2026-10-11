@@ -40,13 +40,41 @@ $policies = @(
   "HKCU:\Software\Policies\Chromium",
   "HKCU:\Software\Policies\Vivaldi"
 )
+function Read-Policy([string]$Key) {
+  if (-not (Test-Path -LiteralPath $Key)) { return $null }
+  return (Get-Item -LiteralPath $Key).GetValue("PasswordManagerEnabled", $null)
+}
+
+$locked = @()
 foreach ($key in $policies) {
-  if (-not (Test-Path -LiteralPath $key)) { continue }
-  $item = Get-Item -LiteralPath $key
-  $value = $item.GetValue("PasswordManagerEnabled", $null)
-  if ($null -ne $value -and [int]$value -eq 0) {
-    Remove-ItemProperty -LiteralPath $key -Name "PasswordManagerEnabled" -ErrorAction SilentlyContinue
-    Write-Output "cleared PasswordManagerEnabled on $key"
+  $value = Read-Policy $key
+  if ($null -eq $value -or [int]$value -ne 0) { continue }
+  Remove-ItemProperty -LiteralPath $key -Name "PasswordManagerEnabled" -ErrorAction SilentlyContinue
+  if ($null -eq (Read-Policy $key)) { Write-Output "cleared PasswordManagerEnabled on $key" }
+  else { $locked += $key }
+}
+
+# the policy helper falls back to an elevated reg import when HKCU\Software\Policies is locked, so undo it the same way
+if ($locked.Count -gt 0) {
+  $lines = @("Windows Registry Editor Version 5.00", "")
+  foreach ($key in $locked) {
+    $lines += "[" + ($key -replace "^HKCU:\\", "HKEY_CURRENT_USER\") + "]"
+    $lines += '"PasswordManagerEnabled"=-'
+    $lines += ""
+  }
+  $regFile = Join-Path $env:TEMP "passbridge-clear-policy.reg"
+  Set-Content -LiteralPath $regFile -Value ($lines -join "`r`n") -Encoding Unicode
+  try {
+    $proc = Start-Process -FilePath reg.exe -ArgumentList @("import", $regFile) -Verb RunAs -Wait -PassThru
+    if ($proc.ExitCode -ne 0) { throw "reg import exited with $($proc.ExitCode)" }
+  } catch {
+    Write-Output "couldn't clear the policy: $_"
+  } finally {
+    Remove-Item -LiteralPath $regFile -Force -ErrorAction SilentlyContinue
+  }
+  foreach ($key in $locked) {
+    if ($null -eq (Read-Policy $key)) { Write-Output "cleared PasswordManagerEnabled on $key" }
+    else { Write-Output "PasswordManagerEnabled is still set on $key. Delete it in regedit as this user." }
   }
 }
 

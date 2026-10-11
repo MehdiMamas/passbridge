@@ -9,6 +9,7 @@ import { generateLoginFillScript } from "./adapter/fill-script.js";
 import { generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { passwordSearchSteps } from "./session/password-search.js";
+import { siteLookupHosts } from "./session/site-domain.js";
 
 const client = createClient();
 let platformOs = "mac";
@@ -152,7 +153,7 @@ async function flushPendingSaves() {
       if (hostBlocked(s.host, settings.excludedDomains)) continue;
       let existing = [];
       try {
-        existing = (await client.getLoginNamesForURL(s.tabId, s.frameUrl))
+        existing = (await siteLogins(s.tabId, s.frameUrl))
           .map((l) => l.username)
           .filter(Boolean);
       } catch {}
@@ -199,33 +200,64 @@ function framePathUrl(frameUrl) {
   return u.href;
 }
 
-// hostname first, then the full path when the helper supports it.
-// a miss then uses websites from this frame's own login list, never a site the page named.
+// the helper may only list the exact host. ask for the page host and each parent up to the
+// site, so account.apple.com also shows apple.com logins, and remember which host found each one.
+async function siteLogins(tabId, url) {
+  const host = registrableHost(url);
+  if (!host) return [];
+  const out = [];
+  const byName = new Map();
+  for (const h of siteLookupHosts(host)) {
+    let list;
+    try {
+      list = await client.getLoginNamesForURL(tabId, h === host ? url : `https://${h}/`);
+    } catch (e) {
+      if (h === host) throw e;
+      continue;
+    }
+    for (const login of list || []) {
+      const sites = Array.isArray(login.sites) ? login.sites : [];
+      const seen = byName.get(normUsername(login.username));
+      if (seen) {
+        // a parent that lists it too becomes one more website to search
+        for (const site of [...sites, h]) if (!seen.sites.includes(site)) seen.sites.push(site);
+        continue;
+      }
+      const row = { username: login.username, sites: [...sites], via: h };
+      byName.set(normUsername(login.username), row);
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+// the page and the popup get usernames only, sites and via stay in the worker
+function publicLogins(logins) {
+  return logins.map((l) => ({ username: l.username }));
+}
+
+// the login is listed again here, so the hosts searched never come from the caller.
+// one only a parent domain listed is searched on that domain first.
 async function readPasswordForFrame(tabId, frameUrl, username) {
   const host = registrableHost(frameUrl);
   const pathUrl = client.capabilities?.supportsSubURLs ? framePathUrl(frameUrl) : null;
+  let match = null;
+  try {
+    match = (await siteLogins(tabId, frameUrl)).find((l) => normUsername(l.username) === normUsername(username)) || null;
+  } catch {}
   const tried = [];
   let cred = null;
-  const run = async (steps) => {
-    for (const step of steps) {
-      const key = `${step.envelope}\n${step.search}`;
-      if (tried.includes(key)) continue;
-      tried.push(key);
-      cred = await client.getPasswordForLoginName(
-        tabId,
-        frameUrl,
-        { username },
-        step.search === host ? undefined : step.search,
-        step.envelope === host ? undefined : step.envelope,
-      );
-      if (cred) return true;
-    }
-    return false;
-  };
-  if (!(await run(passwordSearchSteps(host, [], pathUrl)))) {
-    const logins = await client.getLoginNamesForURL(tabId, frameUrl);
-    const match = (logins || []).find((l) => normUsername(l.username) === normUsername(username));
-    await run(passwordSearchSteps(host, match?.sites, pathUrl));
+  for (const step of passwordSearchSteps(host, match?.sites, pathUrl, match?.via)) {
+    tried.push(`${step.envelope}|${step.search}`);
+    cred = await client.getPasswordForLoginName(
+      tabId,
+      frameUrl,
+      { username: match?.username ?? username },
+      step.search === host ? undefined : step.search,
+      step.envelope === host ? undefined : step.envelope,
+    );
+    if (cred?.password) break;
+    cred = null;
   }
   if (!cred) console.info("[PassBridge] passwordRead", { status: "no credential", host, tried });
   else if (tried.length > 1) console.info("[PassBridge] passwordRead", { status: "ok", host, tried });
@@ -432,6 +464,15 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
+// frames on another host or without a login form stay silent, so no frame answering means no form
+async function sendFill(tabId, msg) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, msg);
+  } catch {
+    return null;
+  }
+}
+
 async function cycleFill(tab) {
   await ensureConnected();
   if (!client.ready || !tab?.url || tab.id == null) return;
@@ -439,7 +480,7 @@ async function cycleFill(tab) {
   if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(host)) return;
   let logins = [];
   try {
-    logins = uniqueByUsername(orderByMru(host, await client.getLoginNamesForURL(tab.id, tab.url)));
+    logins = uniqueByUsername(orderByMru(host, await siteLogins(tab.id, tab.url)));
   } catch {
     return;
   }
@@ -459,7 +500,7 @@ async function cycleFill(tab) {
     usernameOpid: "username",
     passwordOpid: "password",
   });
-  const resp = await chrome.tabs.sendMessage(tab.id, {
+  const resp = await sendFill(tab.id, {
     type: "fill",
     username: cred.username,
     password: cred.password,
@@ -486,11 +527,15 @@ async function ensureOffscreen() {
   }
 }
 
+// throws when the offscreen page could not write, so nothing says "Copied" over an untouched clipboard
 async function copyText(text) {
   const settings = await getSettings();
   const clearMs = Number(settings.clipboardClearMs) || 10000;
   await ensureOffscreen();
-  await chrome.runtime.sendMessage({ type: "offscreenCopy", text: text || "", clearMs }).catch(() => {});
+  const resp = await chrome.runtime
+    .sendMessage({ type: "offscreenCopy", text: text || "", clearMs })
+    .catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
+  if (!resp?.ok) throw new Error(resp?.error || "Couldn't write to the clipboard.");
 }
 
 async function clearClipboard() {
@@ -610,7 +655,7 @@ async function presentTotpOffer(tab, parsed) {
   }
   let logins = [];
   try {
-    logins = uniqueByUsername(await client.getLoginNamesForURL(tab.id, tab.url));
+    logins = uniqueByUsername(await siteLogins(tab.id, tab.url));
   } catch {
     logins = [];
   }
@@ -647,7 +692,7 @@ async function updateBadge(tabId) {
       chrome.action.setBadgeText({ text: "", tabId });
       return;
     }
-    const logins = uniqueByUsername(await client.getLoginNamesForURL(tabId, tab.url));
+    const logins = uniqueByUsername(await siteLogins(tabId, tab.url));
     const n = logins.length;
     chrome.action.setBadgeText({ text: n > 9 ? "9+" : n ? String(n) : "", tabId });
     chrome.action.setBadgeBackgroundColor({ color: "#0a84ff", tabId });
@@ -669,7 +714,7 @@ async function rebuildContextMenu(tab) {
     chrome.contextMenus.create({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page"] });
     chrome.contextMenus.create({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["image"] });
     if (!client.ready || !tab?.url) return;
-    client.getLoginNamesForURL(tab.id, tab.url).then((logins) => {
+    siteLogins(tab.id, tab.url).then((logins) => {
       menuLogins = uniqueByUsername(orderByMru(registrableHost(tab.url), logins || [])).slice(0, 8);
       menuLogins.forEach((login, i) => {
         chrome.contextMenus.create({
@@ -709,7 +754,7 @@ chrome.commands?.onCommand.addListener(async (command) => {
 chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
   if (info.menuItemId === "pb-gen") {
-    chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }).catch(() => {});
+    chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }, { frameId: info.frameId ?? 0 }).catch(() => {});
     return;
   }
   if (info.menuItemId === "pb-gen-copy") {
@@ -736,13 +781,13 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
   const host = registrableHost(tab.url);
   let logins = [];
   try {
-    logins = uniqueByUsername(orderByMru(host, await client.getLoginNamesForURL(tab.id, tab.url)));
+    logins = uniqueByUsername(orderByMru(host, await siteLogins(tab.id, tab.url)));
   } catch { return; }
   const login = logins[0];
   if (!login) return;
   if (info.menuItemId === "pb-user") await copyText(login.username || "");
   else if (info.menuItemId === "pb-pass") {
-    const cred = await client.getPasswordForLoginName(tab.id, tab.url, { username: login.username });
+    const { cred } = await readPasswordForFrame(tab.id, tab.url, login.username);
     if (cred?.password) await copyText(cred.password);
   } else if (info.menuItemId === "pb-otp") {
     try {
@@ -824,13 +869,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const frameUrl = sender.url;
           if (!frameUrl) return sendResponse({ ok: false, error: "no frame" });
           await ensureConnected();
+          if (client.state === State.NoHelper) return sendResponse({ ok: true, locked: false, logins: [] });
           if (!client.ready) return sendResponse({ ok: true, locked: true, logins: [] });
           try {
-            const logins = await client.getLoginNamesForURL(sender.tab?.id, frameUrl);
+            const logins = await siteLogins(sender.tab?.id, frameUrl);
             sendResponse({
               ok: true,
               locked: false,
-              logins: uniqueByUsername(orderByMru(registrableHost(frameUrl), logins)),
+              logins: publicLogins(uniqueByUsername(orderByMru(registrableHost(frameUrl), logins))),
             });
           } catch {
             sendResponse({ ok: true, locked: false, logins: [] });
@@ -843,6 +889,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!frameUrl || sender.tab?.id == null) return sendResponse({ ok: false, error: "no frame" });
           await ensureConnected();
           // capabilities arrive with the hello, before the PIN, so locked still knows if codes are supported
+          if (client.state === State.NoHelper) return sendResponse({ ok: true, locked: false, supported: false, rows: [] });
           if (!client.ready) return sendResponse({ ok: true, locked: true, supported: client.canFillOneTimeCodes, rows: [] });
           if (!client.canFillOneTimeCodes) return sendResponse({ ok: true, locked: false, supported: false, rows: [] });
           try {
@@ -868,7 +915,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             { type: "fillOtp", code, expectedHost: host },
             { frameId },
           );
-          if (resp?.filled && (await getSettings()).copyTotpAfterFill) await copyText(code);
+          if (resp?.filled && (await getSettings()).copyTotpAfterFill) await copyText(code).catch(() => {});
           sendResponse({ ok: true, filled: !!resp?.filled });
           break;
         }
@@ -925,9 +972,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               { frameId },
             );
           } catch (e) {
-            const error = String(e?.message ?? e);
-            console.info("[PassBridge] inlineFill", { status: "fill message failed", host, error });
-            return sendResponse({ ok: false, filled: false, error });
+            console.info("[PassBridge] inlineFill", { status: "fill message failed", host, error: String(e?.message ?? e) });
+            // the frame stays silent when it has no login field left to fill
+            return sendResponse({ ok: false, filled: false, error: "Couldn't find a login form on this page." });
           }
           const filled = !!resp?.filled;
           if (filled) {
@@ -980,7 +1027,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
           let existing = [];
           try {
-            existing = (await client.getLoginNamesForURL(sender.tab.id, frameUrl))
+            existing = (await siteLogins(sender.tab.id, frameUrl))
               .map((l) => l.username)
               .filter(Boolean);
           } catch {}
@@ -1065,8 +1112,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
           const tab = await activeTab();
           if (!tab?.id) return sendResponse({ ok: false, error: "no tab" });
-          const logins = uniqueByUsername(await client.getLoginNamesForURL(tab.id, url));
-          sendResponse({ ok: true, host: registrableHost(url), logins });
+          if (!client.ready) return sendResponse({ ok: false, error: "PassBridge is locked." });
+          const logins = uniqueByUsername(await siteLogins(tab.id, url));
+          sendResponse({ ok: true, host: registrableHost(url), logins: publicLogins(logins) });
           break;
         }
 
@@ -1077,14 +1125,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           let text = "";
           if (msg.field === "username") text = msg.username || "";
           else if (msg.field === "password") {
-            const cred = await client.getPasswordForLoginName(tab.id, url, { username: msg.username });
+            const { cred } = await readPasswordForFrame(tab.id, url, msg.username);
             text = cred?.password || "";
+            if (!text) return sendResponse({ ok: false, error: "Couldn't read the password for that login." });
           } else if (msg.field === "otp") {
             text = await resolveOneTimeCode(tab.id, Number(msg.id));
           }
-          if (!text) return sendResponse({ ok: false, error: "nothing to copy" });
+          if (!text) return sendResponse({ ok: false, error: "Nothing to copy." });
           await copyText(text);
-          sendResponse({ ok: true });
+          sendResponse({ ok: true, copied: true });
           break;
         }
 
@@ -1152,7 +1201,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             );
             filled = !!frames?.filled;
           } catch (_) {}
-          if (filled && (await getSettings()).copyTotpAfterFill) await copyText(code);
+          if (filled && (await getSettings()).copyTotpAfterFill) await copyText(code).catch(() => {});
           sendResponse({ ok: true, filled, code });
           break;
         }
@@ -1167,7 +1216,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             let usernames = [];
             if (tab?.id && url && client.ready) {
               try {
-                usernames = uniqueByUsername(await client.getLoginNamesForURL(tab.id, url))
+                usernames = uniqueByUsername(await siteLogins(tab.id, url))
                   .map((login) => login.username || "")
                   .filter(Boolean)
                   .slice(0, 8);
@@ -1247,8 +1296,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "getLogins": {
           const tab = await activeTab();
           if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
-          const logins = await client.getLoginNamesForURL(tab.id, tab.url);
-          sendResponse({ ok: true, logins: uniqueByUsername(orderByMru(registrableHost(tab.url), logins)) });
+          const logins = await siteLogins(tab.id, tab.url);
+          sendResponse({ ok: true, logins: publicLogins(uniqueByUsername(orderByMru(registrableHost(tab.url), logins))) });
           break;
         }
 
@@ -1277,7 +1326,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: false, filled: false, error: "No saved password for that login." });
           }
           // content script re-checks expectedHost against the page being filled
-          const resp = await chrome.tabs.sendMessage(tab.id, {
+          const resp = await sendFill(tab.id, {
             type: "fill",
             username: cred.username,
             password: cred.password,
@@ -1304,10 +1353,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: true, refilled: false, reason: "none" });
           }
           try {
-            const cred = await client.getPasswordForLoginName(tab.id, tab.url, { username: entry.username });
+            const { cred } = await readPasswordForFrame(tab.id, tab.url, entry.username);
             if (!cred) return sendResponse({ ok: false, refilled: false, error: "No saved password for that login." });
             pwCacheSet(host, cred);
-            const resp = await chrome.tabs.sendMessage(tab.id, {
+            const resp = await sendFill(tab.id, {
               type: "fill",
               username: cred.username,
               password: cred.password,

@@ -89,9 +89,9 @@ def _elevate_reg(delete):
     with open(path, "w", encoding="utf-8", newline="") as handle:
         handle.write(_reg_text(delete))
     command = (
-        "Start-Process -FilePath reg.exe -ArgumentList @('import','"
+        "$p = Start-Process -FilePath reg.exe -ArgumentList @('import','"
         + path.replace("'", "''")
-        + "') -Verb RunAs -Wait"
+        + "') -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
     )
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-Command", command],
@@ -108,6 +108,20 @@ def set_hidden():
         _write_dword()
     except PermissionError:
         _elevate_reg(False)
+        # an admin approving with a different account writes that account's HKCU
+        if not is_hidden():
+            raise PermissionError("the approved import did not reach this user's policy keys")
+
+
+def _any_set():
+    for path in POLICIES:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_READ) as key:
+                winreg.QueryValueEx(key, VALUE)
+                return True
+        except OSError:
+            pass
+    return False
 
 
 def clear_hidden():
@@ -115,6 +129,8 @@ def clear_hidden():
         _delete_value()
     except PermissionError:
         _elevate_reg(True)
+        if _any_set():
+            raise PermissionError("the approved import did not reach this user's policy keys")
 
 
 def main():
@@ -138,7 +154,7 @@ def main():
         send({
             "ok": True,
             "hidden": is_hidden(),
-            "note": "quit and reopen the browser so the policy applies",
+            "note": "Quit and reopen the browser so the policy applies.",
         })
     elif action == "clear":
         try:
@@ -149,7 +165,7 @@ def main():
         send({
             "ok": True,
             "hidden": is_hidden(),
-            "note": "quit and reopen the browser to bring the password manager back",
+            "note": "Quit and reopen the browser to bring the password manager back.",
         })
     elif action == "get":
         send({"ok": True, "hidden": is_hidden()})

@@ -28,9 +28,17 @@ function hostInList(host, list) {
     return d && (host === d || host.endsWith("." + d));
   });
 }
+// page-load fill waits on this, the defaults would say autofill is off
+let markSettingsLoaded = () => {};
+const pbSettingsLoaded = new Promise((resolve) => (markSettingsLoaded = resolve));
+// blocked, or the inline menu turned off, means nothing opens or fills by itself
+function autoUiAllowed() {
+  return pbSettings.inlineMenuVisibility !== "off" && !hostInList(location.hostname, pbSettings.blockedDomains);
+}
 try {
   chrome.storage?.local?.get(PB_DEFAULTS, (o) => {
     if (!chrome.runtime.lastError && o) pbSettings = { ...PB_DEFAULTS, ...o };
+    markSettingsLoaded();
   });
   chrome.storage?.onChanged?.addListener((ch, area) => {
     if (area !== "local") return;
@@ -38,7 +46,9 @@ try {
       if (k in PB_DEFAULTS) pbSettings[k] = v.newValue;
     }
   });
-} catch {}
+} catch {
+  markSettingsLoaded();
+}
 
 const OTP_AUTOCOMPLETE = /one-time-code/i;
 const OTP_HINT = /\b(otp|one[\s-]?time|verification|2fa|mfa|sms[\s-]?code|auth[\s-]?code|security[\s-]?code|passcode)\b/i;
@@ -212,13 +222,33 @@ function isFillable(el) {
   return true;
 }
 
-async function fillCredentials(username, password, anchor) {
+function fillableInputs(anchor) {
   const pool = new Set(document.querySelectorAll("input"));
   const root = anchor?.getRootNode?.();
   if (root && root !== document && root.querySelectorAll) {
     for (const i of root.querySelectorAll("input")) pool.add(i);
   }
-  const inputs = Array.from(pool).filter(isFillable);
+  return Array.from(pool).filter(isFillable);
+}
+
+function hasFillTarget(anchor) {
+  return fillableInputs(anchor).some((i) => isPasswordField(i) || isUsernameField(i));
+}
+
+// focus moves through the fields while filling, which must not open the menu again
+let credFilling = false;
+
+async function fillCredentials(username, password, anchor) {
+  credFilling = true;
+  try {
+    return await fillCredentialsNow(username, password, anchor);
+  } finally {
+    setTimeout(() => { credFilling = false; }, 0);
+  }
+}
+
+async function fillCredentialsNow(username, password, anchor) {
+  const inputs = fillableInputs(anchor);
   let passwords = inputs.filter(isPasswordField);
   let usernames = inputs.filter(isUsernameField);
 
@@ -285,10 +315,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: false, filled: false, error: "forbidden" });
     return true;
   }
-  if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) {
-    sendResponse({ ok: false, filled: false, error: "origin mismatch" });
-    return true;
-  }
+  // the first reply wins, so a frame on another host or with no login fields stays silent
+  // and the frame that fills answers. the background treats no answer as no form
+  if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
+  if (!hasFillTarget(liveField(fillAnchor))) return false;
   fillCredentials(msg.username, msg.password, liveField(fillAnchor)).then(async (filled) => {
     // a submit right after must not re-offer to save this existing login
     if (filled) {
@@ -316,10 +346,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
   switch (msg?.type) {
     case "fillOtp": {
-      if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) {
-        sendResponse({ ok: false, filled: false, error: "origin mismatch" });
-        return true;
-      }
+      if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
       // a frame with no code field stays silent so another frame's answer wins
       const target = otpTargetField();
       if (!target) return false;
@@ -329,7 +356,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     case "oneTimeCodeAvailable": {
       const a = deepActiveElement();
-      if (a instanceof HTMLInputElement && isOtpField(a) && isVisible(a) && frameIsSafe()) {
+      if (a instanceof HTMLInputElement && isOtpField(a) && isVisible(a) && frameIsSafe() && autoUiAllowed()) {
         buildOneTimeCodeSuggestion(a);
       }
       return false;
@@ -368,7 +395,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return false;
     }
     case "generatePassword": {
-      const field = anchorPwField(document) || document.querySelector('input[type="password"]');
+      const clicked = contextField && contextField.isConnected && isPasswordField(contextField) ? contextField : null;
+      const field = clicked || anchorPwField(document) || document.querySelector('input[type="password"]');
       if (field instanceof HTMLInputElement) fillGeneratedPassword(field, generateApplePassword());
       return false;
     }
@@ -389,7 +417,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 let saveHost = null;
+let saveKey = "";
+let saveListener = null;
 function hideSaveBar() {
+  if (saveListener) window.removeEventListener("message", saveListener);
+  saveListener = null;
+  saveKey = "";
   if (!saveHost) return;
   try { saveHost.hidePopover?.(); } catch {}
   saveHost.remove();
@@ -397,7 +430,10 @@ function hideSaveBar() {
 }
 
 function showSaveBar(msg) {
+  const key = `${msg.update ? 1 : 0}:${msg.username || ""}`;
+  if (saveHost?.isConnected && saveKey === key) return;
   hideSaveBar();
+  saveKey = key;
   const host = document.createElement("div");
   host.setAttribute("data-passbridge-save", "1");
   host.setAttribute("popover", "manual");
@@ -416,12 +452,13 @@ function showSaveBar(msg) {
   shadow.appendChild(iframe);
   Object.assign(host.style, {
     position: "fixed",
-    top: "12px",
-    right: "12px",
+    // the popover UA style sets inset:0, which pins a fixed-width box to the left
+    inset: "12px 12px auto auto",
     margin: "0",
     padding: "0",
     border: "none",
     background: "transparent",
+    overflow: "hidden",
     zIndex: "2147483647",
     width: "360px",
     height: "148px",
@@ -429,15 +466,15 @@ function showSaveBar(msg) {
   (document.body || document.documentElement).appendChild(host);
   try { host.showPopover(); } catch {}
   saveHost = host;
-  window.addEventListener("message", function onSave(e) {
+  saveListener = (e) => {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
-    window.removeEventListener("message", onSave);
     const action = e.data.action;
     hideSaveBar();
     if (action === "save") chrome.runtime.sendMessage({ type: "confirmSave" }).catch(() => {});
     else if (action === "never") chrome.runtime.sendMessage({ type: "neverSave" }).catch(() => {});
     else chrome.runtime.sendMessage({ type: "dismissSave" }).catch(() => {});
-  });
+  };
+  window.addEventListener("message", saveListener);
 }
 
 let fillAnchor = null;
@@ -490,6 +527,7 @@ function isLoginField(el) {
 
 function removeSuggestion() {
   menuGen++;
+  offerSeq++;
   loginListUnbind?.();
   loginListUnbind = null;
   loginListReflow = null;
@@ -507,6 +545,25 @@ function removeSuggestion() {
   navItems = [];
   navIndex = -1;
   lockedResume = null;
+}
+
+function placeIconAt(host, field) {
+  const r = field.getBoundingClientRect();
+  const size = Math.min(20, Math.max(14, r.height - 8));
+  host.style.width = `${size}px`;
+  host.style.height = `${size}px`;
+  host.style.left = `${r.right - size - 6}px`;
+  host.style.top = `${r.top + (r.height - size) / 2}px`;
+}
+
+function repositionIcon() {
+  const field = iconHost?._pbField;
+  if (!field) return;
+  if (!field.isConnected || !isVisible(field)) {
+    removeIcon();
+    return;
+  }
+  placeIconAt(iconHost, field);
 }
 
 function removeIcon() {
@@ -579,8 +636,13 @@ function menuSearchFocused(e) {
   return e.target === suggestionHost && document.activeElement === suggestionHost;
 }
 
+function eventField(e) {
+  const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+  return path[0] || e.target;
+}
+
 function menuHandlesKeys(e) {
-  return e.target === anchorField || menuSearchFocused(e);
+  return eventField(e) === anchorField || menuSearchFocused(e);
 }
 
 function onSuggestionKeydown(e) {
@@ -609,11 +671,11 @@ function onSuggestionKeydown(e) {
     e.stopPropagation();
   } else if (e.key === "Enter" && navIndex >= 0) {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     navItems[navIndex].onActivate();
   } else if (e.key === "Enter" && menuSearchFocused(e)) {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
   }
 }
 
@@ -849,12 +911,8 @@ function placeFieldIcon(field) {
   });
   (document.body || document.documentElement).appendChild(host);
   try { host.showPopover(); } catch {}
-  const r = field.getBoundingClientRect();
-  const size = Math.min(20, Math.max(14, r.height - 8));
-  host.style.width = `${size}px`;
-  host.style.height = `${size}px`;
-  host.style.left = `${r.right - size - 6}px`;
-  host.style.top = `${r.top + (r.height - size) / 2}px`;
+  host._pbField = field;
+  placeIconAt(host, field);
   iconHost = host;
 }
 
@@ -934,6 +992,7 @@ async function buildLockedSuggestion(field, onUnlock) {
     lockedResume = null;
     if (typeof onUnlock === "function") {
       removeSuggestion();
+      field.focus();
       onUnlock();
       return;
     }
@@ -987,6 +1046,7 @@ async function buildLockedSuggestion(field, onUnlock) {
     if (input.value.trim().length === 6) doVerify();
   });
 
+  positionBox();
   setTimeout(() => input.focus(), 0);
 }
 
@@ -1022,6 +1082,8 @@ async function fillGeneratedPassword(field, pw) {
   for (const p of Array.from(document.querySelectorAll('input[type="password"]')).filter(isFillable)) {
     if (p === field || p.value) continue;
     if (p.form && field.form && p.form !== field.form) continue;
+    // a change-password form's current password is not a new password
+    if ((p.getAttribute("autocomplete") || "").toLowerCase().includes("current-password")) continue;
     targets.add(p);
   }
   for (const t of targets) {
@@ -1275,6 +1337,14 @@ async function buildOfferSuggestion(field) {
   const locked = !!(res?.ok && res.locked);
   const logins = res?.ok && !locked ? res.logins || [] : [];
   if (!locked && !logins.length && !hasGenerator) return;
+  // the background accepts the PIN only from the top frame, so a sub-frame can't offer to unlock
+  if (locked && window !== window.top) {
+    if (!hasGenerator) return;
+    const box = buildSuggestionBox(field);
+    appendGeneratorOptions(box, field, true);
+    positionBox();
+    return;
+  }
 
   const box = buildSuggestionBox(field);
   if (locked) {
@@ -1436,7 +1506,7 @@ async function buildOneTimeCodeSuggestion(field) {
   const rows = res.rows || [];
   // a locked vault is worth a row only if this helper can offer codes at all
   if (!locked && !rows.length) return;
-  if (locked && res.supported === false) return;
+  if (locked && (res.supported === false || window !== window.top)) return;
 
   const box = buildSuggestionBox(field);
   if (locked) {
@@ -1514,6 +1584,7 @@ function frameIsSafe() {
 }
 
 async function onFocusIn(e) {
+  if (credFilling) return;
   if (hostInList(location.hostname, pbSettings.blockedDomains)) return;
   const path = typeof e.composedPath === "function" ? e.composedPath() : [];
   if (suggestionHost && (e.target === suggestionHost || path.includes(suggestionHost))) return;
@@ -1551,17 +1622,35 @@ async function onFocusIn(e) {
 }
 
 document.addEventListener("focusin", onFocusIn, true);
+let contextField = null;
+document.addEventListener("contextmenu", (e) => {
+  const t = eventField(e);
+  contextField = t instanceof HTMLInputElement ? t : null;
+}, true);
 // capture so Enter is intercepted before the page's own submit handling
 document.addEventListener("keydown", onSuggestionKeydown, true);
 // focusing auto-scrolls the field, which used to fire this and kill the offer
-document.addEventListener("scroll", positionBox, true);
-window.addEventListener("resize", positionBox, true);
+const repositionAll = () => {
+  positionBox();
+  repositionIcon();
+};
+document.addEventListener("scroll", repositionAll, true);
+window.addEventListener("resize", repositionAll, true);
 // focus moving into the box (inline PIN field) is kept
 document.addEventListener(
   "focusout",
   (e) => {
-    if (!suggestionEl) return;
-    if (e.target !== anchorField && e.target !== suggestionHost) return;
+    const target = eventField(e);
+    if (!suggestionEl) {
+      const iconField = iconHost?._pbField;
+      if (iconField && target === iconField) {
+        setTimeout(() => {
+          if (iconHost?._pbField === iconField && deepActiveElement() !== iconField) removeIcon();
+        }, 0);
+      }
+      return;
+    }
+    if (target !== anchorField && e.target !== suggestionHost) return;
     const next = e.relatedTarget;
     if (
       next &&
@@ -1584,6 +1673,7 @@ document.addEventListener(
       if (active === field || active === suggestionHost || active === iconHost) return;
       if (suggestionHost?.contains(active) || suggestionEl?.contains(active)) return;
       removeSuggestion();
+      if (deepActiveElement() !== iconHost?._pbField) removeIcon();
     }, 0);
   },
   true,
@@ -1591,11 +1681,18 @@ document.addEventListener(
 document.addEventListener(
   "mousedown",
   (e) => {
-    if (!suggestionEl) return;
+    const target = eventField(e);
+    if (!suggestionEl) {
+      // focusin won't fire for the field that already has focus
+      if (e.isTrusted && e.button === 0 && target instanceof HTMLInputElement && target === deepActiveElement()) {
+        onFocusIn({ target, composedPath: () => [target] });
+      }
+      return;
+    }
     if (eventHitsMenu(e)) return;
-    if (e.target === anchorField) return;
+    if (target === anchorField) return;
     // another login field's focusin rebuilds the offer, closing here first would race
-    if (e.target instanceof HTMLInputElement && isLoginField(e.target)) return;
+    if (target instanceof HTMLInputElement && isLoginField(target)) return;
     removeSuggestion();
   },
   true,
@@ -1794,9 +1891,15 @@ try {
   });
 } catch {}
 
+pbSettingsLoaded.then(() => {
+  const a = deepActiveElement();
+  if (a instanceof HTMLInputElement) onFocusIn({ target: a, composedPath: () => [a] });
+});
+
 if (window === window.top) {
-  const tryPageLoadFill = () => {
-    if (!pbSettings.autofillOnPageLoad || !frameIsSafe()) return;
+  const tryPageLoadFill = async () => {
+    await pbSettingsLoaded;
+    if (!pbSettings.autofillOnPageLoad || !frameIsSafe() || !autoUiAllowed()) return;
     chrome.runtime.sendMessage({ type: "inlineLogins" }).then((res) => {
       if (!res?.ok || res.locked || res.logins?.length !== 1) return;
       const field = Array.from(document.querySelectorAll("input")).find((i) => isVisible(i) && isLoginField(i));

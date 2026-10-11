@@ -89,10 +89,15 @@ foreach ($root in $browsers) {
   Write-Output "registered ${AppleHost} for $root"
 }
 
+# the WindowsApps python.exe is the Microsoft Store installer stub, not Python
 $py = $null
 foreach ($name in @("py", "python")) {
-  $cmd = Get-Command $name -ErrorAction SilentlyContinue
-  if ($cmd) { $py = $cmd.Source; break }
+  foreach ($cmd in @(Get-Command $name -CommandType Application -All -ErrorAction SilentlyContinue)) {
+    if ($cmd.Source -like "*\WindowsApps\*") { continue }
+    & $cmd.Source -c "import winreg" 2>$null
+    if ($LASTEXITCODE -eq 0) { $py = $cmd.Source; break }
+  }
+  if ($py) { break }
 }
 if (-not $py) {
   Write-Output "Python was not found, so the policy and pairing-code helpers were not registered."
