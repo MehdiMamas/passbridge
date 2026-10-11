@@ -1,20 +1,13 @@
-// needs mock builds (node build-test-extensions.mjs) and python3 -m http.server 8799 --bind 127.0.0.1 from test-harness/
+// needs the mock builds (node build-test-extensions.mjs). Serves test-harness/ itself unless OP_BASE is set.
 
 import { spawn } from "child_process";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { existsSync } from "fs";
-import { pathToFileURL } from "url";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-if (!process.env.OP_PW) {
-  process.env.OP_PW = pathToFileURL(join(HERE, "..", "..", "node_modules", "playwright", "index.js")).href;
-}
+import { join } from "path";
+import { HERE, serveStatic } from "./lib.mjs";
 
 const DRIVERS = [
   ["PIN handshake (SRP math + challenge lifecycle)", "pin-session.test.mjs"],
-  ["Windows helper quirks (string MSG, string SMSG)", "windows-host.test.mjs"],
+  ["Windows helper quirks (string MSG, string SMSG, wrong PIN)", "windows-host.test.mjs"],
   ["UI suite (login/OTP/forum, offer flow, click-through, shortcut)", "drive.mjs"],
   ["Adversarial (false positives: search/tag/checkout)", "drive-adversarial.mjs"],
   ["Test bench (positive + negative on one page)", "drive-bench.mjs"],
@@ -23,11 +16,13 @@ const DRIVERS = [
   ["Input events fire on fill (#9)", "drive-events.mjs"],
   ["Clickjacking: hidden field not filled (#18)", "drive-clickjack.mjs"],
   ["Multi-account chooser", "drive-multi.mjs"],
-  ["PIN flow (wrong code errors, right code unlocks)", "drive-pin.mjs"],
+  ["PIN flow (Enter on a short code, 6 digits submit alone)", "drive-pin.mjs"],
   ["Iframe login (same-origin frame shows dropdown)", "drive-iframe.mjs"],
   ["Cross-origin iframe shows NO offer (leak closed)", "drive-xorigin.mjs"],
   ["Verification codes (TOTP rows, split-box fill)", "drive-otp.mjs"],
   ["Inline menu host (closed shadow, field icon)", "drive-menu.mjs"],
+  ["Login list (search, scroll cap, keyboard)", "drive-login-list.mjs"],
+  ["Popup UI preview (8 screens render)", "drive-ui-preview.mjs"],
   ["Adapter unit (fill script, port names)", "unit.test.mjs"],
 ];
 
@@ -36,9 +31,15 @@ if (!existsSync(join(HERE, ".builds", "unlocked"))) {
   process.exit(2);
 }
 
+let server = null;
+if (!process.env.OP_BASE) {
+  server = await serveStatic(join(HERE, ".."));
+  process.env.OP_BASE = server.url;
+}
+
 function run(file) {
   return new Promise((resolve) => {
-    const p = spawn("node", [join(HERE, file)], { stdio: ["ignore", "pipe", "pipe"] });
+    const p = spawn(process.execPath, [join(HERE, file)], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (out += d));
@@ -48,7 +49,7 @@ function run(file) {
 
 let passed = 0;
 const failures = [];
-console.log("Running PassBridge headless suite\n" + "=".repeat(50));
+console.log(`Running PassBridge headless suite against ${process.env.OP_BASE}\n` + "=".repeat(50));
 for (const [name, file] of DRIVERS) {
   process.stdout.write(`\n▶ ${name}\n`);
   const { code, out } = await run(file);
@@ -62,6 +63,7 @@ for (const [name, file] of DRIVERS) {
     console.log(out.split("\n").filter((l) => /FAIL|Error|throw/.test(l)).slice(0, 5).map((l) => "     " + l).join("\n"));
   }
 }
+await server?.close();
 
 console.log("\n" + "=".repeat(50));
 console.log(`${passed}/${DRIVERS.length} suites passed`);

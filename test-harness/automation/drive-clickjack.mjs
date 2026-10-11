@@ -1,17 +1,14 @@
-import { fileURLToPath } from "url";
-const pw = await import(process.env.OP_PW || "/tmp/op-test/node_modules/playwright/index.js");
-const { chromium } = pw.default || pw;
-const EXT = process.env.OP_EXT || fileURLToPath(new URL("./.builds/unlocked", import.meta.url));
-const ctx=await chromium.launchPersistentContext("/tmp/op-cj-"+Date.now(),{headless:false,args:[`--disable-extensions-except=${EXT}`,`--load-extension=${EXT}`,"--headless=new","--no-first-run"]});
-ctx.serviceWorkers()[0]||await ctx.waitForEvent("serviceworker",{timeout:10000}).catch(()=>null);
-const page=await ctx.newPage();
-await page.goto("http://127.0.0.1:8799/clickjack.html",{waitUntil:"domcontentloaded"}); await page.waitForTimeout(300);
-const box=()=>page.locator('[data-passbridge="suggestions"]');
-await page.focus('input[name=username]'); await page.waitForTimeout(400);
-const offered = await box().count()>0;
-if(offered){ await box().locator("text=test@example.com").click(); await page.waitForTimeout(600); }
-const pval=await page.inputValue('input[name=password]').catch(()=>"");
-const pass = pval==="";
-console.log(`offered on username: ${offered}; hidden password filled: ${pval?"YES (BAD)":"NO (good)"}`);
-console.log(pass?"PASS #18 hidden password field not filled (clickjack defense)":"FAIL clickjack: hidden field got filled");
-await ctx.close(); process.exit(pass?0:1);
+import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.mjs";
+
+await main(async () => {
+  const ctx = await launchExtension(build("unlocked"));
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/clickjack.html`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(300);
+  await page.focus("input[name=username]");
+  await page.waitForTimeout(400);
+  ok("offer on the visible username field", await clickMenu(page, "test@example.com"), "no row");
+  await page.waitForTimeout(600);
+  const pval = await page.inputValue("input[name=password]").catch(() => "");
+  ok("#18 hidden password field not filled (clickjack defense)", pval === "", "hidden field got filled");
+});
