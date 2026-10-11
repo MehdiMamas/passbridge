@@ -18,7 +18,7 @@ BUNDLES = [
     "com.brave.Browser.beta",
     "com.brave.Browser.nightly",
     "com.brave.Browser.dev",
-    "com.microsoft.EdgeMac",
+    "com.microsoft.Edge",
     "org.chromium.Chromium",
     "company.thebrowser.Browser",
     "com.vivaldi.Vivaldi",
