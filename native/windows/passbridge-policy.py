@@ -3,9 +3,11 @@
 # accepts messages only from this extension's id. the browser must be fully quit before the policy applies.
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
+import tempfile
 import winreg
 
 EXT_ORIGIN = "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/"
@@ -66,10 +68,28 @@ def _delete_value():
             pass
 
 
-def _reg_text(delete):
+def _user_sid():
+    # the elevated import runs as whichever admin approves UAC, so it must name this user's hive
+    whoami = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "whoami.exe")
+    try:
+        out = subprocess.run(
+            [whoami, "/user", "/fo", "csv", "/nh"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r'"(S-1-[0-9-]+)"', out)
+    return m.group(1) if m else None
+
+
+def _reg_text(delete, sid):
+    root = "HKEY_USERS\\" + sid if sid else "HKEY_CURRENT_USER"
     lines = ["Windows Registry Editor Version 5.00", ""]
     for path in POLICIES:
-        lines.append("[HKEY_CURRENT_USER\\" + path + "]")
+        lines.append("[" + root + "\\" + path + "]")
         if delete:
             lines.append('"PasswordManagerEnabled"=-')
         else:
@@ -79,26 +99,32 @@ def _reg_text(delete):
 
 
 def _elevate_reg(delete):
-    # some PCs lock HKCU\Software\Policies against new subkeys. importing as the same user
-    # with the runas verb shows one UAC prompt, the same idea as the macOS profile approval.
+    # some PCs lock HKCU\Software\Policies against new subkeys. a reg import with the runas verb
+    # shows one UAC prompt, the same idea as the macOS profile approval.
     if os.environ.get("OPENPASSWORDS_NO_ELEVATE"):
         raise PermissionError("policies key is locked")
-    folder = os.path.join(os.environ.get("LOCALAPPDATA", "."), "PassBridge")
-    os.makedirs(folder, exist_ok=True)
-    path = os.path.join(folder, "password-manager.reg")
-    with open(path, "w", encoding="utf-8", newline="") as handle:
-        handle.write(_reg_text(delete))
-    command = (
-        "$p = Start-Process -FilePath reg.exe -ArgumentList @('import','"
-        + path.replace("'", "''")
-        + "') -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
-    )
-    result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-Command", command],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    fd, path = tempfile.mkstemp(prefix="passbridge-", suffix=".reg")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-16", newline="") as handle:
+            handle.write(_reg_text(delete, _user_sid()))
+        command = (
+            "$p = Start-Process -FilePath reg.exe -ArgumentList @('import','"
+            + path.replace("'", "''")
+            + "') -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
+        )
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        raise PermissionError("the approval prompt timed out")
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     if result.returncode != 0:
         raise PermissionError((result.stderr or result.stdout or "the approval prompt was dismissed").strip())
 
@@ -108,7 +134,6 @@ def set_hidden():
         _write_dword()
     except PermissionError:
         _elevate_reg(False)
-        # an admin approving with a different account writes that account's HKCU
         if not is_hidden():
             raise PermissionError("the approved import did not reach this user's policy keys")
 

@@ -54,15 +54,17 @@ foreach ($key in $policies) {
   else { $locked += $key }
 }
 
-# the policy helper falls back to an elevated reg import when HKCU\Software\Policies is locked, so undo it the same way
+# the policy helper falls back to an elevated reg import when HKCU\Software\Policies is locked, so undo it the same way.
+# the import runs as whichever admin approves UAC, so it names this user's hive by SID instead of HKEY_CURRENT_USER.
 if ($locked.Count -gt 0) {
+  $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $lines = @("Windows Registry Editor Version 5.00", "")
   foreach ($key in $locked) {
-    $lines += "[" + ($key -replace "^HKCU:\\", "HKEY_CURRENT_USER\") + "]"
+    $lines += "[" + ($key -replace "^HKCU:\\", "HKEY_USERS\$sid\") + "]"
     $lines += '"PasswordManagerEnabled"=-'
     $lines += ""
   }
-  $regFile = Join-Path $env:TEMP "passbridge-clear-policy.reg"
+  $regFile = Join-Path $env:TEMP ("passbridge-clear-" + [guid]::NewGuid().ToString("N") + ".reg")
   Set-Content -LiteralPath $regFile -Value ($lines -join "`r`n") -Encoding Unicode
   try {
     $proc = Start-Process -FilePath reg.exe -ArgumentList @("import", $regFile) -Verb RunAs -Wait -PassThru
@@ -74,7 +76,7 @@ if ($locked.Count -gt 0) {
   }
   foreach ($key in $locked) {
     if ($null -eq (Read-Policy $key)) { Write-Output "cleared PasswordManagerEnabled on $key" }
-    else { Write-Output "PasswordManagerEnabled is still set on $key. Delete it in regedit as this user." }
+    else { Write-Output "PasswordManagerEnabled is still set on $key. An administrator can delete it in regedit under HKEY_USERS\$sid." }
   }
 }
 
