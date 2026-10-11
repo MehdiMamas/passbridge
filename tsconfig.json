@@ -7,8 +7,23 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "lib": ["ES2022", "DOM"],
-    "types": ["chrome"]
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "chrome"
+    ],
+    "allowJs": true,
+    "checkJs": false,
+    "noImplicitAny": false,
+    "useUnknownInCatchVariables": false
   },
-  "include": ["src/session/**/*.ts", "src/vault/**/*.ts", "src/ui/**/*.jsx", "src/ui/**/*.tsx"]
+  "include": [
+    "src/background.js",
+    "src/content.js",
+    "src/apple/**/*.js",
+    "src/ui/**/*.jsx",
+    "src/ui/**/*.tsx"
+  ]
 }

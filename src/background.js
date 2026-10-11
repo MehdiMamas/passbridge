@@ -1,17 +1,24 @@
+// @ts-check
 // alarm keep-alive holds the MV3 worker so the PIN isnt re-prompted every idle-out
 
 import { State, setDeviceLabel } from "./apple/protocol.js";
 import { createClient } from "./session/create-client.js";
 import { labelForOs } from "./apple/os-label.js";
 import { getSettings, hostBlocked } from "./settings.js";
-import { INLINE_MENU_PORTS, portKeyForTab } from "./adapter/ports.js";
-import { generateLoginFillScript } from "./adapter/fill-script.js";
 import { generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { passwordSearchSteps } from "./session/password-search.js";
-import { siteLookupHosts } from "./session/site-domain.js";
+import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 
 const client = createClient();
+/** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
+/** @typedef {{ username: string, password: string }} Cred */
+
+// the right-click login list, with the tab and site it was built for
+/** @type {{ tabId: number | null, host: string, logins: SiteLogin[] }} */
+let menuFor = { tabId: null, host: "", logins: [] };
+let refreshRunning = false;
+let refreshAgain = false;
 let platformOs = "mac";
 const platformReady = new Promise((resolve) => {
   try {
@@ -30,25 +37,12 @@ client.onStateChange((s) => {
     pwCacheClear();
     otpByTab.clear();
     dropHeldOffers();
+    clearBadges();
   }
   broadcast({ type: "state", state: s });
+  refreshActiveTab();
+  if (s === State.Unlocked) notifyUnlocked();
 });
-
-// the pairing-window reader stays installed, but nothing drives it on its own
-const AUTOPAIR_HOST = "com.passbridge.autopair";
-
-function autoPairMsg(body) {
-  return new Promise((resolve) => {
-    try {
-      chrome.runtime.sendNativeMessage(AUTOPAIR_HOST, body, (r) => {
-        const err = chrome.runtime.lastError;
-        resolve(err ? { ok: false, error: err.message } : r || { ok: false, error: "no reply" });
-      });
-    } catch (e) {
-      resolve({ ok: false, error: String(e?.message ?? e) });
-    }
-  });
-}
 
 client.onOneTimeCodeAvailable(async () => {
   try {
@@ -202,9 +196,11 @@ function framePathUrl(frameUrl) {
 
 // the helper may only list the exact host. ask for the page host and each parent up to the
 // site, so account.apple.com also shows apple.com logins, and remember which host found each one.
+/** @returns {Promise<SiteLogin[]>} */
 async function siteLogins(tabId, url) {
-  const host = registrableHost(url);
+  const host = hostnameOf(url);
   if (!host) return [];
+  /** @type {SiteLogin[]} */
   const out = [];
   const byName = new Map();
   for (const h of siteLookupHosts(host)) {
@@ -239,13 +235,15 @@ function publicLogins(logins) {
 // the login is listed again here, so the hosts searched never come from the caller.
 // one only a parent domain listed is searched on that domain first.
 async function readPasswordForFrame(tabId, frameUrl, username) {
-  const host = registrableHost(frameUrl);
+  const host = hostnameOf(frameUrl);
   const pathUrl = client.capabilities?.supportsSubURLs ? framePathUrl(frameUrl) : null;
+  /** @type {SiteLogin | null} */
   let match = null;
   try {
     match = (await siteLogins(tabId, frameUrl)).find((l) => normUsername(l.username) === normUsername(username)) || null;
   } catch {}
   const tried = [];
+  /** @type {Cred | null | undefined} */
   let cred = null;
   for (const step of passwordSearchSteps(host, match?.sites, pathUrl, match?.via)) {
     tried.push(`${step.envelope}|${step.search}`);
@@ -326,8 +324,7 @@ function suppressChromeAutofill() {
   const svc = chrome.privacy?.services;
   if (!svc?.passwordSavingEnabled) return;
   // credit-card autofill is never touched, google pay keeps working
-  chrome.storage?.local?.get({ suppressSaveBubble: true, suppressAddressAutofill: false }, (o) => {
-    if (chrome.runtime.lastError) return;
+  getSettings().then((o) => {
     try {
       if (o.suppressSaveBubble) {
         svc.passwordSavingEnabled.set({ value: false }, () => void chrome.runtime.lastError);
@@ -365,7 +362,8 @@ function httpUrl(raw) {
   }
 }
 
-function registrableHost(u) {
+// the exact host. registrableDomain() in site-domain.js gives the site
+function hostnameOf(u) {
   try {
     return new URL(u).hostname.toLowerCase();
   } catch {
@@ -398,6 +396,7 @@ const CONTENT_ALLOWED = new Set([
   "neverSave",
   "dismissSave",
   "confirmTotp",
+  "copyTotpKey",
   "dismissTotp",
 ]);
 
@@ -443,27 +442,6 @@ async function presentSaveOffer({ tabId, frameUrl, target, password, host, updat
   return { ok: true, saved: false, offered: true };
 }
 
-chrome.runtime.onConnect.addListener((port) => {
-  if (!INLINE_MENU_PORTS.has(port.name)) {
-    try { port.disconnect(); } catch {}
-    return;
-  }
-  const tabId = port.sender?.tab?.id ?? 0;
-  const portKey = portKeyForTab(tabId);
-  port.postMessage({ command: "init", portKey });
-  port.onMessage.addListener((msg) => {
-    if (!msg || msg.portKey !== portKey) return;
-    if (msg.command !== "fieldRect") return;
-    const rect = msg.rect || {};
-    port.postMessage({
-      command: "position",
-      portKey,
-      button: { top: rect.y, left: (rect.x || 0) + Math.max(0, (rect.width || 0) - 28), width: 20, height: 20 },
-      list: { top: (rect.y || 0) + (rect.height || 0) + 2, left: rect.x || 0, width: Math.max(rect.width || 0, 200) },
-    });
-  });
-});
-
 // frames on another host or without a login form stay silent, so no frame answering means no form
 async function sendFill(tabId, msg) {
   try {
@@ -473,39 +451,37 @@ async function sendFill(tabId, msg) {
   }
 }
 
-async function cycleFill(tab) {
+// a username fills that login. without one the shortcut starts at the most recent login and steps through the rest
+async function fillLoginOnTab(tab, username) {
   await ensureConnected();
   if (!client.ready || !tab?.url || tab.id == null) return;
-  const host = registrableHost(tab.url);
+  const host = hostnameOf(tab.url);
   if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(host)) return;
-  let logins = [];
-  try {
-    logins = uniqueByUsername(orderByMru(host, await siteLogins(tab.id, tab.url)));
-  } catch {
-    return;
+  if (username == null) {
+    let logins = [];
+    try {
+      logins = uniqueByUsername(await siteLogins(tab.id, tab.url));
+    } catch {
+      return;
+    }
+    if (!logins.length) return;
+    // stable order: re-sorting by MRU after each fill made the shortcut repeat one login
+    const last = cycleByTab.get(tab.id);
+    const at = last == null ? -1 : logins.findIndex((l) => (l.username || "") === last);
+    username = at < 0 ? orderByMru(host, logins)[0].username : logins[(at + 1) % logins.length].username;
   }
-  if (!logins.length) return;
-  const i = cycleByTab.get(tab.id) || 0;
-  const login = logins[i % logins.length];
-  cycleByTab.set(tab.id, i + 1);
-  let cred = pwCacheGet(host, login.username);
+  let cred = pwCacheGet(host, username);
   if (!cred) {
-    cred = (await readPasswordForFrame(tab.id, tab.url, login.username)).cred;
+    cred = (await readPasswordForFrame(tab.id, tab.url, username)).cred;
     if (cred) pwCacheSet(host, cred);
   }
   if (!cred) return;
-  const script = generateLoginFillScript({
-    username: cred.username,
-    password: cred.password,
-    usernameOpid: "username",
-    passwordOpid: "password",
-  });
+  cycleByTab.set(tab.id, cred.username || "");
   const resp = await sendFill(tab.id, {
     type: "fill",
     username: cred.username,
     password: cred.password,
     expectedHost: host,
-    script,
   });
   if (resp?.filled) {
     recordMru(host, cred.username);
@@ -565,6 +541,11 @@ function sweepExpiredSecrets() {
     saveOffers.delete(tabId);
     chrome.tabs.sendMessage(tabId, { type: "hideSaveBar" }, { frameId: 0 }).catch(() => {});
   }
+  for (const [tabId, offer] of totpOffers) {
+    if (secretFresh(offer)) continue;
+    totpOffers.delete(tabId);
+    chrome.tabs.sendMessage(tabId, { type: "hideTotpBar" }, { frameId: 0 }).catch(() => {});
+  }
   for (let i = pendingSaves.length - 1; i >= 0; i--) {
     if (!secretFresh(pendingSaves[i])) pendingSaves.splice(i, 1);
   }
@@ -577,19 +558,17 @@ async function forgetSecrets() {
   await clearClipboard();
 }
 
+// the setup key never goes on the clipboard by itself: Windows clipboard history and cloud
+// clipboard keep it whatever is cleared later. copyTotpKey copies it on an explicit click.
 async function handOffTotp(offer) {
-  const secret = otpAuthSecret(offer?.uri);
-  const detail = secret
-    ? "Setup key copied. Paste it in Passwords if the app did not take it."
-    : "Couldn't copy a setup key.";
+  const hasKey = !!otpAuthSecret(offer?.uri);
   try {
-    if (secret) await copyText(secret);
     await ensureConnected();
     client.launchPasswordsApp({ totpUri: offer.uri, totpPageUrl: offer.pageUrl });
-  } catch {
-    return { ok: true, copied: !!secret, filled: false, detail };
+  } catch (e) {
+    return { ok: true, launched: false, hasKey, filled: false, detail: String(e?.message ?? e) };
   }
-  return { ok: true, copied: !!secret, filled: false, detail };
+  return { ok: true, launched: true, hasKey, filled: false };
 }
 
 async function showTotpBar(tabId, payload) {
@@ -603,6 +582,7 @@ async function showTotpBar(tabId, payload) {
 
 async function scanQrFromMenu(info, tab) {
   if (!tab?.id || !tab.url || !/^https?:/i.test(tab.url)) return;
+  /** @type {{ x: number, y: number, w: number, h: number, dpr: number, whole?: boolean } | null} */
   let rect = null;
   try {
     const resp = await chrome.tabs.sendMessage(tab.id, { type: "qrImageRect" }, { frameId: info.frameId ?? 0 });
@@ -614,7 +594,7 @@ async function scanQrFromMenu(info, tab) {
     await showTotpBar(tab.id, { mode: "error", error: "Right-click the image again, then scan it." });
     return;
   }
-  if (!rect || rect.w < 8 || rect.h < 8) {
+  if (rect.w < 8 || rect.h < 8) {
     await showTotpBar(tab.id, { mode: "error", error: "No QR code in that area." });
     return;
   }
@@ -661,6 +641,7 @@ async function presentTotpOffer(tab, parsed) {
   }
   const usernames = logins.map((login) => login.username || "(no username)").slice(0, 8);
   totpOffers.set(tab.id, {
+    at: Date.now(),
     uri: parsed.uri,
     pageUrl: tab.url,
     issuer: parsed.issuer,
@@ -676,172 +657,190 @@ async function presentTotpOffer(tab, parsed) {
   if (!shown) totpOffers.delete(tab.id);
 }
 
-async function updateBadge(tabId) {
-  try {
-    const settings = await getSettings();
-    if (!settings.enableBadge || tabId == null) {
-      if (tabId != null) chrome.action.setBadgeText({ text: "", tabId });
-      return;
-    }
-    if (!client.ready) {
-      chrome.action.setBadgeText({ text: "", tabId });
-      return;
-    }
-    const tab = await chrome.tabs.get(tabId);
-    if (!tab?.url || !/^https?:/i.test(tab.url)) {
-      chrome.action.setBadgeText({ text: "", tabId });
-      return;
-    }
-    const logins = uniqueByUsername(await siteLogins(tabId, tab.url));
-    const n = logins.length;
-    chrome.action.setBadgeText({ text: n > 9 ? "9+" : n ? String(n) : "", tabId });
-    chrome.action.setBadgeBackgroundColor({ color: "#0a84ff", tabId });
-  } catch {}
+// one lookup per active-tab change feeds both the badge and the right-click menu.
+// background tabs cost nothing: they are looked up when they become active.
+async function focusedTab() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return tab;
 }
 
-let menuLogins = [];
+// rebuilds never overlap: removeAll racing a create gave duplicate-id errors
+function refreshActiveTab() {
+  if (refreshRunning) {
+    refreshAgain = true;
+    return;
+  }
+  refreshRunning = true;
+  (async () => {
+    do {
+      refreshAgain = false;
+      try {
+        await refreshTab(await focusedTab());
+      } catch {}
+    } while (refreshAgain);
+    refreshRunning = false;
+  })();
+}
 
-async function rebuildContextMenu(tab) {
+async function refreshTab(tab) {
   const settings = await getSettings();
-  chrome.contextMenus.removeAll(() => {
-    if (!settings.enableContextMenu || chrome.runtime.lastError) return;
-    chrome.contextMenus.create({ id: "pb-root", title: "PassBridge", contexts: ["editable", "page", "image"] });
-    chrome.contextMenus.create({ id: "pb-fill", parentId: "pb-root", title: "Autofill login", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-user", parentId: "pb-root", title: "Copy username", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-pass", parentId: "pb-root", title: "Copy password", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-otp", parentId: "pb-root", title: "Copy verification code", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-gen", parentId: "pb-root", title: "Generate password", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page"] });
-    chrome.contextMenus.create({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["image"] });
-    if (!client.ready || !tab?.url) return;
-    siteLogins(tab.id, tab.url).then((logins) => {
-      menuLogins = uniqueByUsername(orderByMru(registrableHost(tab.url), logins || [])).slice(0, 8);
-      menuLogins.forEach((login, i) => {
-        chrome.contextMenus.create({
-          id: `pb-login-${i}`,
-          parentId: "pb-fill",
-          title: login.username || "(no username)",
-          contexts: ["editable", "page"],
-        });
-      });
-    }).catch(() => {});
+  const url = tab?.url && /^https?:/i.test(tab.url) ? tab.url : "";
+  let logins = [];
+  if (url && tab.id != null && client.ready && (settings.enableBadge || settings.enableContextMenu)) {
+    try {
+      logins = uniqueByUsername(orderByMru(hostnameOf(url), await siteLogins(tab.id, url)));
+    } catch {}
+  }
+  if (tab?.id != null) {
+    const n = settings.enableBadge ? logins.length : 0;
+    chrome.action.setBadgeText({ text: n > 9 ? "9+" : n ? String(n) : "", tabId: tab.id }).catch(() => {});
+    if (n) chrome.action.setBadgeBackgroundColor({ color: "#0a84ff", tabId: tab.id }).catch(() => {});
+  }
+  await rebuildContextMenu(settings, tab, url, logins.slice(0, 8));
+}
+
+async function rebuildContextMenu(settings, tab, url, logins) {
+  if (!chrome.contextMenus) return;
+  menuFor = { tabId: null, host: "", logins: [] };
+  await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve(void chrome.runtime.lastError)));
+  if (!settings.enableContextMenu) return;
+  const add = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+  add({ id: "pb-root", title: "PassBridge", contexts: ["editable", "page", "image"] });
+  add({ id: "pb-fill", parentId: "pb-root", title: "Autofill login", contexts: ["editable", "page"] });
+  add({ id: "pb-user", parentId: "pb-root", title: "Copy username", contexts: ["editable", "page"] });
+  add({ id: "pb-pass", parentId: "pb-root", title: "Copy password", contexts: ["editable", "page"] });
+  add({ id: "pb-otp", parentId: "pb-root", title: "Copy verification code", contexts: ["editable", "page"] });
+  add({ id: "pb-gen", parentId: "pb-root", title: "Generate password", contexts: ["editable", "page"] });
+  add({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page"] });
+  add({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["image"] });
+  logins.forEach((login, i) => {
+    add({ id: `pb-login-${i}`, parentId: "pb-fill", title: login.username || "(no username)", contexts: ["editable", "page"] });
   });
+  menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
 }
 
 function clearBadges() {
   chrome.tabs.query({}, (tabs) => {
     for (const t of tabs || []) {
-      if (t.id != null) chrome.action.setBadgeText({ text: "", tabId: t.id });
+      if (t.id != null) chrome.action.setBadgeText({ text: "", tabId: t.id }).catch(() => {});
     }
   });
+}
+
+// an inline PIN box left open finishes when the popup unlocked instead, in whichever frame it is
+function notifyUnlocked() {
+  focusedTab()
+    .then((tab) => {
+      if (tab?.id != null) chrome.tabs.sendMessage(tab.id, { type: "unlocked" }).catch(() => {});
+    })
+    .catch(() => {});
 }
 
 chrome.commands?.onCommand.addListener(async (command) => {
   if (command === "lock-vault") {
     await forgetSecrets();
     client.disconnect();
-    menuLogins = [];
     clearBadges();
-    rebuildContextMenu(await activeTab());
+    refreshActiveTab();
     return;
   }
   const tab = await activeTab();
   if (tab?.id == null) return;
   if (command === "fill-login") chrome.tabs.sendMessage(tab.id, { type: "shortcut" }).catch(() => {});
-  else if (command === "autofill-login") await cycleFill(tab);
+  else if (command === "autofill-login") await fillLoginOnTab(tab);
 });
 
 chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
-  if (info.menuItemId === "pb-gen") {
-    chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }, { frameId: info.frameId ?? 0 }).catch(() => {});
-    return;
-  }
-  if (info.menuItemId === "pb-gen-copy") {
-    await copyText(generateApplePassword());
-    return;
-  }
-  if (info.menuItemId === "pb-qr-image") {
-    await scanQrFromMenu(info, tab);
-    return;
-  }
-  if (String(info.menuItemId).startsWith("pb-login-")) {
-    const login = menuLogins[Number(String(info.menuItemId).slice("pb-login-".length))];
-    if (login) {
-      cycleByTab.set(tab.id, menuLogins.indexOf(login));
-      await cycleFill(tab);
-    }
-    return;
-  }
-  if (info.menuItemId === "pb-fill") {
-    await cycleFill(tab);
-    return;
-  }
-  if (!client.ready || !tab.url) return;
-  const host = registrableHost(tab.url);
-  let logins = [];
   try {
-    logins = uniqueByUsername(orderByMru(host, await siteLogins(tab.id, tab.url)));
-  } catch { return; }
-  const login = logins[0];
-  if (!login) return;
-  if (info.menuItemId === "pb-user") await copyText(login.username || "");
-  else if (info.menuItemId === "pb-pass") {
-    const { cred } = await readPasswordForFrame(tab.id, tab.url, login.username);
-    if (cred?.password) await copyText(cred.password);
-  } else if (info.menuItemId === "pb-otp") {
+    if (info.menuItemId === "pb-gen") {
+      chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }, { frameId: info.frameId ?? 0 }).catch(() => {});
+      return;
+    }
+    if (info.menuItemId === "pb-gen-copy") {
+      await copyText(generateApplePassword());
+      return;
+    }
+    if (info.menuItemId === "pb-qr-image") {
+      await scanQrFromMenu(info, tab);
+      return;
+    }
+    if (String(info.menuItemId).startsWith("pb-login-")) {
+      // the list belongs to the tab and site it was built for, anywhere else it names the wrong account
+      const fresh = menuFor.tabId === tab.id && menuFor.host === hostnameOf(tab.url || "");
+      const login = fresh ? menuFor.logins[Number(String(info.menuItemId).slice("pb-login-".length))] : null;
+      if (login) await fillLoginOnTab(tab, login.username);
+      else refreshActiveTab();
+      return;
+    }
+    if (info.menuItemId === "pb-fill") {
+      await fillLoginOnTab(tab);
+      return;
+    }
+    if (!client.ready || !tab.url) return;
+    const host = hostnameOf(tab.url);
+    let logins = [];
     try {
+      logins = uniqueByUsername(orderByMru(host, await siteLogins(tab.id, tab.url)));
+    } catch { return; }
+    const login = logins[0];
+    if (!login) return;
+    if (info.menuItemId === "pb-user") await copyText(login.username || "");
+    else if (info.menuItemId === "pb-pass") {
+      const { cred } = await readPasswordForFrame(tab.id, tab.url, login.username);
+      if (cred?.password) await copyText(cred.password);
+    } else if (info.menuItemId === "pb-otp") {
       const { rows } = await listOneTimeCodes(tab.id, 0, [tab.url]);
       if (rows[0]) await copyText(await resolveOneTimeCode(tab.id, rows[0].id));
-    } catch {}
+    }
+  } catch (e) {
+    console.info("[PassBridge] context menu", { item: info.menuItemId, error: String(e?.message ?? e) });
   }
 });
 
-chrome.tabs?.onActivated.addListener(({ tabId }) => {
-  updateBadge(tabId);
-  chrome.tabs.get(tabId).then((tab) => rebuildContextMenu(tab)).catch(() => {});
+chrome.tabs?.onActivated.addListener(() => refreshActiveTab());
+chrome.windows?.onFocusChanged.addListener((windowId) => {
+  if (windowId !== chrome.windows.WINDOW_ID_NONE) refreshActiveTab();
 });
-chrome.tabs?.onUpdated.addListener((tabId, info, tab) => {
-  if (info.status === "complete") {
-    updateBadge(tabId);
-    rebuildContextMenu(tab);
-    const offer = saveOffers.get(tabId);
-    if (offer && Date.now() - offer.at < 20000) {
-      chrome.tabs.sendMessage(
-        tabId,
-        { type: "showSaveBar", username: offer.target, update: offer.update },
-        { frameId: 0 },
-      ).catch(() => {});
-    }
+chrome.tabs?.onUpdated.addListener((tabId, info) => {
+  if (info.status !== "complete") return;
+  focusedTab()
+    .then((tab) => {
+      if (tab?.id === tabId) refreshActiveTab();
+    })
+    .catch(() => {});
+  const offer = saveOffers.get(tabId);
+  if (offer && Date.now() - offer.at < 20000) {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "showSaveBar", username: offer.target, update: offer.update },
+      { frameId: 0 },
+    ).catch(() => {});
   }
 });
 chrome.storage?.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.enableBadge) {
-    chrome.tabs.query({}, (tabs) => {
-      for (const t of tabs || []) if (t.id != null) updateBadge(t.id);
-    });
-  }
-  if (changes.enableContextMenu || changes.enableBadge) {
-    activeTab().then((tab) => rebuildContextMenu(tab)).catch(() => {});
-  }
+  if (changes.enableBadge?.newValue === false) clearBadges();
+  if (changes.enableContextMenu || changes.enableBadge) refreshActiveTab();
 });
+// main_frame in the filter, not the callback: every image and XHR would otherwise wake the worker
 try {
   chrome.webRequest?.onCompleted.addListener((details) => {
-    if (details.type !== "main_frame") return;
     if (!saveOffers.has(details.tabId)) return;
     const method = String(details.method || "").toUpperCase();
     if (!["POST", "PUT", "PATCH"].includes(method)) return;
     if (details.statusCode >= 400) {
       saveOffers.delete(details.tabId);
-      chrome.tabs.sendMessage(details.tabId, { type: "hideSaveBar" }).catch(() => {});
+      chrome.tabs.sendMessage(details.tabId, { type: "hideSaveBar" }, { frameId: 0 }).catch(() => {});
     }
-  }, { urls: ["<all_urls>"] });
+  }, { urls: ["<all_urls>"], types: ["main_frame"] });
 } catch {}
 
 chrome.tabs?.onRemoved.addListener((tabId) => {
   totpOffers.delete(tabId);
   saveOffers.delete(tabId);
+  cycleByTab.delete(tabId);
+  lastFillByTab.delete(tabId);
   for (let i = pendingSaves.length - 1; i >= 0; i--) {
     if (pendingSaves[i].tabId === tabId) pendingSaves.splice(i, 1);
   }
@@ -876,7 +875,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({
               ok: true,
               locked: false,
-              logins: publicLogins(uniqueByUsername(orderByMru(registrableHost(frameUrl), logins))),
+              logins: publicLogins(uniqueByUsername(orderByMru(hostnameOf(frameUrl), logins))),
             });
           } catch {
             sendResponse({ ok: true, locked: false, logins: [] });
@@ -905,18 +904,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const frameUrl = sender.url;
           const frameId = sender.frameId;
           if (!frameUrl || sender.tab?.id == null || frameId == null) return sendResponse({ ok: false, error: "no frame" });
-          const host = registrableHost(frameUrl);
+          const host = hostnameOf(frameUrl);
           if (!/^https:\/\//i.test(frameUrl) && !isLocalDevHost(host)) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS frame" });
           }
           const code = await resolveOneTimeCode(sender.tab.id, Number(msg.id));
-          const resp = await chrome.tabs.sendMessage(
-            sender.tab.id,
-            { type: "fillOtp", code, expectedHost: host },
-            { frameId },
-          );
-          if (resp?.filled && (await getSettings()).copyTotpAfterFill) await copyText(code).catch(() => {});
-          sendResponse({ ok: true, filled: !!resp?.filled });
+          // the frame stays silent when its code field is gone
+          const resp = await chrome.tabs
+            .sendMessage(sender.tab.id, { type: "fillOtp", code, expectedHost: host }, { frameId })
+            .catch(() => null);
+          if (!resp?.filled) return sendResponse({ ok: false, filled: false, error: "Couldn't find the code field." });
+          if ((await getSettings()).copyTotpAfterFill) await copyText(code).catch(() => {});
+          sendResponse({ ok: true, filled: true });
           break;
         }
 
@@ -927,14 +926,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!frameUrl || sender.tab?.id == null || frameId == null) {
             return sendResponse({ ok: false, error: "no frame" });
           }
-          const host = registrableHost(frameUrl);
-          const isLocalDev =
-            host === "localhost" ||
-            host === "127.0.0.1" ||
-            host === "[::1]" ||
-            host?.endsWith(".localhost") ||
-            host?.endsWith(".test");
-          if (!/^https:\/\//i.test(frameUrl) && !isLocalDev) {
+          const host = hostnameOf(frameUrl);
+          if (!/^https:\/\//i.test(frameUrl) && !isLocalDevHost(host)) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS frame" });
           }
           // pass only the username through, sites is caller-supplied
@@ -999,7 +992,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!frameUrl || sender.tab?.id == null) {
             return sendResponse({ ok: false, error: "no frame" });
           }
-          const host = registrableHost(frameUrl);
+          const host = hostnameOf(frameUrl);
           if (!/^https:\/\//i.test(frameUrl) && !isLocalDevHost(host)) {
             return sendResponse({ ok: false, error: "refusing to save from a non-HTTPS frame" });
           }
@@ -1061,12 +1054,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
 
         case "confirmSave": {
-          const offer = sender.tab?.id != null ? saveOffers.get(sender.tab.id) : null;
-          if (!secretFresh(offer)) {
-            if (sender.tab?.id != null) saveOffers.delete(sender.tab.id);
+          const tabId = sender.tab?.id;
+          const offer = tabId != null ? saveOffers.get(tabId) : null;
+          if (tabId == null || !secretFresh(offer)) {
+            if (tabId != null) saveOffers.delete(tabId);
             return sendResponse({ ok: false, error: "nothing to save" });
           }
-          saveOffers.delete(sender.tab.id);
+          saveOffers.delete(tabId);
           await ensureConnected();
           await client.saveLogin(offer.tabId, offer.frameUrl, offer.target, offer.password);
           sendResponse({ ok: true, saved: true });
@@ -1082,9 +1076,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "confirmTotp": {
           if (fromContent && sender.frameId !== 0) return sendResponse({ ok: false, error: "forbidden" });
           const offer = sender.tab?.id != null ? totpOffers.get(sender.tab.id) : null;
-          if (sender.tab?.id != null) totpOffers.delete(sender.tab.id);
-          if (!offer) return sendResponse({ ok: false, error: "nothing to add" });
+          if (!secretFresh(offer)) {
+            if (sender.tab?.id != null) totpOffers.delete(sender.tab.id);
+            return sendResponse({ ok: false, error: "nothing to add" });
+          }
+          // held until it expires so the bar can offer the setup key on an explicit click
+          offer.handedOff = true;
           sendResponse(await handOffTotp(offer));
+          break;
+        }
+
+        case "copyTotpKey": {
+          if (fromContent && sender.frameId !== 0) return sendResponse({ ok: false, error: "forbidden" });
+          const offer = sender.tab?.id != null ? totpOffers.get(sender.tab.id) : null;
+          if (sender.tab?.id != null) totpOffers.delete(sender.tab.id);
+          const secret = offer?.handedOff && secretFresh(offer) ? otpAuthSecret(offer.uri) : "";
+          if (!secret) return sendResponse({ ok: false, error: "The setup key is no longer held. Scan the code again." });
+          await copyText(secret);
+          sendResponse({ ok: true, copied: true });
           break;
         }
 
@@ -1095,11 +1104,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
 
         case "neverSave": {
-          const host = registrableHost(sender.url || "");
+          // the whole site: never saving on www.example.com also covers login.example.com
+          const host = hostnameOf(sender.url || "");
+          const site = host ? registrableDomain(host) : "";
           if (sender.tab?.id != null) saveOffers.delete(sender.tab.id);
-          if (host) {
+          if (site) {
             const settings = await getSettings();
-            const excludedDomains = Array.from(new Set([...(settings.excludedDomains || []), host]));
+            const excludedDomains = Array.from(new Set([...(settings.excludedDomains || []), site]));
             await chrome.storage.local.set({ excludedDomains });
           }
           sendResponse({ ok: true });
@@ -1114,7 +1125,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!tab?.id) return sendResponse({ ok: false, error: "no tab" });
           if (!client.ready) return sendResponse({ ok: false, error: "PassBridge is locked." });
           const logins = uniqueByUsername(await siteLogins(tab.id, url));
-          sendResponse({ ok: true, host: registrableHost(url), logins: publicLogins(logins) });
+          sendResponse({ ok: true, host: hostnameOf(url), logins: publicLogins(logins) });
           break;
         }
 
@@ -1165,12 +1176,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           });
           break;
 
-        case "autoPairCheck": {
-          const r = await autoPairMsg({ action: "check" });
-          sendResponse(r);
-          break;
-        }
-
         case "getOneTimeCodes": {
           const tab = await activeTab();
           const url = httpUrl(msg.url) || tab?.url;
@@ -1185,16 +1190,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "fillOneTimeCode": {
           // every frame gets it, only the one with a code field acts. value returned so the popup can show it if none did
           const tab = await activeTab();
-          if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
-          const host = registrableHost(tab.url);
+          if (!tab?.url || tab.id == null) return sendResponse({ ok: false, error: "no active tab" });
+          const host = hostnameOf(tab.url);
           if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(host)) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS page" });
           }
-          const code = await resolveOneTimeCode(tab.id, Number(msg.id));
+          const tabId = tab.id;
+          const code = await resolveOneTimeCode(tabId, Number(msg.id));
           let filled = false;
           try {
             const frames = await new Promise((resolve) =>
-              chrome.tabs.sendMessage(tab.id, { type: "fillOtp", code, expectedHost: host }, (r) => {
+              chrome.tabs.sendMessage(tabId, { type: "fillOtp", code, expectedHost: host }, (r) => {
                 void chrome.runtime.lastError;
                 resolve(r);
               }),
@@ -1210,27 +1216,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           const url = httpUrl(msg.url) || (tab?.url && /^https?:/i.test(tab.url) ? tab.url : undefined);
           await ensureConnected();
-          if (msg.mode === "totp") {
-            if (!msg.uri || !/^(apple-)?otpauth:\/\//i.test(msg.uri)) return sendResponse({ ok: false, error: "no otpauth URI" });
-            const parsed = parseOtpAuth(msg.uri);
-            let usernames = [];
-            if (tab?.id && url && client.ready) {
-              try {
-                usernames = uniqueByUsername(await siteLogins(tab.id, url))
-                  .map((login) => login.username || "")
-                  .filter(Boolean)
-                  .slice(0, 8);
-              } catch {}
-            }
-            sendResponse(await handOffTotp({
-              uri: msg.uri,
-              pageUrl: url,
-              issuer: parsed?.issuer || "",
-              account: parsed?.account || "",
-              usernames,
-            }));
-            break;
-          } else if (msg.mode === "new") {
+          if (msg.mode === "new") {
             client.launchPasswordsApp({ newPasswordUrl: url });
           } else {
             client.launchPasswordsApp({ searchUrl: url });
@@ -1297,25 +1283,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
           const logins = await siteLogins(tab.id, tab.url);
-          sendResponse({ ok: true, logins: publicLogins(uniqueByUsername(orderByMru(registrableHost(tab.url), logins))) });
+          sendResponse({ ok: true, logins: publicLogins(uniqueByUsername(orderByMru(hostnameOf(tab.url), logins))) });
           break;
         }
 
         case "fillOnPage": {
           const tab = await activeTab();
           if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
-          const pageHost = registrableHost(tab.url);
-          const isLocalDev =
-            pageHost === "localhost" ||
-            pageHost === "127.0.0.1" ||
-            pageHost === "[::1]" ||
-            pageHost?.endsWith(".localhost") ||
-            pageHost?.endsWith(".test");
-          if (!/^https:\/\//i.test(tab.url) && !isLocalDev) {
+          const pageHost = hostnameOf(tab.url);
+          if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(pageHost)) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS page" });
           }
           const credUrl = httpUrl(msg.url) || tab.url;
-          const credHost = registrableHost(credUrl);
+          const credHost = hostnameOf(credUrl);
           const sameSite = credHost === pageHost;
           let cred = sameSite ? pwCacheGet(pageHost, msg.loginName?.username) : null;
           if (!cred) {
@@ -1348,7 +1328,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           pwCacheClear();
           const tab = await activeTab();
           const entry = tab?.id != null ? lastFillByTab.get(tab.id) : null;
-          const host = tab?.url ? registrableHost(tab.url) : null;
+          const host = tab?.url ? hostnameOf(tab.url) : null;
           if (!entry || !host || entry.host !== host) {
             return sendResponse({ ok: true, refilled: false, reason: "none" });
           }

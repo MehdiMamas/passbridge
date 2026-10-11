@@ -1,6 +1,8 @@
+// @ts-check
 import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
+import { SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
 
 const UPSTREAM_USER = new Set(
   [...AutoFillConstants.UsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
@@ -14,36 +16,24 @@ function hitsUpstreamName(el) {
 // OTP inputs are never fillable login fields, that misclassification is apple's balloon-on-every-OTP bug
 console.log("[PassBridge] content script v1.0.0 loaded");
 
-const PB_DEFAULTS = {
-  inlineMenuVisibility: "on-focus",
-  autofillOnPageLoad: false,
-  showAnimations: true,
-  blockedDomains: [],
-};
-let pbSettings = { ...PB_DEFAULTS };
-function hostInList(host, list) {
-  host = (host || "").toLowerCase();
-  return (list || []).some((d) => {
-    d = String(d || "").trim().toLowerCase();
-    return d && (host === d || host.endsWith("." + d));
-  });
-}
+let pbSettings = { ...SETTINGS_DEFAULTS };
 // page-load fill waits on this, the defaults would say autofill is off
+/** @type {(value?: unknown) => void} */
 let markSettingsLoaded = () => {};
 const pbSettingsLoaded = new Promise((resolve) => (markSettingsLoaded = resolve));
 // blocked, or the inline menu turned off, means nothing opens or fills by itself
 function autoUiAllowed() {
-  return pbSettings.inlineMenuVisibility !== "off" && !hostInList(location.hostname, pbSettings.blockedDomains);
+  return pbSettings.inlineMenuVisibility !== "off" && !hostBlocked(location.hostname, pbSettings.blockedDomains);
 }
 try {
-  chrome.storage?.local?.get(PB_DEFAULTS, (o) => {
-    if (!chrome.runtime.lastError && o) pbSettings = { ...PB_DEFAULTS, ...o };
+  chrome.storage?.local?.get(SETTINGS_DEFAULTS, (o) => {
+    if (!chrome.runtime.lastError && o) pbSettings = { ...SETTINGS_DEFAULTS, ...o };
     markSettingsLoaded();
   });
   chrome.storage?.onChanged?.addListener((ch, area) => {
     if (area !== "local") return;
     for (const [k, v] of Object.entries(ch)) {
-      if (k in PB_DEFAULTS) pbSettings[k] = v.newValue;
+      if (k in SETTINGS_DEFAULTS) pbSettings[k] = v.newValue;
     }
   });
 } catch {
@@ -267,6 +257,7 @@ async function fillCredentialsNow(username, password, anchor) {
       .sort((a, b) => a.d - b.d)[0].p;
   }
 
+  /** @type {HTMLInputElement | null} */
   let userTarget = null;
   if (username) {
     if (anchor && isUsernameField(anchor)) userTarget = anchor;
@@ -308,13 +299,9 @@ async function passwordsMatch(hash, password) {
   return hash === (await sha256Hex(password));
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type !== "fill") return false;
   // host must match the origin the background pinned the cred to, so site A's cred never lands on site B
-  if (sender.id !== chrome.runtime.id) {
-    sendResponse({ ok: false, filled: false, error: "forbidden" });
-    return true;
-  }
   // the first reply wins, so a frame on another host or with no login fields stays silent
   // and the frame that fills answers. the background treats no answer as no form
   if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
@@ -342,8 +329,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id) return false;
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   switch (msg?.type) {
     case "fillOtp": {
       if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
@@ -366,7 +352,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return false;
     }
     case "unlocked": {
-      // auto-pair opened the vault while the inline PIN box was up
+      // the popup unlocked while the inline PIN box was up
       if (suggestionEl && typeof lockedResume === "function") lockedResume();
       return false;
     }
@@ -400,24 +386,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (field instanceof HTMLInputElement) fillGeneratedPassword(field, generateApplePassword());
       return false;
     }
-    case "collectFields": {
-      const inputs = Array.from(document.querySelectorAll("input"));
-      sendResponse({
-        fields: inputs.filter((el) => isVisible(el)).map((el, i) => ({
-          opid: el.id || el.name || String(i),
-          username: isUsernameField(el),
-          password: isPasswordField(el),
-          otp: isOtpField(el),
-        })),
-      });
-      return true;
-    }
   }
   return false;
 });
 
+/** @typedef {HTMLDivElement & { _pbField?: HTMLInputElement, _pbWatch?: MutationObserver }} PbHost */
+
+/** @type {HTMLElement | null} */
 let saveHost = null;
 let saveKey = "";
+/** @type {((e: MessageEvent) => void) | null} */
 let saveListener = null;
 function hideSaveBar() {
   if (saveListener) window.removeEventListener("message", saveListener);
@@ -477,23 +455,36 @@ function showSaveBar(msg) {
   window.addEventListener("message", saveListener);
 }
 
+/** @type {HTMLInputElement | null} */
 let fillAnchor = null;
+/** @type {HTMLInputElement | null} */
 let otpAnchor = null;
+/** @type {(() => void) | null} */
 let lockedResume = null;
 // suppresses a save offer for a login just filled from the vault
+/** @type {{ host: string, username: string, passwordHash: string, at: number } | null} */
 let lastAutofill = null;
 // its submit always offers to save (reset page / password change)
+/** @type {{ host: string, passwordHash: Promise<string>, at: number } | null} */
 let lastGenerated = null;
 
+/** @type {HTMLDivElement | null} */
 let suggestionEl = null;
+/** @type {PbHost | null} */
 let suggestionHost = null;
+/** @type {PbHost | null} */
 let iconHost = null;
+/** @type {HTMLInputElement | null} */
 let anchorField = null;
+/** @type {string[] | null} */
 let cachedLogins = null;
 let navItems = [];
 let navIndex = -1;
+/** @type {HTMLInputElement | null} */
 let loginSearchEl = null;
+/** @type {(() => void) | null} */
 let loginListReflow = null;
+/** @type {(() => void) | null} */
 let loginListUnbind = null;
 let menuGen = 0;
 
@@ -679,27 +670,6 @@ function onSuggestionKeydown(e) {
   }
 }
 
-function frameShift() {
-  // The menu lives in this frame, so the field rect is already local.
-  // The same walk is what a top frame would add for a child rect (depth cap 8).
-  let x = 0;
-  let y = 0;
-  let depth = 0;
-  let w = window;
-  while (w !== w.top && depth < 8) {
-    let fe = null;
-    try { fe = w.frameElement; } catch { break; }
-    if (!fe) break;
-    const r = fe.getBoundingClientRect();
-    const s = w.parent.getComputedStyle(fe);
-    x += r.left + (parseFloat(s.borderLeftWidth) || 0) + (parseFloat(s.paddingLeft) || 0);
-    y += r.top + (parseFloat(s.borderTopWidth) || 0) + (parseFloat(s.paddingTop) || 0);
-    w = w.parent;
-    depth++;
-  }
-  return { x, y, depth };
-}
-
 function pageIsFaded() {
   try {
     const html = parseFloat(getComputedStyle(document.documentElement).opacity);
@@ -736,7 +706,6 @@ function positionBox() {
     return;
   }
   const r = anchorField.getBoundingClientRect();
-  void frameShift();
   const GAP = 6;
   const vw = window.innerWidth || document.documentElement.clientWidth;
   const vh = window.innerHeight || document.documentElement.clientHeight;
@@ -822,7 +791,7 @@ function watchMenuHost(host) {
 function buildSuggestionBox(field) {
   removeSuggestion();
   anchorField = field;
-  const host = document.createElement("div");
+  const host = /** @type {PbHost} */ (document.createElement("div"));
   host.setAttribute("data-passbridge-host", "menu");
   host.setAttribute("data-passbridge", "suggestions");
   host.setAttribute("popover", "manual");
@@ -857,7 +826,7 @@ function buildSuggestionBox(field) {
 function placeFieldIcon(field) {
   removeIcon();
   if (pbSettings.inlineMenuVisibility === "off") return;
-  const host = document.createElement("div");
+  const host = /** @type {PbHost} */ (document.createElement("div"));
   host.setAttribute("data-passbridge-icon", "1");
   host.setAttribute("popover", "manual");
   const shadow = host.attachShadow({ mode: "closed" });
@@ -988,7 +957,10 @@ async function buildLockedSuggestion(field, onUnlock) {
   chrome.runtime.sendMessage({ type: "requestChallenge", ifNeeded: true }).catch(() => {});
 
   // also reached from the background's "unlocked" message via lockedResume
+  let unlockDone = false;
   const finishUnlock = async () => {
+    if (unlockDone) return;
+    unlockDone = true;
     lockedResume = null;
     if (typeof onUnlock === "function") {
       removeSuggestion();
@@ -998,13 +970,15 @@ async function buildLockedSuggestion(field, onUnlock) {
     }
     cachedLogins = null;
     const r2 = await chrome.runtime.sendMessage({ type: "inlineLogins" }).catch(() => null);
-    cachedLogins = r2?.logins || [];
-    if (cachedLogins.length === 1) {
+    /** @type {string[]} */
+    const logins = r2?.logins || [];
+    cachedLogins = logins;
+    if (logins.length === 1) {
       removeSuggestion();
       fillAnchor = field;
-      chrome.runtime.sendMessage({ type: "inlineFill", loginName: cachedLogins[0] }).catch(() => {});
-    } else if (cachedLogins.length > 1) {
-      buildChooser(field, cachedLogins);
+      chrome.runtime.sendMessage({ type: "inlineFill", loginName: logins[0] }).catch(() => {});
+    } else if (logins.length > 1) {
+      buildChooser(field, logins);
     } else {
       removeSuggestion();
     }
@@ -1057,7 +1031,7 @@ function isNewPasswordField(el) {
   if (ac.includes("new-password")) return true;
   const pwCount = Array.from(document.querySelectorAll('input[type="password"]')).filter(isVisible).length;
   if (pwCount >= 2) return true;
-  return Array.from(document.querySelectorAll("button, input[type=submit], input[type=button]")).some((b) =>
+  return Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll("button, input[type=submit], input[type=button]"))).some((b) =>
     /\b(sign[\s-]?up|register|create[\s-]?account|create[\s-]?your[\s-]?account)\b/i.test(b.textContent || b.value || ""),
   );
 }
@@ -1079,7 +1053,7 @@ function liveField(field) {
 async function fillGeneratedPassword(field, pw) {
   field = liveField(field);
   const targets = new Set([field]);
-  for (const p of Array.from(document.querySelectorAll('input[type="password"]')).filter(isFillable)) {
+  for (const p of Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[type="password"]'))).filter(isFillable)) {
     if (p === field || p.value) continue;
     if (p.form && field.form && p.form !== field.form) continue;
     // a change-password form's current password is not a new password
@@ -1090,9 +1064,10 @@ async function fillGeneratedPassword(field, pw) {
     setValue(t, pw);
     everPassword.add(t);
   }
-  try {
-    lastGenerated = { host: location.hostname, passwordHash: await sha256Hex(pw), at: Date.now() };
-  } catch {}
+  // set before the hash resolves: a submit right after the fill used to miss it
+  const passwordHash = sha256Hex(pw).catch(() => "");
+  lastGenerated = { host: location.hostname, passwordHash, at: Date.now() };
+  await passwordHash;
 }
 
 // More than six saved logins scrolls inside the menu. Search is a case-insensitive
@@ -1117,9 +1092,9 @@ function fitLoginScroller(scroller) {
   const r = anchorField.getBoundingClientRect();
   const vh = window.innerHeight || document.documentElement.clientHeight;
   const GAP = 6;
-  const chrome = Math.max(0, suggestionEl.offsetHeight - scroller.offsetHeight);
-  const below = vh - 8 - (r.bottom + GAP) - chrome;
-  const above = r.top - GAP - 8 - chrome;
+  const frame = Math.max(0, suggestionEl.offsetHeight - scroller.offsetHeight);
+  const below = vh - 8 - (r.bottom + GAP) - frame;
+  const above = r.top - GAP - 8 - frame;
   const room = Math.max(below, above);
   const row = scroller.firstElementChild?.offsetHeight || LOGIN_ROW_PX;
   const cap = (row > 0 ? row : LOGIN_ROW_PX) * LOGIN_LIST_CAP;
@@ -1168,6 +1143,7 @@ function appendLoginRows(box, field, logins) {
       if (busy) return;
       busy = true;
       fillAnchor = field;
+      /** @type {{ ok?: boolean, filled?: boolean, error?: string } | null} */
       let res = null;
       try {
         res = await chrome.runtime.sendMessage({ type: "inlineFill", loginName: login });
@@ -1194,6 +1170,7 @@ function appendLoginRows(box, field, logins) {
 function mountLoginList(box, field, logins, hasGenerator) {
   const capped = logins.length > LOGIN_LIST_CAP;
   let query = pageUsernameQuery(field);
+  /** @type {HTMLInputElement | null} */
   let search = null;
 
   if (capped) {
@@ -1219,8 +1196,8 @@ function mountLoginList(box, field, logins, hasGenerator) {
     });
     search.style.setProperty("background", "light-dark(rgba(255,255,255,0.55), rgba(0,0,0,0.28))");
     search.addEventListener("mousedown", (e) => e.stopPropagation());
-    search.addEventListener("input", () => {
-      query = search.value.trim().toLowerCase();
+    search.addEventListener("input", (e) => {
+      query = /** @type {HTMLInputElement} */ (e.currentTarget).value.trim().toLowerCase();
       render();
     });
     box.appendChild(search);
@@ -1477,10 +1454,21 @@ function appendOneTimeCodeRows(box, field, rows) {
       text.appendChild(sub);
     }
     row.appendChild(text);
-    registerRow(row, () => {
-      removeSuggestion();
+    let filling = false;
+    registerRow(row, async () => {
+      if (filling) return;
+      filling = true;
       otpAnchor = field;
-      chrome.runtime.sendMessage({ type: "inlineFillOneTimeCode", id: r.id }).catch(() => {});
+      const resp = await chrome.runtime
+        .sendMessage({ type: "inlineFillOneTimeCode", id: r.id })
+        .catch((err) => ({ ok: false, error: String(err?.message ?? err) }));
+      filling = false;
+      if (resp?.ok && resp.filled) {
+        removeSuggestion();
+        return;
+      }
+      label.textContent = resp?.error || "Couldn't fill the code.";
+      label.style.color = "#d70015";
     });
     box.appendChild(row);
   }
@@ -1577,7 +1565,7 @@ function frameIsSafe() {
   if (window === window.top) return true;
   if (isAllowlistedLoginHost(location.hostname)) return true;
   try {
-    return location.origin === window.top.location.origin;
+    return location.origin === window.top?.location.origin;
   } catch {
     return false;
   }
@@ -1585,7 +1573,7 @@ function frameIsSafe() {
 
 async function onFocusIn(e) {
   if (credFilling) return;
-  if (hostInList(location.hostname, pbSettings.blockedDomains)) return;
+  if (hostBlocked(location.hostname, pbSettings.blockedDomains)) return;
   const path = typeof e.composedPath === "function" ? e.composedPath() : [];
   if (suggestionHost && (e.target === suggestionHost || path.includes(suggestionHost))) return;
   // focusin from inside a shadow root retargets to the host, composedPath has the real input
@@ -1622,6 +1610,7 @@ async function onFocusIn(e) {
 }
 
 document.addEventListener("focusin", onFocusIn, true);
+/** @type {HTMLInputElement | null} */
 let contextField = null;
 document.addEventListener("contextmenu", (e) => {
   const t = eventField(e);
@@ -1653,7 +1642,7 @@ document.addEventListener(
     if (target !== anchorField && e.target !== suggestionHost) return;
     const next = e.relatedTarget;
     if (
-      next &&
+      next instanceof Node &&
       (next === suggestionHost ||
         next === iconHost ||
         next === anchorField ||
@@ -1704,21 +1693,58 @@ let lastSaveAt = 0;
 const SUBMITY_LABEL =
   /\b(sign[\s-]?in|sign[\s-]?up|log[\s-]?in|register|create[\s-]?account|save|update|reset|confirm|done|set|apply|activate|enroll|finish|proceed|verify|join|change[\s-]?password|continue|next|submit)\b/i;
 
-// ids and names carry no word boundaries ("findpwd", "loginBtn"), so match bare substrings
-const SUBMITY_ATTR = /pwd|passw|reset|submit|login|signin|confirm|continue|next|done|save|set|apply/i;
+// ids and names are split into words ("loginBtn", "save_pw", "find-pwd"). whole words only:
+// bare substrings made "offset", "context" and "datasets" submit buttons
+const SUBMITY_WORDS = new Set(["next", "done", "save", "set", "apply", "reset", "confirm", "continue", "submit", "login", "signin", "logon"]);
+// compounds with no separator ("findpwd", "dologin", "resetpassword") still count by their ending
+const SUBMITY_ENDINGS = /(pwd|password|passwd|submit|login|signin)$/;
+// a show-password eye or other toggle sits in the form and is never a submit
+const TOGGLE_WORDS = new Set(["show", "hide", "toggle", "reveal", "eye", "visibility", "view", "peek", "unmask", "mask"]);
+const NOT_SUBMIT_WORDS = new Set(["forgot", "cancel"]);
+
+function attrWords(text) {
+  return String(text || "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function submityAttr(attrs) {
+  const words = attrWords(attrs);
+  if (words.some((w) => NOT_SUBMIT_WORDS.has(w))) return false;
+  // a bare "password" or "pwd" names the field it sits next to, the compound is the action
+  return words.some((w) => {
+    if (SUBMITY_WORDS.has(w)) return true;
+    const m = SUBMITY_ENDINGS.exec(w);
+    return !!m && w.length > m[1].length;
+  });
+}
+
+// attributes, not the visible label: "Sign in to view" is still a submit
+function isToggleControl(el) {
+  if (el.hasAttribute("aria-pressed")) return true;
+  const attrs = ["name", "id", "class", "aria-label", "title", "data-testid"].map((a) => el.getAttribute(a) || "").join(" ");
+  if (attrWords(attrs).some((w) => TOGGLE_WORDS.has(w))) return true;
+  return /^\s*(show|hide|reveal|toggle)\b/i.test(el.textContent || el.value || "");
+}
 
 function isSubmitControl(el) {
   if (!(el instanceof Element)) return false;
+  // button.value or input.value, both strings
+  const value = /** @type {HTMLInputElement} */ (el).value;
   const tag = el.tagName.toLowerCase();
   const type = (el.getAttribute("type") || "").toLowerCase();
   if ((tag === "button" || tag === "input") && type === "submit") return true;
   const attrs = `${el.getAttribute("name") || ""} ${el.id || ""}`;
   if (tag === "button" && (type === "" || type === "button")) {
-    return SUBMITY_LABEL.test((el.textContent || el.value || "") ?? "") || SUBMITY_ATTR.test(attrs);
+    if (isToggleControl(el)) return false;
+    return SUBMITY_LABEL.test(el.textContent || value || "") || submityAttr(attrs);
   }
   // old-school pages (tplink) submit via <input type=button value="OK">
   if (tag === "input" && type === "button") {
-    return SUBMITY_LABEL.test(el.value || "") || SUBMITY_ATTR.test(attrs);
+    if (isToggleControl(el)) return false;
+    return SUBMITY_LABEL.test(value || "") || submityAttr(attrs);
   }
   // styled div/a with role=button (sling reset pages)
   if ((el.getAttribute("role") || "").toLowerCase() === "button" || tag === "a") {
@@ -1790,9 +1816,10 @@ async function maybeOfferSave(scope) {
 
   let generated = false;
   let savePassword = cred.password;
-  if (lastGenerated && lastGenerated.passwordHash && Date.now() - lastGenerated.at < 600000) {
+  const generatedHash = lastGenerated && Date.now() - lastGenerated.at < 600000 ? await lastGenerated.passwordHash : "";
+  if (generatedHash) {
     for (const candidate of cred.allPasswords || []) {
-      if (await passwordsMatch(lastGenerated.passwordHash, candidate)) {
+      if (await passwordsMatch(generatedHash, candidate)) {
         generated = true;
         savePassword = candidate;
         break;
@@ -1858,8 +1885,8 @@ document.addEventListener(
   "click",
   (e) => {
     if (!e.isTrusted || !(e.target instanceof Element)) return;
-    const ctrl = e.target.closest('button, input[type=submit], input[type=button], [role="button"], a');
-    if (isSubmitControl(ctrl)) maybeOfferSave(ctrl.form || document);
+    const ctrl = /** @type {HTMLButtonElement | null} */ (e.target.closest('button, input[type=submit], input[type=button], [role="button"], a'));
+    if (ctrl && isSubmitControl(ctrl)) maybeOfferSave(ctrl.form || document);
   },
   true,
 );
@@ -1875,21 +1902,6 @@ document.addEventListener(
   },
   true,
 );
-
-try {
-  const menuPort = chrome.runtime.connect({ name: "autofill-inline-menu-list-port" });
-  menuPort.onMessage.addListener((msg) => {
-    if (msg?.command === "init" && anchorField) {
-      const r = anchorField.getBoundingClientRect();
-      const shift = frameShift();
-      menuPort.postMessage({
-        command: "fieldRect",
-        portKey: msg.portKey,
-        rect: { x: r.left + shift.x, y: r.top + shift.y, width: r.width, height: r.height },
-      });
-    }
-  });
-} catch {}
 
 pbSettingsLoaded.then(() => {
   const a = deepActiveElement();

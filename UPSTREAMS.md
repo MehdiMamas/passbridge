@@ -21,8 +21,8 @@ The content bundle after this change is 70,020 bytes (17,496 gzip), against a ba
 ## When something breaks
 
 - Bitwarden changes detection: `npm run sync -- bitwarden <commit>`. Read the diff. If `autofill-constants.ts` changed, rebuild and run the harness, then `--accept`.
-- A new macOS or iCloud for Windows breaks pairing or login lookup, and au2001 or open-passwords has the fix: `npm run sync -- au2001 <commit>` (or `open-passwords`). Update `src/apple/` only where the command shape changed. `src/vault/apple-vault.ts` is the typed seam over that client.
-- The popup needs a new capability: add it to `src/session/contract.ts` first. The React UI in `src/ui/` only renders what that contract can do.
+- A new macOS or iCloud for Windows breaks pairing or login lookup, and au2001 or open-passwords has the fix: `npm run sync -- au2001 <commit>` (or `open-passwords`). Update `src/apple/` only where the command shape changed. `src/apple/protocol.js` is the client the background talks to.
+- The popup needs a new capability: add the message to `src/background.js` first. The React UI in `src/ui/` only renders what the background answers.
 
 ## Parity
 
