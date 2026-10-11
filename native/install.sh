@@ -5,6 +5,14 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 EXT_ID="pejdijmoenmkgeppbflobdenhhabjlaj" # the ID our manifest key forces
 SUPPORT="$HOME/Library/Application Support"
 
+# without the Command Line Tools /usr/bin/python3 is only a stub that offers to install them
+if ! xcode-select -p >/dev/null 2>&1; then
+  echo "The helper runs on /usr/bin/python3, which needs the Xcode Command Line Tools."
+  echo "Run: xcode-select --install"
+  echo "Then run this script again."
+  exit 1
+fi
+
 # outside the repo so moving it wont break the host path, and out of ~/Downloads where TCC can block the browser launching it
 APPDIR="$SUPPORT/PassBridge"
 mkdir -p "$APPDIR"
@@ -12,43 +20,8 @@ cp "$DIR/passbridge-policy.py" "$APPDIR/passbridge-policy.py"
 chmod +x "$APPDIR/passbridge-policy.py"
 HELPER="$APPDIR/passbridge-policy.py"
 
-cp "$DIR/passbridge-autopair.py" "$APPDIR/passbridge-autopair.py"
-chmod +x "$APPDIR/passbridge-autopair.py"
-AUTOPAIR="$APPDIR/passbridge-autopair.py"
-
-# app bundle so the permission prompt says "PassBridge" instead of "Python 3"
-APP="$APPDIR/PassBridge Helper.app"
-if command -v cc >/dev/null 2>&1; then
-  rm -rf "$APP"
-  mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-  cp "$DIR/passbridge-autopair.py" "$APP/Contents/Resources/passbridge-autopair.py"
-  cat > "$APP/Contents/Info.plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleName</key><string>PassBridge</string>
-  <key>CFBundleDisplayName</key><string>PassBridge</string>
-  <key>CFBundleIdentifier</key><string>com.passbridge.helper</string>
-  <key>CFBundleExecutable</key><string>PassBridge Helper</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
-  <key>LSUIElement</key><true/>
-  <key>NSAppleEventsUsageDescription</key>
-  <string>PassBridge reads the 6-digit pairing code from the Passwords helper's window so you don't have to type it.</string>
-</dict>
-</plist>
-EOF
-  if cc -O2 -o "$APP/Contents/MacOS/PassBridge Helper" "$DIR/autopair-launcher.c" 2>/dev/null \
-     && codesign -s - -f -i com.passbridge.helper "$APP" >/dev/null 2>&1; then
-    AUTOPAIR="$APP/Contents/MacOS/PassBridge Helper"
-    echo "  built $(basename "$APP")"
-  else
-    rm -rf "$APP"
-    echo "  (no C compiler or codesign, the pairing-code reader runs as plain python)"
-  fi
-fi
+# the pairing-code reader earlier versions installed
+rm -rf "$APPDIR/passbridge-autopair.py" "$APPDIR/PassBridge Helper.app"
 
 found=0
 register() {
@@ -63,16 +36,7 @@ register() {
   "allowed_origins": ["chrome-extension://$EXT_ID/"]
 }
 EOF
-  cat > "$d/com.passbridge.autopair.json" <<EOF
-{
-  "name": "com.passbridge.autopair",
-  "description": "PassBridge pairing-code reader",
-  "path": "$AUTOPAIR",
-  "type": "stdio",
-  "allowed_origins": ["chrome-extension://$EXT_ID/"]
-}
-EOF
-  rm -f "$d/com.openpasswords.policy.json" "$d/com.openpasswords.autopair.json"
+  rm -f "$d/com.passbridge.autopair.json" "$d/com.openpasswords.policy.json" "$d/com.openpasswords.autopair.json"
   echo "  registered: $(basename "$1")"
   found=$((found + 1))
 }
@@ -86,4 +50,4 @@ done
 
 echo
 echo "Helper installed to $HELPER ($found browser(s))"
-echo "Now FULLY QUIT and reopen your browser (Cmd+Q), then use the popup toggle."
+echo "Now FULLY QUIT and reopen your browser (Cmd+Q), then use the toggle in PassBridge settings."

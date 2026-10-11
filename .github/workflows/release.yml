@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
       - run: cd dist && zip -r ../passbridge.zip .
       - uses: softprops/action-gh-release@v2

@@ -1,7 +1,7 @@
 // a code is only valid for the exact challenge it was shown for, the client must never swap the challenge under the user
 
-import { webcrypto } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { randomBytes, webcrypto } from "node:crypto";
+import { GROUP_1024, GROUP_3072, appleServer, big, bytes, group } from "./srp-reference.mjs";
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
@@ -13,15 +13,37 @@ const ok = (name, cond, detail = "") => {
 
 const SRC = new URL("../../src/apple/", import.meta.url);
 const { SRPSession } = await import(new URL("srp.js", SRC));
-const crypt = await import(new URL("crypto.js", SRC));
-const { sha256, bigIntToBytes, bytesToBigInt, padBytes, utf8ToBytes, concatBytes, mod, powmod } = crypt;
 
-const N = BigInt(
-  "0x" +
-    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AAAC42DAD33170D04507A33A85521ABDF1CBA64ECFB850458DBEF0A8AEA71575D060C7DB3970F85A6E1E4C7ABF5AE8CDB0933D71E8C94E04A25619DCEE3D2261AD2EE6BF12FFA06D98A0864D87602733EC86A64521F2B18177B200CBBE117577A615D6C770988C0BAD946E208E24FA074E5AB3143DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF",
-);
-const NB = 384;
-const g = 5n;
+const hex = (n) => (typeof n === "bigint" ? n.toString(16) : Buffer.from(n).toString("hex")).toUpperCase();
+const same = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
+
+// RFC 5054 appendix B (SHA-1, 1024-bit group): proves the reference before it grades anything
+{
+  const G = group(GROUP_1024, "sha1");
+  const I = "alice";
+  const P = "password123";
+  const s = Buffer.from("BEB25379D1A8581EB5A727673A2441EE", "hex");
+  const a = BigInt("0x60975527035CF2AD1989806F0407210BC81EDC04E2762A56AFD529DDDA2D4393");
+  const b = BigInt("0xE487CB59D31AC550471E81F00F6928E01DDA08E974A004F49E61F5D105284D20");
+  const want = {
+    k: "7556AA045AEF2CDD07ABAF0F665C3E818913186F",
+    x: "94B7555AABE9127CC58CCF4993DB6CF84D16C124",
+    v: "7E273DE8696FFC4F4E337D05B4B375BEB0DDE1569E8FA00A9886D8129BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78E955A5E29E7AB245DB2BE315E2099AFB",
+    A: "61D5E490F6F1B79547B0704C436F523DD0E560F0C64115BB72557EC44352E8903211C04692272D8B2D1A5358A2CF1B6E0BFCF99F921530EC8E39356179EAE45E42BA92AEACED825171E1E8B9AF6D9C03E1327F44BE087EF06530E69F66615261EEF54073CA11CF5858F0EDFDFE15EFEAB349EF5D76988A3672FAC47B0769447B",
+    B: "BD0C61512C692C0CB6D041FA01BB152D4916A1E77AF46AE105393011BAF38964DC46A0670DD125B95A981652236F99D9B681CBF87837EC996C6DA04453728610D0C6DDB58B318885D7D82C7F8DEB75CE7BD4FBAA37089E6F9C6059F388838E7A00030B331EB76840910440B1B27AAEAEEB4012B7D7665238A8E3FB004B117B58",
+    u: "CE38B9593487DA98554ED47D70A7AE5F462EF019",
+    S: "B0DC82BABCF30674AE450C0287745E7990A3381F63B387AAF271A10D233861E359B48220F7C4693C9AE12B0A6F67809F0876E2D013800D6C41BB59B6D5979B5C00A172B4A2A5903A0BDCAF8A709585EB2AFAFA8F3499B200210DCC1F10EB33943CD67FC88A2F39A4BE5BEC4EC0A3212DC346D7E474B29EDE8A469FFECA686E5A",
+  };
+  const x = G.x(I, P, s);
+  const v = G.verifier(I, P, s);
+  const A = G.publicA(a);
+  const B = G.publicB(b, v);
+  const u = G.u(A, B);
+  const got = { k: G.k, x, v, A, B, u, S: G.clientS(a, B, x, u) };
+  const off = Object.keys(want).filter((key) => hex(got[key]) !== want[key]);
+  ok("reference SRP matches RFC 5054 appendix B (k, x, v, A, B, u, S)", off.length === 0, `differs: ${off.join(", ")}`);
+  ok("reference server and client agree on S", G.serverS(A, v, u, b) === got.S);
+}
 
 // salt is bytes and K a 32-byte digest, both hashed as-is never as trimmed bigints
 class SrpServer {
@@ -29,42 +51,9 @@ class SrpServer {
     this.pin = pin;
     this.salt = salt;
   }
-  async start(username, A) {
-    this.username = username;
-    this.A = A;
-    const innerHash = await sha256(utf8ToBytes(username + ":" + this.pin));
-    const x = bytesToBigInt(await sha256(this.salt, innerHash));
-    this.v = powmod(g, x, N);
-    this.b = bytesToBigInt(crypt.randomBytes(32));
-    const k = bytesToBigInt(await sha256(bigIntToBytes(N), padBytes(bigIntToBytes(g), NB)));
-    this.B = mod(mod(k * this.v, N) + powmod(g, this.b, N), N);
-    return { B: this.B, s: this.salt };
-  }
-  async sharedKey() {
-    const u = bytesToBigInt(
-      await sha256(padBytes(bigIntToBytes(this.A), NB), padBytes(bigIntToBytes(this.B), NB)),
-    );
-    const S = powmod(mod(this.A * powmod(this.v, u, N), N), this.b, N);
-    return bytesToBigInt(await sha256(bigIntToBytes(S)));
-  }
-  async expectedM() {
-    const K = await this.sharedKey();
-    const hN = await sha256(bigIntToBytes(N));
-    const hg = await sha256(padBytes(bigIntToBytes(g), NB));
-    const xored = new Uint8Array(hN.length);
-    for (let i = 0; i < hN.length; i++) xored[i] = hN[i] ^ hg[i];
-    return sha256(
-      xored,
-      await sha256(utf8ToBytes(this.username)),
-      this.salt,
-      bigIntToBytes(this.A),
-      bigIntToBytes(this.B),
-      padBytes(bigIntToBytes(K), 32),
-    );
-  }
-  async hamk(m) {
-    const K = await this.sharedKey();
-    return sha256(bigIntToBytes(this.A), m, padBytes(bigIntToBytes(K), 32));
+  start(username, A) {
+    this.r = appleServer({ username, pin: this.pin, salt: this.salt, A, b: big(randomBytes(32)) });
+    return { B: this.r.B, s: this.salt };
   }
 }
 
@@ -87,8 +76,8 @@ function makeHost({ salts, pins }) {
   const reply = (m) => port._listeners.forEach((fn) => fn(m));
   const b64 = (o) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
   const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
-  const hex = (bytes) => "0x" + crypt.bytesToHex(bytes);
-  const unhex = (s) => crypt.hexToBytes(String(s).replace(/^0x/, ""));
+  const wire = (b) => "0x" + Buffer.from(b).toString("hex");
+  const unwire = (s) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
 
   async function handle(msg) {
     if (msg.cmd === 14) return reply({ cmd: 14, capabilities: { shouldUseBase64: false } });
@@ -102,22 +91,19 @@ function makeHost({ salts, pins }) {
       state.codesShown.push(pin);
       state.server = new SrpServer({ pin, salt });
       state.live = true;
-      const { B, s } = await state.server.start(pake.TID, bytesToBigInt(unhex(pake.A)));
+      const { B, s } = state.server.start(pake.TID, big(unwire(pake.A)));
       return reply({
         cmd: 2,
-        payload: { PAKE: b64({ TID: pake.TID, MSG: 1, PROTO: 1, B: hex(bigIntToBytes(B)), s: hex(s) }) },
+        payload: { PAKE: b64({ TID: pake.TID, MSG: 1, PROTO: 1, B: wire(bytes(B)), s: wire(s) }) },
       });
     }
 
     if (!state.live) return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: 3, ErrCode: 1 }) } });
-    const expected = await state.server.expectedM();
-    const got = unhex(pake.M);
     state.live = false;
-    if (Buffer.compare(Buffer.from(expected), Buffer.from(got)) !== 0) {
+    if (!same(state.server.r.M, unwire(pake.M))) {
       return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: 3, ErrCode: 1 }) } });
     }
-    const hamk = await state.server.hamk(got);
-    return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: 3, ErrCode: 0, HAMK: hex(hamk) }) } });
+    return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: 3, ErrCode: 0, HAMK: wire(state.server.r.HAMK) }) } });
   }
 
   globalThis.chrome = { runtime: { connectNative: () => port, lastError: undefined } };
@@ -125,12 +111,12 @@ function makeHost({ salts, pins }) {
 }
 
 const leadingZeroSalt = () => {
-  const s = crypt.randomBytes(16);
+  const s = randomBytes(16);
   s[0] = 0x00; // the 1-in-256 case that used to be truncated
   return s;
 };
 const plainSalt = () => {
-  const s = crypt.randomBytes(16);
+  const s = randomBytes(16);
   if (s[0] === 0) s[0] = 0x7f;
   return s;
 };
@@ -162,27 +148,34 @@ async function freshClient() {
   ok("leading-zero salt still unlocks", c.state === "unlocked" && !err, String(err?.message));
 }
 
+// fixed inputs chosen so K = H(S) starts with 0x00 and the salt starts with 0x00,
+// graded against the reference and against golden values, not against srp.js's own formula
 {
-  const salt = plainSalt();
+  const username = "0x00112233445566778899aabbccddeeff";
+  const salt = Buffer.from("00" + "5a".repeat(15), "hex");
+  const a = BigInt("0x" + "a5".repeat(32));
+  const b = BigInt("0x" + "3c".repeat(32)) + 512n;
+  const A = group(GROUP_3072, "sha256").publicA(a);
+  const r = appleServer({ username, pin: "123456", salt, A, b });
+  const golden = {
+    K: "00018E6D301A6FBE5CD377927F34C296620996CFFA5BFD6B9475ACDE3FD63180",
+    M: "C3D8C91BA21ABEFD6968D1E6B100BC3368CBFFEF2D9F17812D891575694D1F6F",
+    HAMK: "41DFB0165F818F097216993F58C9384AE8B6312D9ADA20E517EC6526C846FA3E",
+  };
+  ok("reference still yields the golden K, M and HAMK", hex(r.K) === golden.K && hex(r.M) === golden.M && hex(r.HAMK) === golden.HAMK);
+
   const s = new SRPSession(false);
-  s.setServerPublicKey(2n, salt);
-  s.sharedKey = bytesToBigInt(padBytes(new Uint8Array([0x00, 0x11, 0x22]), 32));
+  s.username = username;
+  s.clientPrivateKey = a;
+  ok("client A is minimal big-endian g^a", same(s.clientPublicKeyBytes, bytes(A)));
+  s.setServerPublicKey(r.B, new Uint8Array(salt));
+  await s.setSharedKey("123456");
+  ok("leading-zero shared key matches the reference", s.sharedKey.toString(16).padStart(64, "0").toUpperCase() === golden.K);
   const m = await s.computeM();
-  const expected = await (async () => {
-    const hN = await sha256(bigIntToBytes(N));
-    const hg = await sha256(padBytes(bigIntToBytes(g), NB));
-    const xored = new Uint8Array(hN.length);
-    for (let i = 0; i < hN.length; i++) xored[i] = hN[i] ^ hg[i];
-    return sha256(
-      xored,
-      await sha256(utf8ToBytes(s.username)),
-      salt,
-      bigIntToBytes(s.clientPublicKey),
-      bigIntToBytes(2n),
-      padBytes(bigIntToBytes(s.sharedKey), 32),
-    );
-  })();
-  ok("leading-zero shared key hashes at full 32 bytes", Buffer.compare(Buffer.from(m), Buffer.from(expected)) === 0);
+  ok("leading-zero shared key hashes at full 32 bytes (M)", hex(m) === golden.M, hex(m));
+  ok("HAMK matches the reference", hex(await s.computeHMAC(m)) === golden.HAMK);
+  await s.setSharedKey("654321");
+  ok("a wrong PIN gives a different M", hex(await s.computeM()) !== golden.M);
 }
 
 {

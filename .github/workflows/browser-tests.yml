@@ -1,0 +1,29 @@
+name: Browser tests
+
+# headless Chromium suite (run-all.mjs); manual only, it takes a few minutes
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node test-harness/automation/build-test-extensions.mjs
+      - run: xvfb-run -a node test-harness/automation/run-all.mjs
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shots
+          path: test-harness/automation/shots/
+          if-no-files-found: ignore
