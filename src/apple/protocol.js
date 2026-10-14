@@ -84,13 +84,16 @@ function jsonToBase64(obj) {
   return bytesToBase64(new TextEncoder().encode(JSON.stringify(obj)));
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // totp entries can arrive without a code, the value is read at fill time
-function normalizeOtpEntries(entries) {
+export function normalizeOtpEntries(entries) {
   return (Array.isArray(entries) ? entries : [])
     .map((e) => ({
       source: String(e.source || ""),
       username: e.username || "",
-      domain: e.domain || "",
+      // a code set up from a QR scan on Windows carries a record id as its domain, the title reads better
+      domain: (UUID_RE.test(e.domain || "") && e.customTitle) || e.domain || "",
       code: e.code != null ? String(e.code) : "",
     }))
     .filter((e) => e.code || e.source === "totp");
