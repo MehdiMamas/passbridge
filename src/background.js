@@ -71,8 +71,26 @@ function otpRow(e, i) {
   return { id: i, source: e.source, username: e.username, domain: e.domain };
 }
 
+// iCloud for Windows 15.10 lists only codes set up on Windows, so a synced TOTP needs a per-login read
+const OTP_FALLBACK_MAX_LOGINS = 8;
+
+async function syncedTotpEntries(tabId, frameId, frameUrls) {
+  const url = frameUrls[0];
+  if (!url) return [];
+  const names = await client.getLoginNamesForURL(tabId, url).catch(() => []);
+  const usernames = [...new Set(names.map((n) => n.username).filter(Boolean))].slice(0, OTP_FALLBACK_MAX_LOGINS);
+  const entries = [];
+  for (const username of usernames) {
+    const found = await client.readOneTimeCode(tabId, frameId, frameUrls, username).catch(() => []);
+    const hit = found.find((e) => e.source === "totp" && e.username === username);
+    if (hit) entries.push(hit);
+  }
+  return entries;
+}
+
 async function listOneTimeCodes(tabId, frameId, frameUrls) {
-  const { entries, requiresAuth } = await client.getOneTimeCodes(tabId, frameId, frameUrls);
+  let { entries, requiresAuth } = await client.getOneTimeCodes(tabId, frameId, frameUrls);
+  if (!entries.length && (await platformReady) === "win") entries = await syncedTotpEntries(tabId, frameId, frameUrls);
   otpByTab.set(tabId, { at: Date.now(), entries, frameId, frameUrls });
   return { rows: entries.map(otpRow), requiresAuth };
 }
