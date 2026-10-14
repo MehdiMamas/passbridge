@@ -1,4 +1,4 @@
-import { ApplePasswords, Command } from "../../src/apple/protocol.js";
+import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
@@ -52,6 +52,11 @@ ok("a non-setup link has no setup key", otpAuthSecret("https://example.com/?secr
 ok("wifi and migration QR codes are not setup links", parseOtpAuth("WIFI:S:cafe;T:WPA;P:secret;;") === null && parseOtpAuth("otpauth-migration://offline?data=abc") === null);
 ok("a grouped setup key with spaces is accepted", otpAuthSecret("otpauth://totp/Work?secret=JBSW%20Y3DP%20EHPK%203PXP") === "JBSWY3DPEHPK3PXP");
 ok("apple-otpauth totp is accepted", parseOtpAuth("apple-otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP&issuer=Work")?.account === "Work");
+const [scanned, synced] = normalizeOtpEntries([
+  { source: "totp", domain: "7E8A4488-FB35-4AC8-B885-3CB52740EFBB", customTitle: "Cashapp", username: "a" },
+  { source: "totp", domain: "github.com", customTitle: "GitHub", username: "b" },
+]);
+ok("a code keyed by a record id is labelled with its title, a real domain is kept", scanned.domain === "Cashapp" && synced.domain === "github.com");
 const generated = generateApplePassword();
 ok("generated password is three hyphenated groups", /^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/.test(generated));
 
