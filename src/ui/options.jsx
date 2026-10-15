@@ -109,6 +109,7 @@ function OptionsApp() {
           </select>
         </Row>
         {check("autofillOnPageLoad", "Autofill on page load", "Off by default. A single match can ask for Touch ID or Windows Hello as the page opens.")}
+        {check("canFillOnHttp", "Fill and save on HTTP pages", "Off by default. Opens fill and save on every HTTP page. HTTP traffic is unencrypted and the page could be a spoof.")}
         {check("showAnimations", "Fill animation")}
         {check("showFavicons", "Website icons")}
         <DomainList

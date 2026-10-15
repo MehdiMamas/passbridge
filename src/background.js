@@ -400,6 +400,12 @@ function isLocalDevHost(host) {
   );
 }
 
+// one gate for every fill and save: https always, dev hosts always, plain http only on the opt-in
+async function isFillUrlAllowed(url) {
+  if (/^https:\/\//i.test(url) || isLocalDevHost(hostnameOf(url))) return true;
+  return (await getSettings()).canFillOnHttp === true;
+}
+
 // only these from a content script, none returns a password to the page
 const CONTENT_ALLOWED = new Set([
   "inlineLogins",
@@ -474,7 +480,7 @@ async function fillLoginOnTab(tab, username) {
   await ensureConnected();
   if (!client.ready || !tab?.url || tab.id == null) return;
   const host = hostnameOf(tab.url);
-  if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(host)) return;
+  if (!(await isFillUrlAllowed(tab.url))) return;
   if (username == null) {
     let logins = [];
     try {
@@ -925,7 +931,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const frameId = sender.frameId;
           if (!frameUrl || sender.tab?.id == null || frameId == null) return sendResponse({ ok: false, error: "no frame" });
           const host = hostnameOf(frameUrl);
-          if (!/^https:\/\//i.test(frameUrl) && !isLocalDevHost(host)) {
+          if (!(await isFillUrlAllowed(frameUrl))) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS frame" });
           }
           const code = await resolveOneTimeCode(sender.tab.id, Number(msg.id));
@@ -947,7 +953,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: false, error: "no frame" });
           }
           const host = hostnameOf(frameUrl);
-          if (!/^https:\/\//i.test(frameUrl) && !isLocalDevHost(host)) {
+          if (!(await isFillUrlAllowed(frameUrl))) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS frame" });
           }
           // pass only the username through, sites is caller-supplied
@@ -1013,7 +1019,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: false, error: "no frame" });
           }
           const host = hostnameOf(frameUrl);
-          if (!/^https:\/\//i.test(frameUrl) && !isLocalDevHost(host)) {
+          if (!(await isFillUrlAllowed(frameUrl))) {
             return sendResponse({ ok: false, error: "refusing to save from a non-HTTPS frame" });
           }
           if (!msg.password) return sendResponse({ ok: false, error: "no password" });
@@ -1212,7 +1218,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           if (!tab?.url || tab.id == null) return sendResponse({ ok: false, error: "no active tab" });
           const host = hostnameOf(tab.url);
-          if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(host)) {
+          if (!(await isFillUrlAllowed(tab.url))) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS page" });
           }
           const tabId = tab.id;
@@ -1311,7 +1317,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
           const pageHost = hostnameOf(tab.url);
-          if (!/^https:\/\//i.test(tab.url) && !isLocalDevHost(pageHost)) {
+          if (!(await isFillUrlAllowed(tab.url))) {
             return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS page" });
           }
           const credUrl = httpUrl(msg.url) || tab.url;
