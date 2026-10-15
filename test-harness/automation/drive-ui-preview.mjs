@@ -24,7 +24,25 @@ await main(async () => {
       await page.goto(pageUrl, { waitUntil: "networkidle" });
       await page.screenshot({ path: join(SHOTS, "ui-preview.png"), fullPage: true });
       const count = await page.locator("[data-screen]").count();
-      ok("preview renders 8 screens (4 states x light/dark)", count === 8, `got ${count}`);
+      ok("preview renders 10 screens (5 states x light/dark)", count === 10, `got ${count}`);
+      const frame = page.locator('[data-screen="grouped_codes"][data-scheme="light"]');
+      const rows = (await frame.locator("li").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+      ok("grouped: 8 rows, one li per code", rows.length === 8, `rows=${rows.length}`);
+      ok("grouped: same-domain code says Verification code, no strip", rows[1]?.includes("Verification code") && !rows[1].includes("↳") && !rows[1].includes("cloudflare.com"), rows[1]);
+      ok("grouped: foreign domain moves to a thin strip", rows[2]?.includes("Verification code") && rows[2].includes("↳ api.cloudflare.com") && !rows[2].includes("Code for"), rows[2]);
+      ok("grouped: username match is case-insensitive", rows[3]?.includes("Bob@CF.com") && rows[4]?.includes("↳ Instagram"), `${rows[3]} | ${rows[4]}`);
+      ok("grouped: bottom row with the site's domain stays bare", rows[5]?.includes("carol@elsewhere.com") && !rows[5].includes("↳"), rows[5]);
+      ok("grouped: bottom row with a foreign domain gets the strip", rows[6]?.includes("dave@elsewhere.com") && rows[6].includes("↳ instagram.example") && !rows[6].includes("Code for"), rows[6]);
+      ok("grouped: Messages keeps its own row", rows[7]?.includes("Verification code from Messages"), rows[7]);
+      const italicCount = await frame.locator("li .italic").count();
+      ok("grouped: the Messages app name is set off in italics", italicCount === 1, `italic spans=${italicCount}`);
+      const stripCount = await frame.locator('[data-passbridge="code-domain"]').count();
+      ok("grouped: exactly three domain footers", stripCount === 3, `footers=${stripCount}`);
+      const copyCount = await frame.locator('button[aria-label="Copy verification code"]').count();
+      ok("grouped: every code row keeps its copy button", copyCount === 6, `copy buttons=${copyCount}`);
+      const pwIcon = await frame.locator('button[aria-label="Copy password"] svg').first().innerHTML();
+      const codeIcon = await frame.locator('button[aria-label="Copy verification code"] svg').first().innerHTML();
+      ok("grouped: code copy icon is a lock, not the password icon", pwIcon !== codeIcon && codeIcon.includes("<rect"), "wrong icon on the code rows");
     } finally {
       await browser.close();
     }

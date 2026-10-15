@@ -8,7 +8,7 @@ const FIXTURES = {
   ],
   locked: [],
   pinflow: [{ username: "test@example.com", sites: [] }],
-  otp: [{ username: "test@example.com", sites: [] }],
+  otp: [{ username: "test@example.com", sites: [] }, { username: "alice@example.com", sites: [] }],
   many: [
     { username: "alice@example.com", sites: ["https://account.riotgames.com"] },
     { username: "bob@work.com", sites: [] },
@@ -27,6 +27,8 @@ const FIXTURES = {
 
 const OTP_ROWS = [
   { source: "totp", username: "alice@example.com", domain: "acme.example", code: "246810" },
+  { source: "totp", username: "test@example.com", domain: "instagram.example", code: "135790" },
+  { source: "sms", username: "", domain: "", code: "975318" },
 ];
 
 export function createMockClient(kind) {
