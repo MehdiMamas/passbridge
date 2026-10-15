@@ -20,6 +20,17 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: cd dist && zip -r ../passbridge.zip .
+      # the helper install and uninstall scripts, each next to the policy helper it copies
+      - run: |
+          mkdir -p helpers/passbridge-macos-helper helpers/passbridge-windows-helper
+          cp native/install.sh native/uninstall.sh native/passbridge-policy.py helpers/passbridge-macos-helper/
+          cp native/windows/install.ps1 native/windows/uninstall.ps1 native/windows/passbridge-policy.py helpers/passbridge-windows-helper/
+          cd helpers
+          zip -r ../passbridge-macos-helper.zip passbridge-macos-helper
+          zip -r ../passbridge-windows-helper.zip passbridge-windows-helper
       - uses: softprops/action-gh-release@v2
         with:
-          files: passbridge.zip
+          files: |
+            passbridge.zip
+            passbridge-macos-helper.zip
+            passbridge-windows-helper.zip

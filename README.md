@@ -48,6 +48,10 @@ Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension 
 - [bitwarden/clients](https://github.com/bitwarden/clients) (GPL-3.0), the autofill field lists. Snapshot under `vendor/bitwarden/`. Nothing from `bitwarden_license/` is included.
 - [Open Runde](https://github.com/lauridskern/open-runde) (SIL OFL 1.1), the interface font. The license text is in `fonts/OFL.txt`.
 
+Contributors:
+
+- [Mahmuthan Elbir (@mahelbir)](https://github.com/mahelbir): the "Fill and save on HTTP pages" setting ([#33](https://github.com/MehdiMamas/passbridge/pull/33)) and verification codes grouped under their logins in the popup ([#34](https://github.com/MehdiMamas/passbridge/pull/34)).
+
 See [NOTICE](NOTICE). License: GPL-3.0, see [LICENSE](LICENSE).
 
 "Apple", "iCloud", and "Passwords" are trademarks of Apple Inc. "Bitwarden" is a trademark of Bitwarden Inc.
