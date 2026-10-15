@@ -400,10 +400,10 @@ function isLocalDevHost(host) {
   );
 }
 
-// one gate for every fill and save: https always, dev hosts always, plain http only on the opt-in
+// one gate for every fill and save: https always, dev hosts always, plain http only on the opt-in, other schemes never
 async function isFillUrlAllowed(url) {
   if (/^https:\/\//i.test(url) || isLocalDevHost(hostnameOf(url))) return true;
-  return (await getSettings()).canFillOnHttp === true;
+  return /^http:\/\//i.test(url) && (await getSettings()).canFillOnHttp === true;
 }
 
 // only these from a content script, none returns a password to the page
