@@ -31,6 +31,10 @@ The interface font is Open Runde, licensed under the SIL Open Font License 1.1.
   Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
   The license text ships in fonts/OFL.txt, next to the font files.
 
+The files taken from Open Passwords and icloud-passwords-firefox have been
+modified for PassBridge; the git history records each change. A copy of the
+Apache License, Version 2.0 is in licenses/Apache-2.0.txt.
+
 This combined work is licensed under the GNU General Public License, Version 3.
 See the LICENSE file. The font stays under the SIL Open Font License.
 

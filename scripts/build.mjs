@@ -89,7 +89,8 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   const dst = (...p) => join(out, ...p);
 
   // fonts/ includes OFL.txt, which has to ship beside the woff2 files.
-  for (const item of ["manifest.json", "icons", "fonts", "overlay"]) {
+  // LICENSE, NOTICE and licenses/ (Apache-2.0 for the upstream code) ship with every build.
+  for (const item of ["manifest.json", "icons", "fonts", "overlay", "LICENSE", "NOTICE", "licenses"]) {
     await cp(at(item), dst(item), { recursive: true });
   }
   for (const page of ["popup.html", "options.html", "offscreen.html"]) {
