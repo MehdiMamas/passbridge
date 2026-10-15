@@ -4,6 +4,8 @@
 export const SETTINGS_DEFAULTS = {
   inlineMenuVisibility: "on-focus",
   autofillOnPageLoad: false,
+  // plain-http pages are refused unless the user opts in
+  canFillOnHttp: false,
   copyTotpAfterFill: false,
   clipboardClearMs: 10000,
   enableContextMenu: true,

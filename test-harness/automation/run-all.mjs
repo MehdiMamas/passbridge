@@ -15,6 +15,7 @@ const DRIVERS = [
   ["Click-back (dropdown reappears)", "drive-clickback.mjs"],
   ["Input events fire on fill (#9)", "drive-events.mjs"],
   ["Clickjacking: hidden field not filled (#18)", "drive-clickjack.mjs"],
+  ["HTTP fill gate (refused by default, canFillOnHttp opens it)", "drive-http-fill.mjs"],
   ["Multi-account chooser", "drive-multi.mjs"],
   ["PIN flow (Enter on a short code, 6 digits submit alone)", "drive-pin.mjs"],
   ["Iframe login (same-origin frame shows dropdown)", "drive-iframe.mjs"],
