@@ -24,6 +24,24 @@ const screens = [
       caps: { newPasswordSheet: true },
     },
   ],
+  [
+    "grouped_codes",
+    {
+      state: "unlocked",
+      site: "cloudflare.com",
+      showFavicons: false,
+      logins: [{ username: "alice@cf.com" }, { username: "Bob@CF.com" }],
+      codes: [
+        { id: 0, source: "totp", username: "alice@cf.com", domain: "cloudflare.com" },
+        { id: 1, source: "totp", username: "alice@cf.com", domain: "api.cloudflare.com" },
+        { id: 2, source: "totp", username: "bob@cf.com", domain: "Instagram" },
+        { id: 3, source: "totp", username: "carol@elsewhere.com", domain: "cloudflare.com" },
+        { id: 5, source: "totp", username: "dave@elsewhere.com", domain: "instagram.example" },
+        { id: 4, source: "sms", username: "", domain: "" },
+      ],
+      caps: { newPasswordSheet: true },
+    },
+  ],
 ];
 
 function Frame({ title, scheme, props }) {
