@@ -4,6 +4,8 @@ PassBridge fills logins from the Apple Passwords vault in Chrome on macOS and Wi
 
 Disable Apple's official iCloud Passwords extension first. Two extensions cannot share that id in one profile.
 
+Without building it yourself: each [release](https://github.com/MehdiMamas/passbridge/releases/latest) has `passbridge.zip` (the built extension; unzip it and load that folder in place of `dist`), `passbridge-macos-helper.zip` and `passbridge-windows-helper.zip`. The helper zips hold the install and uninstall scripts below. Unzip one and run its scripts from inside that folder, where the steps below say `./native/` or `./native/windows/`.
+
 ## macOS
 
 You need:
