@@ -70,34 +70,34 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
               </>
             )}
           </span>
-      <span className="flex shrink-0 items-center gap-1">
-        {shown ? (
-          <span className="font-mono text-sm tracking-widest">{shown}</span>
-        ) : (
-          <IconButton label="Copy verification code" onClick={() => onCopy("otp", row)}>
-            <LockIcon />
-          </IconButton>
-        )}
-        {!shown && (
-          <button
-            type="button"
-            disabled={busy}
-            className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
-            onClick={async () => {
-              setBusy(true);
-              const res = await onFillCode(row);
-              if (res?.ok && res.filled) return;
-              if (res?.ok && res.code) {
-                setShown(res.code);
-                return;
-              }
-              setBusy(false);
-            }}
-          >
-            Fill
-          </button>
-        )}
-        </span>
+          <span className="flex shrink-0 items-center gap-1">
+            {shown ? (
+              <span className="font-mono text-sm tracking-widest">{shown}</span>
+            ) : (
+              <IconButton label="Copy verification code" onClick={() => onCopy("otp", row)}>
+                <LockIcon />
+              </IconButton>
+            )}
+            {!shown && (
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                onClick={async () => {
+                  setBusy(true);
+                  const res = await onFillCode(row);
+                  if (res?.ok && res.filled) return;
+                  if (res?.ok && res.code) {
+                    setShown(res.code);
+                    return;
+                  }
+                  setBusy(false);
+                }}
+              >
+                Fill
+              </button>
+            )}
+          </span>
         </div>
         {domainDiffers && (
           <div data-passbridge="code-domain" className="truncate border-t border-[color-mix(in_srgb,CanvasText_10%,Canvas)] px-2 py-0.5 text-[11px] opacity-70">
