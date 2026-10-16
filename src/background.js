@@ -9,6 +9,7 @@ import { generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { passwordSearchSteps } from "./session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
+import { frameUrlsFor } from "./session/frame-urls.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -56,15 +57,6 @@ client.onOneTimeCodeAvailable(async () => {
 // rows resolve by id so the page never chooses the username/domain
 const otpByTab = new Map();
 const OTP_LIST_TTL_MS = 120_000;
-
-// apple walks the whole parent chain via webNavigation, the top URL covers a same-site iframe without another permission
-function frameUrlsFor(sender) {
-  const urls = [];
-  for (const u of [sender.url, sender.tab?.url]) {
-    if (u && /^https?:/i.test(u) && !urls.includes(u)) urls.push(u);
-  }
-  return urls;
-}
 
 // never the code itself at list time
 function otpRow(e, i) {
@@ -1208,7 +1200,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!tab?.id || !url) return sendResponse({ ok: false, error: "no active tab" });
           if (!client.ready) return sendResponse({ ok: true, rows: [] });
           if (!client.canFillOneTimeCodes) return sendResponse({ ok: true, supported: false, rows: [] });
-          const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url, tab }));
+          const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url }));
           sendResponse({ ok: true, supported: true, rows, requiresAuth });
           break;
         }
