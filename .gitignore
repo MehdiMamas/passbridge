@@ -17,3 +17,5 @@ test-harness/automation/.builds/
 
 # git worktrees
 .worktrees/
+
+.idea/

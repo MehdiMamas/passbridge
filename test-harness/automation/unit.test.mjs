@@ -3,6 +3,7 @@ import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
+import { frameUrlsFor } from "../../src/session/frame-urls.js";
 
 let failed = 0;
 function ok(name, cond) {
@@ -112,6 +113,20 @@ async function connectedClient() {
   ok("a dropped session rejects the pending request", (await settles(stuck)) === "rejected: connection closed" && port.disconnected);
 }
 delete globalThis.chrome;
+
+ok(
+  "a site lookup carries only its own url",
+  JSON.stringify(frameUrlsFor({ url: "https://acme.example/" })) === '["https://acme.example/"]',
+);
+ok(
+  "an inline frame still carries its tab's url",
+  JSON.stringify(frameUrlsFor({ url: "https://login.acme.example/frame", tab: { url: "https://acme.example/" } })) ===
+    '["https://login.acme.example/frame","https://acme.example/"]',
+);
+ok(
+  "a chrome url is never asked of the helper",
+  frameUrlsFor({ url: "chrome://extensions/", tab: { url: "https://acme.example/" } }).length === 1,
+);
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

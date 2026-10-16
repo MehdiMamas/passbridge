@@ -28,8 +28,27 @@ const FIXTURES = {
 const OTP_ROWS = [
   { source: "totp", username: "alice@example.com", domain: "acme.example", code: "246810" },
   { source: "totp", username: "test@example.com", domain: "instagram.example", code: "135790" },
+  { source: "totp", username: "panel@example.com", domain: "127.0.0.1.nip.io", code: "112233" },
   { source: "sms", username: "", domain: "", code: "975318" },
 ];
+
+const hostOf = (u) => {
+  try {
+    return new URL(u).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+};
+
+// harness hosts stand in for real sites, so they see every row
+const isHarnessHost = (h) =>
+  !h || h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost") || h.endsWith(".test");
+
+const otpRowsFor = (frameUrls) => {
+  const hosts = (frameUrls || []).map(hostOf);
+  if (hosts.some(isHarnessHost)) return OTP_ROWS;
+  return OTP_ROWS.filter((row) => !row.domain || hosts.some((h) => h === row.domain || h.endsWith("." + row.domain)));
+};
 
 export function createMockClient(kind) {
   const startsLocked = kind === "locked" || kind === "pinflow";
@@ -63,12 +82,12 @@ export function createMockClient(kind) {
     async getPasswordForLoginName(_tabId, _url, login) {
       return { username: login?.username || "test@example.com", password: "TestPass123" };
     },
-    async getOneTimeCodes() {
+    async getOneTimeCodes(_tabId, _frameId, frameUrls) {
       if (kind !== "otp") return { entries: [], requiresAuth: false };
-      return { entries: OTP_ROWS.map((row) => ({ ...row })), requiresAuth: false };
+      return { entries: otpRowsFor(frameUrls).map((row) => ({ ...row })), requiresAuth: false };
     },
-    async readOneTimeCode() {
-      return OTP_ROWS.map((row) => ({ ...row }));
+    async readOneTimeCode(_tabId, _frameId, frameUrls) {
+      return otpRowsFor(frameUrls).map((row) => ({ ...row }));
     },
     async requestChallenge() {
       client.state = "needs_pin";
