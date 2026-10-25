@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 function StatusDot({ state }) {
   const color =
@@ -138,8 +138,15 @@ export function PopupScreen({
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
+  const [agentOn, setAgentOn] = useState(false);
   const win = os === "win";
   const unlocked = state === "unlocked";
+
+  useEffect(() => {
+    try {
+      chrome.storage.local.get({ agentSignIn: false }, (o) => setAgentOn(o?.agentSignIn === true));
+    } catch {}
+  }, []);
 
   const isSameUser = (a, b) => (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
   const groups = logins.map((login) => ({
@@ -180,6 +187,9 @@ export function PopupScreen({
         )}
         <StatusDot state={state} />
       </header>
+      {agentOn && (
+        <p className="shrink-0 px-3 pt-1.5 text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">Agent sign-in on</p>
+      )}
       {unlocked && (
         <div className="shrink-0 px-3 pt-2">
           <input

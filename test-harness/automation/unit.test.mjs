@@ -5,6 +5,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
+import { createLimiter, handleAgentRequest, hostAllowed, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 
 let failed = 0;
@@ -157,6 +158,52 @@ ok(
     .join() === "me@gmail.com,a@x.com,b@x.com",
 );
 ok("no match keeps the order", orderByPageUsername([{ username: "a" }, { username: "b" }], "zzz")[0].username === "a");
+
+const agentList = ["github.com", "google.com"];
+ok("agent: the exact host is allowed", hostAllowed("github.com", agentList));
+ok("agent: a subdomain is allowed", hostAllowed("gist.github.com", agentList));
+ok("agent: github.com.evil.io is refused", !hostAllowed("github.com.evil.io", agentList));
+ok("agent: evilgithub.com is refused", !hostAllowed("evilgithub.com", agentList));
+ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []));
+{
+  const lim = createLimiter(3, 1000);
+  ok("agent: rate limiter allows up to the max", lim.take(0) && lim.take(1) && lim.take(2));
+  ok("agent: rate limiter refuses the next", !lim.take(3));
+  ok("agent: rate limiter frees up after the window", lim.take(1001));
+}
+{
+  const dirty = { ok: true, password: "p", code: "123456", nested: { Password: "x", list: [{ otp: "1", username: "me" }], domain: "a.com" } };
+  const clean = sanitizeReply(dirty);
+  ok("agent: sanitizer drops password and code at any depth", !JSON.stringify(clean).match(/password|"code"|otp|"p"|123456/i));
+  ok("agent: sanitizer keeps usernames and domains", clean.nested.list[0].username === "me" && clean.nested.domain === "a.com");
+}
+{
+  const deps = (over = {}) => ({
+    client: { ready: true },
+    getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }),
+    getTab: async () => ({ id: 1, url: "https://github.com/login" }),
+    hostnameOf: (u) => new URL(u).hostname,
+    isFillUrlAllowed: async () => true,
+    siteLogins: async () => [{ username: "a@x.com" }, { username: "b@x.com" }],
+    uniqueByUsername: (l) => l,
+    fillLoginOnTab: async (tab, username) => ({ filled: true, username, password: "leak" }),
+    fillCodeOnTab: async () => ({ filled: true, username: "a@x.com" }),
+    ...over,
+  });
+  const run = (msg, d = deps(), lim = createLimiter()) => handleAgentRequest(msg, d, lim);
+  ok("agent: disabled refuses", (await run({ op: "logins", tabId: 1 }, deps({ getSettings: async () => ({ agentSignIn: false }) }))).reply.error === "not_enabled");
+  ok("agent: a host off the list is not_allowed", (await run({ op: "logins", tabId: 1 }, deps({ getTab: async () => ({ id: 1, url: "https://github.com.evil.io/" }) }))).reply.error === "not_allowed");
+  ok("agent: a missing tab is no_tab", (await run({ op: "logins", tabId: 9 }, deps({ getTab: async () => { throw new Error("x"); } }))).reply.error === "no_tab");
+  ok("agent: several logins need a choice", (await run({ op: "sign_in", tabId: 1 })).reply.error === "choose_login");
+  const r = await run({ op: "sign_in", tabId: 1, username: "B@x.com" });
+  ok("agent: sign_in replies domain and username only", r.reply.ok && r.reply.username === "b@x.com" && r.reply.domain === "github.com" && !("password" in r.reply));
+  ok("agent: an unpaired client is needs_user", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ client: { ready: false } }))).reply.error === "needs_user");
+  ok("agent: a refused read is needs_user", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ fillLoginOnTab: async () => { throw new Error("timeout"); } }))).reply.error === "needs_user");
+  const lim = createLimiter(1, 1000);
+  await run({ op: "fill_code", tabId: 1 }, deps(), lim);
+  ok("agent: the second fill in the window is rate_limited", (await run({ op: "fill_code", tabId: 1 }, deps(), lim)).reply.error === "rate_limited");
+  ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
+}
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
