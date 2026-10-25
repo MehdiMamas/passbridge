@@ -3,6 +3,7 @@ import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
+import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 
 let failed = 0;
@@ -127,6 +128,18 @@ ok(
   "a chrome url is never asked of the helper",
   frameUrlsFor({ url: "chrome://extensions/", tab: { url: "https://acme.example/" } }).length === 1,
 );
+
+ok("username matcher: case-insensitive exact", usernameMatchesPage("Me@Gmail.com", " me@gmail.com "));
+ok("username matcher: bare name matches by local part", usernameMatchesPage("me", "me@gmail.com") && usernameMatchesPage("me@gmail.com", "me"));
+ok("username matcher: different domains do not match", !usernameMatchesPage("me@a.com", "me@b.com"));
+ok("username matcher: empty never matches", !usernameMatchesPage("", "me") && !usernameMatchesPage("me", ""));
+ok(
+  "matching login is ordered first, others keep order",
+  orderByPageUsername([{ username: "a@x.com" }, { username: "me@gmail.com" }, { username: "b@x.com" }], "ME@gmail.com")
+    .map((l) => l.username)
+    .join() === "me@gmail.com,a@x.com,b@x.com",
+);
+ok("no match keeps the order", orderByPageUsername([{ username: "a" }, { username: "b" }], "zzz")[0].username === "a");
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

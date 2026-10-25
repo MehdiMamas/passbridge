@@ -10,6 +10,7 @@ import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { passwordSearchSteps } from "./session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
+import { orderByPageUsername } from "./session/username-match.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -1301,7 +1302,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
           const logins = await siteLogins(tab.id, tab.url);
-          sendResponse({ ok: true, logins: publicLogins(uniqueByUsername(orderByMru(hostnameOf(tab.url), logins))) });
+          const ordered = publicLogins(uniqueByUsername(orderByMru(hostnameOf(tab.url), logins)));
+          // the page may already name the account (Gmail's password page), that login goes first
+          let pageName = "";
+          try {
+            const r = await chrome.tabs.sendMessage(tab.id ?? 0, { type: "pageUsername" }, { frameId: 0 });
+            if (typeof r?.username === "string") pageName = r.username.slice(0, 320);
+          } catch {}
+          sendResponse({ ok: true, logins: orderByPageUsername(ordered, pageName) });
           break;
         }
 
