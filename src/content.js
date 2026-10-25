@@ -3,6 +3,7 @@ import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
 import { SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
+import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
 
 const UPSTREAM_USER = new Set(
   [...AutoFillConstants.UsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
@@ -365,6 +366,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case "hideSaveBar": {
       hideSaveBar();
       return false;
+    }
+    case "pageUsername": {
+      if (window !== window.top) return false;
+      const f = anchorPwField(document) || document.querySelector('input[type="password"]');
+      sendResponse({ username: f ? findPageUsername(f) : "" });
+      return true;
     }
     case "qrImageRect": {
       sendResponse({ rect: qrImageRect() });
@@ -1077,6 +1084,36 @@ async function fillGeneratedPassword(field, pw) {
 const LOGIN_LIST_CAP = 6;
 const LOGIN_ROW_PX = 40;
 
+const EMAIL_RE = /[^\s@<>()"',;:]+@[^\s@<>()"',;:]+\.[^\s@<>()"',;:]+/;
+
+// the username this page is for: a filled username input, a hidden identifier, or an email shown near the password field
+function findPageUsername(field) {
+  try {
+    const scopes = [field?.form, document].filter(Boolean);
+    for (const scope of scopes) {
+      for (const el of scope.querySelectorAll("input")) {
+        if (el === field || isPasswordField(el)) continue;
+        const v = (el.value || "").trim();
+        if (!v || v.length > 320) continue;
+        if (el.type === "hidden") {
+          if (/^(identifier|username|email|login)$/i.test(el.name || "") || /^(identifier|username|email|login)$/i.test(el.id || "")) return v;
+        } else if (el.type === "email" || (isUsernameField(el) && isVisible(el))) {
+          return v;
+        }
+      }
+    }
+    let node = field;
+    for (let i = 0; node && i < 6; i++) {
+      node = node.parentElement;
+      if (!node) break;
+      const text = (node.innerText || "").slice(0, 2000);
+      const m = text.match(EMAIL_RE);
+      if (m) return m[0];
+    }
+  } catch {}
+  return "";
+}
+
 function pageUsernameQuery(field) {
   if (!field || isPasswordField(field)) return "";
   return (field.value || "").trim().toLowerCase();
@@ -1106,8 +1143,9 @@ function fitLoginScroller(scroller) {
 }
 
 // fill routes through the origin-checked background path, page never sees the password
-function appendLoginRows(box, field, logins) {
+function appendLoginRows(box, field, logins, preferred = "") {
   for (const login of logins) {
+    const isPreferred = !!preferred && usernameMatchesPage(login.username, preferred);
     const label = login.username || "(no username)";
     const row = document.createElement("div");
     row.title = label;
@@ -1127,10 +1165,10 @@ function appendLoginRows(box, field, logins) {
       overflow: "hidden",
       textOverflow: "ellipsis",
       whiteSpace: "nowrap",
-      fontWeight: "500",
+      fontWeight: isPreferred ? "700" : "500",
     });
     const hint = document.createElement("span");
-    hint.textContent = "Fill";
+    hint.textContent = isPreferred ? "This account" : "Fill";
     Object.assign(hint.style, {
       flex: "none",
       color: "#0a84ff",
@@ -1170,6 +1208,8 @@ function appendLoginRows(box, field, logins) {
 function mountLoginList(box, field, logins, hasGenerator) {
   const capped = logins.length > LOGIN_LIST_CAP;
   let query = pageUsernameQuery(field);
+  const preferred = isPasswordField(field) ? findPageUsername(field) : "";
+  logins = orderByPageUsername(logins, preferred);
   /** @type {HTMLInputElement | null} */
   let search = null;
 
@@ -1234,7 +1274,7 @@ function mountLoginList(box, field, logins, hasGenerator) {
       Object.assign(empty.style, { padding: "10px 12px", opacity: "0.65" });
       scroller.appendChild(empty);
     } else {
-      appendLoginRows(scroller, field, matched);
+      appendLoginRows(scroller, field, matched, preferred);
     }
     for (const item of pinnedNav) navItems.push(item);
     positionBox();
@@ -1447,9 +1487,7 @@ function appendOneTimeCodeRows(box, field, rows) {
         fontSize: "12px",
         opacity: "0.65",
         marginTop: "1px",
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
+        overflowWrap: "anywhere",
       });
       text.appendChild(sub);
     }

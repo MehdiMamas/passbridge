@@ -59,10 +59,8 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
     <li className={grouped ? "ml-5" : ""}>
       <div className="overflow-hidden rounded-xl bg-[color-mix(in_srgb,CanvasText_6%,Canvas)]">
         <div className="flex items-center gap-2 px-2 py-1">
-          <span className="min-w-0 flex-1 truncate text-[13px]">
-            {carriesOwnName ? (
-              row.username
-            ) : isTotp ? (
+          <span className="min-w-0 flex-1 text-[13px]">
+            {isTotp ? (
               "Verification code"
             ) : (
               <>
@@ -99,6 +97,11 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
             )}
           </span>
         </div>
+        {carriesOwnName && (
+          <div data-passbridge="code-name" className="px-2 pb-1 text-[12px] opacity-70 [overflow-wrap:anywhere]">
+            {row.username}
+          </div>
+        )}
         {domainDiffers && (
           <div data-passbridge="code-domain" className="truncate border-t border-[color-mix(in_srgb,CanvasText_10%,Canvas)] px-2 py-0.5 text-[11px] opacity-70">
             ↳ {row.domain}
