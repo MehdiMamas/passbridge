@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Numeric ID Sign In</title>
+</head>
+<body>
+  <p>Fixture: id-number login, numeric username next to a password (issue #49). No real data.</p>
+  <form id="idForm" action="javascript:void(0)" method="post">
+    <input type="hidden" name="encIdField" id="encIdField">
+    <label for="idField">National ID No</label>
+    <input name="idField" id="idField" type="number" inputmode="numeric" maxlength="11" autocomplete="off" aria-label="Enter your ID number" required>
+    <label for="pwField">Password</label>
+    <input name="pwField" id="pwField" type="password" autocomplete="off" required>
+    <button type="submit">Sign in</button>
+  </form>
+</body>
+</html>

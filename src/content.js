@@ -134,11 +134,31 @@ function loginishContext(el) {
   });
 }
 
+// id-number logins (giris.turkiye.gov.tr, 11-digit T.C. Kimlik No) use type=number next to a password field
+const NUMERIC_ID_HINT = /\b(tckn?|tc[\s_-]?kimlik|kimlik|identity|national[\s-]?id|id[\s_-]?(?:no|number|num)|user|username|login|member|customer|client)/i;
+
+function isNumericIdField(el) {
+  const max = parseInt(el.getAttribute("maxlength") || "0", 10);
+  if (max === 1) return false;
+  const form = el.form;
+  if (!form) return false;
+  const pass = Array.from(form.querySelectorAll("input")).filter((i) => isPasswordField(i) && isVisible(i));
+  if (!pass.length) return false;
+  const blob = attrBlob(el);
+  if (NONLOGIN_HINT.test(blob)) return false;
+  if (NUMERIC_ID_HINT.test(blob)) return true;
+  // otherwise only the visible input right before the password field counts
+  const inputs = Array.from(form.querySelectorAll("input")).filter((i) => i.type !== "hidden" && isVisible(i));
+  const at = inputs.indexOf(pass[0]);
+  return at > 0 && inputs[at - 1] === el;
+}
+
 function isUsernameField(el) {
   if (!(el instanceof HTMLInputElement)) return false;
   if (isOtpField(el)) return false;
   if (isSearchOrComboField(el)) return false;
   const t = (el.type || "text").toLowerCase();
+  if (t === "number") return isNumericIdField(el);
   if (!["text", "email", "tel", ""].includes(t)) return false;
 
   // "E-mail address" contains "address", which NONLOGIN_HINT would reject (nintendo)
