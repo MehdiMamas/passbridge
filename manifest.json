@@ -79,6 +79,7 @@
     "offscreen",
     "tabs",
     "webNavigation",
+    "scripting",
     "clipboardWrite",
     "clipboardRead"
   ],

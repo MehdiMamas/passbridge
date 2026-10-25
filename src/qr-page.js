@@ -22,8 +22,8 @@ function pictureFromEvent(e) {
   return asPicture(e.target.closest("img, canvas, svg, picture"));
 }
 
-export function installQrPage() {
-  document.addEventListener("contextmenu", (e) => {
+export function installQrPage(listen = (t, type, fn, o) => t.addEventListener(type, fn, o)) {
+  listen(document, "contextmenu", (e) => {
     const el = pictureFromEvent(e);
     if (!el) return;
     qrImageEl = el;

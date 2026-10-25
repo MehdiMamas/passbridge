@@ -15,6 +15,7 @@ import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
 import { availableUpdate, checkForUpdate, dismissUpdate } from "./update-check.js";
 import { installUpdate, updaterAvailable } from "./update-install.js";
+import { reinjectContentScripts } from "./reload-recovery.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -340,6 +341,12 @@ async function ensureConnected() {
 
 chrome.runtime.onStartup.addListener(ensureConnected);
 chrome.runtime.onInstalled.addListener(ensureConnected);
+// chrome leaves open pages with a dead copy of the content script after a reload or update
+chrome.runtime.onInstalled.addListener((d) => {
+  if (d?.reason === "install" || d?.reason === "update") {
+    reinjectContentScripts({ tabs: chrome.tabs, scripting: chrome.scripting, runtime: chrome.runtime });
+  }
+});
 ensureConnected();
 
 function suppressChromeAutofill() {
