@@ -930,7 +930,7 @@ chrome.storage?.onChanged.addListener((changes, area) => {
   if (changes.enableBadge?.newValue === false) clearBadges();
   if (changes.enableContextMenu || changes.enableBadge) refreshActiveTab();
   if (changes.latestRelease || changes.dismissedRelease || changes.canCheckForUpdates) syncUpdateBadge();
-  if (changes.canCheckForUpdates?.newValue) checkForUpdate();
+  if (changes.canCheckForUpdates?.newValue) checkForUpdate(Date.now(), { force: true });
 });
 checkForUpdate();
 syncUpdateBadge();
@@ -1268,6 +1268,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await platformReady;
           sendResponse({ ok: true, os: platformOs, label: labelForOs(platformOs) });
           break;
+
+        case "checkUpdateNow": {
+          const reached = await checkForUpdate(Date.now(), { force: true });
+          const { latestRelease } = await chrome.storage.local.get("latestRelease");
+          sendResponse({ ok: true, reached: !!reached, latest: latestRelease ?? null, available: await availableUpdate(), current: chrome.runtime.getManifest().version });
+          break;
+        }
 
         case "getState":
           await platformReady;

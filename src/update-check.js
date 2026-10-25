@@ -23,25 +23,27 @@ export function isNewerVersion(latest, current) {
 }
 
 // a failed request leaves updateCheckedAt alone so the next alarm retries, a refused one waits a day
-async function runCheck(now) {
-  if (!(await getSettings()).canCheckForUpdates) return;
+async function runCheck(now, force) {
+  if (!(await getSettings()).canCheckForUpdates) return false;
   const { updateCheckedAt } = await chrome.storage.local.get("updateCheckedAt");
   const age = now - (Number(updateCheckedAt) || 0);
-  if (age >= 0 && age < UPDATE_CHECK_MS) return;
+  if (!force && age >= 0 && age < UPDATE_CHECK_MS) return false;
   let res;
   try {
     res = await fetch(LATEST_RELEASE_URL, { headers: { Accept: "application/vnd.github+json" } });
   } catch {
-    return;
+    return false;
   }
   const body = res.ok ? await res.json().catch(() => null) : null;
   const tag = body?.tag_name;
   await chrome.storage.local.set(parseVersion(tag) ? { updateCheckedAt: now, latestRelease: tag } : { updateCheckedAt: now });
+  return res.ok;
 }
 
 let running = null;
-export function checkForUpdate(now = Date.now()) {
-  running ||= runCheck(now).finally(() => {
+// force skips the daily wait (a button press); resolves true when GitHub answered
+export function checkForUpdate(now = Date.now(), { force = false } = {}) {
+  running ||= runCheck(now, force).finally(() => {
     running = null;
   });
   return running;

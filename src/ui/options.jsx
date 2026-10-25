@@ -57,6 +57,7 @@ function OptionsApp() {
   const [agentLog, setAgentLog] = useState([]);
   const [policy, setPolicy] = useState({ ready: false, available: false, hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
+  const [updateMsg, setUpdateMsg] = useState("");
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
 
   useEffect(() => {
@@ -89,6 +90,18 @@ function OptionsApp() {
     const next = { ...settings, ...partial };
     setSettings(next);
     chrome.storage.local.set(partial);
+  }
+
+  async function checkNow() {
+    setUpdateMsg("Checking...");
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "checkUpdateNow" });
+      if (!r?.ok || !r.reached) setUpdateMsg("Couldn't reach GitHub. Try again later.");
+      else if (r.available) setUpdateMsg(`Version ${r.available.version} is available`);
+      else setUpdateMsg(`Up to date (${r.current})`);
+    } catch {
+      setUpdateMsg("Couldn't check for updates.");
+    }
   }
 
   function check(id, label, note) {
@@ -204,6 +217,18 @@ function OptionsApp() {
         {check("enableContextMenu", "Context menu")}
         {check("enableBadge", "Badge count on the toolbar icon")}
         {check("canCheckForUpdates", "Check for updates")}
+        {settings.canCheckForUpdates && (
+          <Row label="Check for updates now" note={updateMsg || undefined}>
+            <button
+              type="button"
+              disabled={updateMsg === "Checking..."}
+              className="rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] px-3 py-1 text-[13px]"
+              onClick={checkNow}
+            >
+              Check now
+            </button>
+          </Row>
+        )}
         <p className="py-2">
           <button type="button" className="text-[13px] text-accent" onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}>
             Keyboard shortcuts
