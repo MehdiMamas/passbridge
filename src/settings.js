@@ -20,6 +20,9 @@ export const SETTINGS_DEFAULTS = {
   // Chrome's own save-password bubble and address autofill, switched through chrome.privacy
   suppressSaveBubble: true,
   suppressAddressAutofill: false,
+  // a local program may ask to fill a login or code on these sites, never reads a secret
+  agentSignIn: false,
+  agentAllowlist: ["github.com", "google.com", "vercel.com", "apple.com"],
 };
 
 export function getSettings() {

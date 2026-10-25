@@ -19,6 +19,11 @@ mkdir -p "$APPDIR"
 cp "$DIR/passbridge-policy.py" "$APPDIR/passbridge-policy.py"
 chmod +x "$APPDIR/passbridge-policy.py"
 HELPER="$APPDIR/passbridge-policy.py"
+# agent sign-in host and its command-line client
+cp "$DIR/passbridge-agent.py" "$APPDIR/passbridge-agent.py"
+cp "$DIR/passbridge-agent-cli.py" "$APPDIR/passbridge-agent-cli.py"
+chmod +x "$APPDIR/passbridge-agent.py" "$APPDIR/passbridge-agent-cli.py"
+AGENT="$APPDIR/passbridge-agent.py"
 
 # the pairing-code reader earlier versions installed
 rm -rf "$APPDIR/passbridge-autopair.py" "$APPDIR/PassBridge Helper.app"
@@ -32,6 +37,15 @@ register() {
   "name": "com.passbridge.policy",
   "description": "PassBridge policy helper",
   "path": "$HELPER",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://$EXT_ID/"]
+}
+EOF
+  cat > "$d/com.passbridge.agent.json" <<EOF
+{
+  "name": "com.passbridge.agent",
+  "description": "PassBridge agent sign-in host",
+  "path": "$AGENT",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://$EXT_ID/"]
 }

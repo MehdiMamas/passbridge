@@ -8,6 +8,7 @@ PROFILE_NAME="PassBridge - Hide Browser Password Manager"
 
 for d in "$SUPPORT/Google/Chrome"* "$SUPPORT/Microsoft Edge" "$SUPPORT/Chromium" "$SUPPORT/Arc/User Data" "$SUPPORT/Vivaldi" "$SUPPORT/BraveSoftware/"*/; do
   rm -f "${d%/}/NativeMessagingHosts/com.passbridge.policy.json" 2>/dev/null || true
+  rm -f "${d%/}/NativeMessagingHosts/com.passbridge.agent.json" 2>/dev/null || true
   rm -f "${d%/}/NativeMessagingHosts/com.passbridge.autopair.json" 2>/dev/null || true
   rm -f "${d%/}/NativeMessagingHosts/com.openpasswords.policy.json" 2>/dev/null || true
   rm -f "${d%/}/NativeMessagingHosts/com.openpasswords.autopair.json" 2>/dev/null || true

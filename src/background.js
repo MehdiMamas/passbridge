@@ -12,6 +12,7 @@ import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
+import { initAgent } from "./agent.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -473,17 +474,17 @@ async function sendFill(tabId, msg) {
 // a username fills that login. without one the shortcut starts at the most recent login and steps through the rest
 async function fillLoginOnTab(tab, username) {
   await ensureConnected();
-  if (!client.ready || !tab?.url || tab.id == null) return;
+  if (!client.ready || !tab?.url || tab.id == null) return { filled: false, reason: "needs_user" };
   const host = hostnameOf(tab.url);
-  if (!(await isFillUrlAllowed(tab.url))) return;
+  if (!(await isFillUrlAllowed(tab.url))) return { filled: false, reason: "not_allowed" };
   if (username == null) {
     let logins = [];
     try {
       logins = uniqueByUsername(await siteLogins(tab.id, tab.url));
     } catch {
-      return;
+      return { filled: false, reason: "needs_user" };
     }
-    if (!logins.length) return;
+    if (!logins.length) return { filled: false, reason: "no_login" };
     // stable order: re-sorting by MRU after each fill made the shortcut repeat one login
     const last = cycleByTab.get(tab.id);
     const at = last == null ? -1 : logins.findIndex((l) => (l.username || "") === last);
@@ -494,7 +495,7 @@ async function fillLoginOnTab(tab, username) {
     cred = (await readPasswordForFrame(tab.id, tab.url, username)).cred;
     if (cred) pwCacheSet(host, cred);
   }
-  if (!cred) return;
+  if (!cred) return { filled: false, reason: "needs_user" };
   cycleByTab.set(tab.id, cred.username || "");
   const resp = await sendFill(tab.id, {
     type: "fill",
@@ -505,7 +506,27 @@ async function fillLoginOnTab(tab, username) {
   if (resp?.filled) {
     recordMru(host, cred.username);
     lastFillByTab.set(tab.id, { host, username: cred.username });
+    return { filled: true, username: cred.username };
   }
+  return { filled: false, reason: "fill_failed" };
+}
+
+// the agent's code fill: one code row for the tab, filled in place, the value never leaves this function
+async function fillCodeOnTab(tab) {
+  if (!client.canFillOneTimeCodes) return { filled: false, reason: "fill_failed" };
+  const host = hostnameOf(tab.url);
+  const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url: tab.url }));
+  if (requiresAuth && !rows.length) return { filled: false, reason: "needs_user" };
+  if (!rows.length) return { filled: false, reason: "no_login" };
+  if (rows.length > 1) return { filled: false, reason: "choose_code", usernames: rows.map((r) => r.username).filter(Boolean) };
+  const code = await resolveOneTimeCode(tab.id, rows[0].id);
+  const frames = await new Promise((resolve) =>
+    chrome.tabs.sendMessage(tab.id, { type: "fillOtp", code, expectedHost: host }, (r) => {
+      void chrome.runtime.lastError;
+      resolve(r);
+    }),
+  );
+  return frames?.filled ? { filled: true, username: rows[0].username || "" } : { filled: false, reason: "fill_failed" };
 }
 
 async function ensureOffscreen() {
@@ -1445,4 +1466,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
   })();
   return true;
+});
+
+initAgent({
+  client,
+  getSettings,
+  getTab: (id) => chrome.tabs.get(id),
+  hostnameOf,
+  isFillUrlAllowed,
+  siteLogins,
+  uniqueByUsername,
+  fillLoginOnTab,
+  fillCodeOnTab,
 });
