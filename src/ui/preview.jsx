@@ -64,6 +64,7 @@ function Frame({ title, scheme, props }) {
         onLock={noop}
         onRefresh={noop}
         onSettings={noop}
+        onReport={noop}
         {...props}
       />
     </section>

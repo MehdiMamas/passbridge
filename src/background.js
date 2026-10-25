@@ -11,6 +11,7 @@ import { passwordSearchSteps } from "./session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
+import { scrubUrl } from "./report-scrub.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -401,6 +402,7 @@ async function isFillUrlAllowed(url) {
 
 // only these from a content script, none returns a password to the page
 const CONTENT_ALLOWED = new Set([
+  "reportFrame",
   "inlineLogins",
   "inlineFill",
   "inlineOneTimeCodes",
@@ -730,10 +732,37 @@ async function rebuildContextMenu(settings, tab, url, logins) {
   add({ id: "pb-gen", parentId: "pb-root", title: "Generate password", contexts: ["editable", "page"] });
   add({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page"] });
   add({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["image"] });
+  add({ id: "pb-report", parentId: "pb-root", title: "Report this page…", contexts: ["page"] });
   logins.forEach((login, i) => {
     add({ id: `pb-login-${i}`, parentId: "pb-fill", title: login.username || "(no username)", contexts: ["editable", "page"] });
   });
   menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
+}
+
+// "Report this page": every frame of the tab sends its scrubbed snapshot, gathered for a short window
+/** @type {Map<string, { tabId: number, frames: any[] }>} */
+const pendingReports = new Map();
+const REPORT_GATHER_MS = 1500;
+
+async function reportPage(tab) {
+  if (tab?.id == null) throw new Error("no tab");
+  const id = crypto.randomUUID();
+  /** @type {{ tabId: number, frames: any[] }} */
+  const entry = { tabId: tab.id, frames: [] };
+  pendingReports.set(id, entry);
+  await chrome.tabs.sendMessage(tab.id, { type: "collectReport", id }).catch(() => {});
+  await new Promise((r) => setTimeout(r, REPORT_GATHER_MS));
+  pendingReports.delete(id);
+  entry.frames.sort((a, b) => (b.top ? 1 : 0) - (a.top ? 1 : 0) || a.frameId - b.frameId);
+  const report = {
+    url: scrubUrl(tab.url || ""),
+    version: chrome.runtime.getManifest().version,
+    browser: navigator.userAgent,
+    createdAt: new Date().toISOString(),
+    frames: entry.frames,
+  };
+  await chrome.storage.session.set({ [`report:${id}`]: report });
+  await chrome.tabs.create({ url: chrome.runtime.getURL(`src/report.html?id=${id}`), index: tab.index + 1 });
 }
 
 function clearBadges() {
@@ -770,6 +799,10 @@ chrome.commands?.onCommand.addListener(async (command) => {
 chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
   try {
+    if (info.menuItemId === "pb-report") {
+      await reportPage(tab);
+      return;
+    }
     if (info.menuItemId === "pb-gen") {
       chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }, { frameId: info.frameId ?? 0 }).catch(() => {});
       return;
@@ -1382,6 +1415,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           pwCacheClear();
           sendResponse({ ok: true });
           break;
+
+        case "reportFrame": {
+          const entry = pendingReports.get(msg.id);
+          if (entry && sender.tab?.id === entry.tabId && msg.frame && typeof msg.frame === "object") {
+            entry.frames.push({ ...msg.frame, frameId: sender.frameId ?? 0 });
+          }
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case "reportPage": {
+          await reportPage(await activeTab());
+          sendResponse({ ok: true });
+          break;
+        }
 
         case "disconnect":
           await forgetSecrets();

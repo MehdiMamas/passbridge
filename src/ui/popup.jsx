@@ -189,6 +189,12 @@ function PopupApp() {
         else showNote(res?.error || "Couldn't re-fill this page.", "danger");
       }}
       onSettings={() => chrome.runtime.openOptionsPage()}
+      onReport={async () => {
+        showNote("Collecting the page…", "muted");
+        const res = await send({ type: "reportPage" });
+        if (res?.ok) window.close();
+        else showNote(res?.error || "Couldn't read this page.", "danger");
+      }}
     />
   );
 }

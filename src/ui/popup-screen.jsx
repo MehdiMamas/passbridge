@@ -134,6 +134,7 @@ export function PopupScreen({
   onLock,
   onRefresh,
   onSettings,
+  onReport,
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
@@ -306,9 +307,14 @@ export function PopupScreen({
           ) : (
             <span />
           )}
-          <button type="button" className="text-xs text-accent" onClick={onSettings}>
-            Settings
-          </button>
+          <span className="flex items-center gap-3">
+            <button type="button" className="text-xs text-accent" onClick={onReport}>
+              Report this page
+            </button>
+            <button type="button" className="text-xs text-accent" onClick={onSettings}>
+              Settings
+            </button>
+          </span>
         </div>
       </footer>
     </div>

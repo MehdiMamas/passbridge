@@ -4,6 +4,7 @@ import { generateAlphanumericPassword, generateApplePassword } from "./password-
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
 import { SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
+import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
 
 const UPSTREAM_USER = new Set(
   [...AutoFillConstants.UsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
@@ -332,6 +333,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   switch (msg?.type) {
+    case "collectReport": {
+      // every frame answers on its own message, a reply here would reach only the first frame
+      let frame;
+      try {
+        frame = snapshotFrame();
+      } catch (e) {
+        frame = { url: scrubUrl(location.href), top: window === window.top, error: String(e?.message ?? e) };
+      }
+      chrome.runtime.sendMessage({ type: "reportFrame", id: msg.id, frame }).catch(() => {});
+      return false;
+    }
     case "fillOtp": {
       if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
       // a frame with no code field stays silent so another frame's answer wins
@@ -1566,6 +1578,38 @@ function buildChooser(field, logins) {
   }
   const box = buildSuggestionBox(field);
   mountLoginList(box, field, logins, false);
+}
+
+// what PassBridge saw in this frame plus its scrubbed HTML, for "Report this page"
+function snapshotFrame() {
+  const fields = Array.from(document.querySelectorAll("input, textarea, select"))
+    .slice(0, 60)
+    .map((el) => ({
+      tag: el.tagName.toLowerCase(),
+      type: el.getAttribute("type") || "",
+      name: scrubAttr(el.getAttribute("name") || ""),
+      id: scrubAttr(el.id || ""),
+      autocomplete: el.getAttribute("autocomplete") || "",
+      visible: isVisible(el),
+      login: el instanceof HTMLInputElement && isLoginField(el),
+      otp: el instanceof HTMLInputElement && isOtpField(el),
+    }));
+  const root = scrubTree(/** @type {Element} */ (document.documentElement.cloneNode(true)), (el) =>
+    Array.from(el.attributes).some((a) => a.name.startsWith("data-passbridge")),
+  );
+  let html = root.outerHTML;
+  const truncated = html.length > REPORT_FRAME_HTML_MAX;
+  if (truncated) html = html.slice(0, REPORT_FRAME_HTML_MAX);
+  return {
+    url: scrubUrl(location.href),
+    top: window === window.top,
+    title: scrubAttr(document.title),
+    safe: frameIsSafe(),
+    blocked: hostBlocked(location.hostname, pbSettings.blockedDomains),
+    fields,
+    html,
+    truncated,
+  };
 }
 
 // excludes generic app hosting (firebaseapp, vercel) where anyone can deploy
