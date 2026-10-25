@@ -1538,7 +1538,7 @@ const IFRAME_LOGIN_ALLOWLIST = [
   "corbado.io", "cyberark.cloud", "delinea.app", "descope.com", "descope.io", "discord.com",
   "dropbox.com", "duosecurity.com", "dynamicauth.com", "facebook.com", "finicity.com", "force.com",
   "forgeblocks.com", "forgerock.com", "forgerock.io", "frontegg.com", "fusionauth.io", "github.com",
-  "gitlab.com", "hanko.io", "idaptive.app", "jumpcloud.com", "kakao.com", "kinde.com", "klarna.com",
+  "gitlab.com", "hanko.io", "idaptive.app", "idmsa.apple.com", "jumpcloud.com", "kakao.com", "kinde.com", "klarna.com",
   "line.me", "link.com", "linkedin.com", "live.com", "loginradius.com", "magic.link",
   "microsoftonline.com", "mojoauth.com", "moneydesktop.com", "naver.com", "okta-emea.com", "okta.com",
   "oktapreview.com", "onelogin.com", "openlogin.com", "ory.sh", "oryapis.com", "paypal.com",
