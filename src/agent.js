@@ -1,4 +1,4 @@
-// agent sign-in: a local program asks over a native host to fill a login or code into a tab.
+// agent sign-in: a local program asks over a native host to fill a login into a tab.
 // replies carry status and usernames only, never a password or a code.
 import { getSettings, hostBlocked } from "./settings.js";
 
@@ -10,6 +10,21 @@ export const RATE_WINDOW_MS = 10 * 60 * 1000;
 
 // exact host or a subdomain of an entry, so github.com.evil.io and evilgithub.com stay out
 export const hostAllowed = hostBlocked;
+
+// child frames the agent may fill: a real child (not the top frame) whose own host is on the allowlist,
+// e.g. idmsa.apple.com under apple.com. frames are {frameId, url} from webNavigation.getAllFrames
+export function pickAllowedFrames(frames, allowlist, hostnameOf) {
+  const out = [];
+  for (const f of Array.isArray(frames) ? frames : []) {
+    if (!f || !f.frameId) continue;
+    let host = "";
+    try {
+      host = hostnameOf(f.url);
+    } catch {}
+    if (host && hostAllowed(host, allowlist)) out.push({ frameId: f.frameId, host });
+  }
+  return out;
+}
 
 // sliding window, the caller passes the clock so tests need no timers
 export function createLimiter(max = RATE_MAX, windowMs = RATE_WINDOW_MS) {
@@ -56,7 +71,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   const base = { host: "", username: "" };
   const done = (reply, extra) => Object.assign(base, extra, { reply });
   if (!settings.agentSignIn) return done(fail("not_enabled"));
-  if (!["logins", "sign_in", "fill_code"].includes(op)) return done(fail("unknown_op"));
+  if (!["logins", "sign_in"].includes(op)) return done(fail("unknown_op"));
 
   let tab = null;
   try {
@@ -88,16 +103,10 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
         username = hit;
       }
       base.username = username;
-      const r = await deps.fillLoginOnTab(tab, username);
+      const r = await deps.fillLoginOnTab(tab, username, { frameAllowlist: settings.agentAllowlist });
       if (!r?.filled) return done(fail(r?.reason || "fill_failed"));
       return done({ ok: true, domain: host, username: r.username || username }, { username: r.username || username });
     }
-
-    // fill_code
-    const r = await deps.fillCodeOnTab(tab);
-    if (r?.username) base.username = r.username;
-    if (!r?.filled) return done(fail(r?.reason || "fill_failed", r?.reason === "choose_code" ? { usernames: r.usernames } : undefined));
-    return done({ ok: true, domain: host, username: r.username || "" });
   } catch {
     // a refused or timed-out read is the Touch ID case
     return done(fail("needs_user"));

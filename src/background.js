@@ -12,7 +12,7 @@ import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
-import { initAgent } from "./agent.js";
+import { initAgent, pickAllowedFrames } from "./agent.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -472,7 +472,7 @@ async function sendFill(tabId, msg) {
 }
 
 // a username fills that login. without one the shortcut starts at the most recent login and steps through the rest
-async function fillLoginOnTab(tab, username) {
+async function fillLoginOnTab(tab, username, opts) {
   await ensureConnected();
   if (!client.ready || !tab?.url || tab.id == null) return { filled: false, reason: "needs_user" };
   const host = hostnameOf(tab.url);
@@ -508,25 +508,31 @@ async function fillLoginOnTab(tab, username) {
     lastFillByTab.set(tab.id, { host, username: cred.username });
     return { filled: true, username: cred.username };
   }
+  // agent only: the form may sit in an allowlisted child frame (account.apple.com -> idmsa.apple.com).
+  // the password was read for the top site above, each frame is filled only under its own allowlisted host
+  if (opts?.frameAllowlist) {
+    let frames = [];
+    try {
+      frames = (await chrome.webNavigation.getAllFrames({ tabId: tab.id })) || [];
+    } catch {}
+    for (const f of pickAllowedFrames(frames, opts.frameAllowlist, hostnameOf)) {
+      /** @type {any} */
+      let r = null;
+      try {
+        r = await chrome.tabs.sendMessage(
+          tab.id,
+          { type: "fill", username: cred.username, password: cred.password, expectedHost: f.host },
+          { frameId: f.frameId },
+        );
+      } catch {}
+      if (r?.filled) {
+        recordMru(host, cred.username);
+        lastFillByTab.set(tab.id, { host, username: cred.username });
+        return { filled: true, username: cred.username };
+      }
+    }
+  }
   return { filled: false, reason: "fill_failed" };
-}
-
-// the agent's code fill: one code row for the tab, filled in place, the value never leaves this function
-async function fillCodeOnTab(tab) {
-  if (!client.canFillOneTimeCodes) return { filled: false, reason: "fill_failed" };
-  const host = hostnameOf(tab.url);
-  const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url: tab.url }));
-  if (requiresAuth && !rows.length) return { filled: false, reason: "needs_user" };
-  if (!rows.length) return { filled: false, reason: "no_login" };
-  if (rows.length > 1) return { filled: false, reason: "choose_code", usernames: rows.map((r) => r.username).filter(Boolean) };
-  const code = await resolveOneTimeCode(tab.id, rows[0].id);
-  const frames = await new Promise((resolve) =>
-    chrome.tabs.sendMessage(tab.id, { type: "fillOtp", code, expectedHost: host }, (r) => {
-      void chrome.runtime.lastError;
-      resolve(r);
-    }),
-  );
-  return frames?.filled ? { filled: true, username: rows[0].username || "" } : { filled: false, reason: "fill_failed" };
 }
 
 async function ensureOffscreen() {
@@ -1477,5 +1483,4 @@ initAgent({
   siteLogins,
   uniqueByUsername,
   fillLoginOnTab,
-  fillCodeOnTab,
 });

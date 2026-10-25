@@ -12,7 +12,7 @@ import uuid
 
 APPDIR = os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", "~/Library/Application Support/PassBridge"))
 SOCK = os.path.join(APPDIR, "agent.sock")
-TIMEOUT = 30
+TIMEOUT = 90
 
 out_lock = threading.Lock()
 pending = {}  # id -> [event, reply]

@@ -5,7 +5,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { createLimiter, handleAgentRequest, hostAllowed, sanitizeReply } from "../../src/agent.js";
+import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 
 let failed = 0;
@@ -187,7 +187,6 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
     siteLogins: async () => [{ username: "a@x.com" }, { username: "b@x.com" }],
     uniqueByUsername: (l) => l,
     fillLoginOnTab: async (tab, username) => ({ filled: true, username, password: "leak" }),
-    fillCodeOnTab: async () => ({ filled: true, username: "a@x.com" }),
     ...over,
   });
   const run = (msg, d = deps(), lim = createLimiter()) => handleAgentRequest(msg, d, lim);
@@ -200,8 +199,20 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("agent: an unpaired client is needs_user", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ client: { ready: false } }))).reply.error === "needs_user");
   ok("agent: a refused read is needs_user", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ fillLoginOnTab: async () => { throw new Error("timeout"); } }))).reply.error === "needs_user");
   const lim = createLimiter(1, 1000);
-  await run({ op: "fill_code", tabId: 1 }, deps(), lim);
-  ok("agent: the second fill in the window is rate_limited", (await run({ op: "fill_code", tabId: 1 }, deps(), lim)).reply.error === "rate_limited");
+  await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), lim);
+  ok("agent: the second fill in the window is rate_limited", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), lim)).reply.error === "rate_limited");
+  ok("agent: fill_code is gone", (await run({ op: "fill_code", tabId: 1 })).reply.error === "unknown_op");
+  const fr = pickAllowedFrames(
+    [
+      { frameId: 0, url: "https://account.apple.com/" },
+      { frameId: 3, url: "https://idmsa.apple.com/appleauth" },
+      { frameId: 4, url: "https://apple.com.evil.io/x" },
+      { frameId: 5, url: "https://evilapple.com/" },
+    ],
+    ["apple.com"],
+    (u) => new URL(u).hostname,
+  );
+  ok("agent: frame choice keeps allowlisted subdomain frames only", fr.length === 1 && fr[0].frameId === 3 && fr[0].host === "idmsa.apple.com");
   ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
 }
 

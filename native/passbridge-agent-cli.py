@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username] | fill_code <tabId>
+# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username]
 import json
 import os
 import socket
@@ -12,7 +12,7 @@ SOCK = os.path.join(
 
 
 def main(argv):
-    if not argv or argv[0] not in ("status", "logins", "sign_in", "fill_code"):
+    if not argv or argv[0] not in ("status", "logins", "sign_in"):
         print(__doc__.strip().splitlines()[0], file=sys.stderr)
         return 2
     req = {"id": uuid.uuid4().hex, "op": argv[0]}
@@ -24,7 +24,7 @@ def main(argv):
     if argv[0] == "sign_in" and len(argv) > 2:
         req["username"] = argv[2]
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(40)
+    s.settimeout(100)
     try:
         s.connect(SOCK)
     except OSError:
