@@ -8,6 +8,7 @@ import socket
 import struct
 import sys
 import threading
+import uuid
 
 APPDIR = os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", "~/Library/Application Support/PassBridge"))
 SOCK = os.path.join(APPDIR, "agent.sock")
@@ -40,20 +41,22 @@ def ask(req):
     rid = str(req.get("id", ""))
     if not rid or not isinstance(req.get("op"), str):
         return {"id": rid, "ok": False, "error": "bad_request"}
+    # our own id on the wire, so two clients picking the same id can't get each other's reply
+    wid = uuid.uuid4().hex
     ev = threading.Event()
     slot = [ev, None]
     with pending_lock:
-        pending[rid] = slot
+        pending[wid] = slot
     try:
-        send_ext(req)
+        send_ext({**req, "id": wid})
         if not ev.wait(TIMEOUT):
             return {"id": rid, "ok": False, "error": "timeout"}
-        return slot[1]
+        return {**slot[1], "id": rid}
     except Exception:
         return {"id": rid, "ok": False, "error": "extension_gone"}
     finally:
         with pending_lock:
-            pending.pop(rid, None)
+            pending.pop(wid, None)
 
 
 def serve_client(conn):
