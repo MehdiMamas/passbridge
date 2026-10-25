@@ -18,4 +18,12 @@ await main(async () => {
   ok("field icon is up", (await page.locator("[data-passbridge-icon]").count()) > 0, "no icon");
   const text = await menuText(page);
   ok("suggestions still readable", /test@example.com/.test(text), text);
+
+  // numeric id username next to a password still gets the menu (issue #49)
+  await page.goto(`${BASE}/login-numeric-id.html`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(300);
+  await page.focus("#idField");
+  await page.waitForTimeout(500);
+  ok("numeric id username gets the menu", (await page.locator('[data-passbridge-host="menu"]').count()) > 0, "no host");
+  ok("numeric id username gets the field icon", (await page.locator("[data-passbridge-icon]").count()) > 0, "no icon");
 });
