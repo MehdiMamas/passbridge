@@ -48,6 +48,25 @@ Quit Chrome with Cmd+Q and reopen it. Then open PassBridge settings.
 
 `./native/uninstall.sh` removes the helper. If the password-manager profile is still installed, it tries to remove it and otherwise opens System Settings > General > Device Management so you can remove "PassBridge - Hide Browser Password Manager" yourself. It only says the password manager is restored once the profile is gone. It also removes older `com.openpasswords.*` registrations from before the PassBridge rename, and the pairing-code reader that earlier versions installed.
 
+### Agent sign-in (macOS)
+
+A local program can ask PassBridge to fill a saved login into a tab on sites you list. It gets a status back (site, username), never a password.
+
+1. Rerun `./native/install.sh` (it installs the agent host next to the policy helper), then quit Chrome with Cmd+Q and reopen it.
+2. In PassBridge settings, turn on Agent sign-in and check the allowed sites.
+3. Test it with the command-line client, using a tab id from `chrome.tabs`:
+
+```bash
+P="$HOME/Library/Application Support/PassBridge"
+"$P/passbridge-agent-cli.py" status
+"$P/passbridge-agent-cli.py" logins <tabId>
+"$P/passbridge-agent-cli.py" sign_in <tabId> [username]
+```
+
+Apple's Passwords asks for Touch ID every time a password is read (except within 15 s of the last read), so each agent sign-in needs one Touch ID approval; when no saved login exists the agent gets `no_login` and the person signs in themselves.
+
+Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged in the settings page.
+
 ## Windows
 
 You need:

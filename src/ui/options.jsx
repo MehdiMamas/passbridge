@@ -53,6 +53,8 @@ function OptionsApp() {
   const [settings, setSettings] = useState(DEFAULTS);
   const [excludedText, setExcludedText] = useState("");
   const [blockedText, setBlockedText] = useState("");
+  const [agentText, setAgentText] = useState("");
+  const [agentLog, setAgentLog] = useState([]);
   const [policy, setPolicy] = useState({ ready: false, available: false, hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
@@ -67,13 +69,20 @@ function OptionsApp() {
       setSettings(next);
       setExcludedText((next.excludedDomains || []).join("\n"));
       setBlockedText((next.blockedDomains || []).join("\n"));
+      setAgentText((next.agentAllowlist || []).join("\n"));
     });
+    chrome.storage.local.get({ agentLog: [] }, (o) => setAgentLog(Array.isArray(o.agentLog) ? o.agentLog : []));
+    const onLog = (changes, area) => {
+      if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
+    };
+    chrome.storage.onChanged.addListener(onLog);
     sendPolicy("get").then((r) => {
       if (r.missing) setPolicy({ ready: true, available: false, hidden: false, message: "" });
       else setPolicy({ ready: true, available: true, hidden: !!r.hidden, message: r.ok ? "" : r.error || "" });
     });
     readPrivacy("passwordSavingEnabled", setBubble);
     readPrivacy("autofillAddressEnabled", setAddress);
+    return () => chrome.storage.onChanged.removeListener(onLog);
   }, []);
 
   function persist(partial) {
@@ -153,6 +162,43 @@ function OptionsApp() {
             <option value="300000">5 minutes</option>
           </select>
         </Row>
+      </Section>
+      <Section title="Agent sign-in" className="mt-6">
+        <p className="py-2 text-[12px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
+          A local program can ask PassBridge to sign in on these sites. It sees which site and username were filled, never a password or a code. Needs the helper from native/install.sh.
+        </p>
+        {check("agentSignIn", "Allow agent sign-in")}
+        <DomainList
+          label="Allowed sites"
+          note="One domain per line. Subdomains are included."
+          value={agentText}
+          onChange={(e) => setAgentText(e.target.value)}
+          onBlur={() => persist({ agentAllowlist: domainLines(agentText) })}
+        />
+        {agentLog.length > 0 && (
+          <table className="w-full text-left text-[11px]">
+            <thead className="opacity-60">
+              <tr>
+                <th className="py-1 pr-2 font-normal">Time</th>
+                <th className="pr-2 font-normal">Request</th>
+                <th className="pr-2 font-normal">Site</th>
+                <th className="pr-2 font-normal">Username</th>
+                <th className="font-normal">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...agentLog].reverse().slice(0, 50).map((r, i) => (
+                <tr key={i} className="border-t border-[color-mix(in_srgb,CanvasText_8%,Canvas)]">
+                  <td className="py-1 pr-2">{new Date(r.t).toLocaleString()}</td>
+                  <td className="pr-2">{r.op}</td>
+                  <td className="pr-2">{r.host}</td>
+                  <td className="pr-2">{r.username}</td>
+                  <td>{r.result}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Section>
       <Section title="Browser" className="mt-6">
         {check("enableContextMenu", "Context menu")}

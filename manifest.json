@@ -78,6 +78,7 @@
     "webRequest",
     "offscreen",
     "tabs",
+    "webNavigation",
     "clipboardWrite",
     "clipboardRead"
   ],
