@@ -24,6 +24,10 @@ cp "$DIR/passbridge-agent.py" "$APPDIR/passbridge-agent.py"
 cp "$DIR/passbridge-agent-cli.py" "$APPDIR/passbridge-agent-cli.py"
 chmod +x "$APPDIR/passbridge-agent.py" "$APPDIR/passbridge-agent-cli.py"
 AGENT="$APPDIR/passbridge-agent.py"
+# one-click update host
+cp "$DIR/passbridge-updater.py" "$APPDIR/passbridge-updater.py"
+chmod +x "$APPDIR/passbridge-updater.py"
+UPDATER="$APPDIR/passbridge-updater.py"
 
 # the pairing-code reader earlier versions installed
 rm -rf "$APPDIR/passbridge-autopair.py" "$APPDIR/PassBridge Helper.app"
@@ -46,6 +50,15 @@ EOF
   "name": "com.passbridge.agent",
   "description": "PassBridge agent sign-in host",
   "path": "$AGENT",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://$EXT_ID/"]
+}
+EOF
+  cat > "$d/com.passbridge.updater.json" <<EOF
+{
+  "name": "com.passbridge.updater",
+  "description": "PassBridge update host",
+  "path": "$UPDATER",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://$EXT_ID/"]
 }

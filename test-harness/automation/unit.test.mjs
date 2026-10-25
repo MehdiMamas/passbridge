@@ -8,11 +8,35 @@ import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update-check.js";
+import { digestHex, verifyRelease } from "../../src/update-verify.js";
 
 let failed = 0;
 function ok(name, cond) {
   console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
   if (!cond) failed++;
+}
+
+{
+  const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const other = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const b64 = async (k) => Buffer.from(await crypto.subtle.exportKey("raw", k.publicKey)).toString("base64");
+  const zip = new TextEncoder().encode("pretend zip bytes");
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
+  const key = await b64(kp);
+  ok("verify: a good signature and digest pass", (await verifyRelease(zip, sig, hex, key)) === true);
+  const bad = sig.slice();
+  bad[0] ^= 1;
+  ok("verify: a flipped signature bit fails", (await verifyRelease(zip, bad, hex, key)) === false);
+  ok("verify: a changed zip fails", (await verifyRelease(new TextEncoder().encode("pretend zip bytez"), sig, hex, key)) === false);
+  ok("verify: a wrong digest fails", (await verifyRelease(zip, sig, "0".repeat(64), key)) === false);
+  ok("verify: a missing digest fails", (await verifyRelease(zip, sig, "", key)) === false);
+  ok("verify: a signature from another key fails", (await verifyRelease(zip, sig, hex, await b64(other))) === false);
+  ok("verify: an empty pinned key always fails", (await verifyRelease(zip, sig, hex, "")) === false);
+  ok("verify: the shipped key rejects a signature made by a test key", (await verifyRelease(zip, sig, hex)) === false);
+  ok("verify: a short signature fails", (await verifyRelease(zip, sig.slice(0, 63), hex, key)) === false);
+  ok("verify: a garbage key fails without throwing", (await verifyRelease(zip, sig, hex, "!!!")) === false);
+  ok("verify: digest field parsing", digestHex("sha256:" + hex) === hex && digestHex(undefined) === null && digestHex("sha1:abc") === null);
 }
 
 ok("report: query values and fragments are dropped, keys stay", scrubUrl("https://idmsa.apple.com/signin?widgetKey=abc&lang=en#x") === "https://idmsa.apple.com/signin?widgetKey=…&lang=…#…");

@@ -14,6 +14,7 @@ import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
 import { availableUpdate, checkForUpdate, dismissUpdate } from "./update-check.js";
+import { installUpdate, updaterAvailable } from "./update-install.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -1272,6 +1273,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             hasChallenge: client.hasChallenge,
             settings: await getSettings(),
             update: await availableUpdate(),
+            canInstallUpdate: (await availableUpdate()) ? await updaterAvailable() : false,
             caps: {
               oneTimeCodes: client.canFillOneTimeCodes,
               newPasswordSheet: client.canOpenPasswordsAppToNewPasswordSheet,
@@ -1466,6 +1468,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "clearCache":
           pwCacheClear();
           sendResponse({ ok: true });
+          break;
+
+        case "installUpdate":
+          sendResponse(await installUpdate());
           break;
 
         case "dismissUpdate":

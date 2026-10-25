@@ -67,6 +67,14 @@ Apple's Passwords asks for Touch ID every time a password is read (except within
 
 Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged in the settings page.
 
+### One-click update (macOS)
+
+The popup's update notice shows Update now when the updater host (`com.passbridge.updater`, installed by `install.sh`) answers. The extension downloads `passbridge.zip` and `passbridge.zip.sig` from the latest release, checks the signature against the key pinned in `src/update-verify.js` and the SHA-256 GitHub lists for the asset, then the host swaps the unpacked folder and the extension reloads. Without a `.sig` on the release the update is refused.
+
+Maintainer: the private key is the Keychain item "PassBridge release signing key" (account `passbridge`, service `passbridge-release-signing`, the PKCS8 PEM base64 encoded on one line), with a backup in the maintainer's password manager. It never goes on GitHub. The matching public key is pinned as `PUBLIC_KEY_B64` in `src/update-verify.js`.
+
+For each release, after the tag build uploads `passbridge.zip`: download it, then `node scripts/sign-release.mjs sign passbridge.zip` (reads the key from the Keychain, writes `passbridge.zip.sig` and checks it against the pinned key; `--key <pem file>` uses a PEM file instead), then `gh release upload vX passbridge.zip.sig`.
+
 ## Windows
 
 You need:
