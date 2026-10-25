@@ -7,6 +7,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
+import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update-check.js";
 
 let failed = 0;
 function ok(name, cond) {
@@ -215,6 +216,83 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("agent: frame choice keeps allowlisted subdomain frames only", fr.length === 1 && fr[0].frameId === 3 && fr[0].host === "idmsa.apple.com");
   ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
 }
+ok("update: a higher release tag is newer", isNewerVersion("v1.4.0", "1.3.1") && isNewerVersion("1.3.10", "1.3.9"));
+ok("update: the same or an older release is not newer", !isNewerVersion("v1.3.1", "1.3.1") && !isNewerVersion("1.3", "1.3.0") && !isNewerVersion("v1.2.9", "1.3.0"));
+ok("update: a tag that is no version is never newer", !isNewerVersion("desktop-preview", "1.3.1") && !isNewerVersion(undefined, "1.3.1"));
+
+// chrome.storage.local in memory, callback and promise forms, plus a fetch that counts its calls
+const realFetch = globalThis.fetch;
+function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_name: "v1.4.0" }) }) {
+  const data = { ...seed };
+  const pick = (keys) => {
+    if (typeof keys === "string") keys = [keys];
+    if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in data).map((k) => [k, data[k]]));
+    return { ...keys, ...data };
+  };
+  const local = {
+    get: (keys, cb) => (cb ? cb(pick(keys)) : Promise.resolve(pick(keys))),
+    set: (o, cb) => {
+      Object.assign(data, o);
+      cb?.();
+      return Promise.resolve();
+    },
+  };
+  globalThis.chrome = { storage: { local }, runtime: { lastError: undefined } };
+  const env = { data, fetched: [] };
+  globalThis.fetch = async (url) => {
+    env.fetched.push(String(url));
+    if (reply instanceof Error) throw reply;
+    return reply;
+  };
+  return env;
+}
+const NOW = Date.UTC(2026, 9, 25);
+{
+  const env = fakeUpdateEnv();
+  await checkForUpdate(NOW);
+  ok("update: a first check asks GitHub for the latest release", env.fetched.join() === "https://api.github.com/repos/MehdiMamas/passbridge/releases/latest");
+  ok("update: the check keeps the tag and the time", env.data.latestRelease === "v1.4.0" && env.data.updateCheckedAt === NOW);
+  const update = await availableUpdate("1.3.1");
+  ok("update: a newer release is offered with its release page", update?.version === "1.4.0" && update?.url === "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.0");
+  ok("update: the installed version is not offered", (await availableUpdate("1.4.0")) === null);
+  await dismissUpdate();
+  ok("update: a dismissed release is not offered again", (await availableUpdate("1.3.1")) === null);
+  env.data.latestRelease = "v1.5.0";
+  ok("update: a release after the dismissed one is offered", (await availableUpdate("1.3.1"))?.version === "1.5.0");
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: NOW - UPDATE_CHECK_MS + 60_000 });
+  await checkForUpdate(NOW);
+  ok("update: no second request inside a day", env.fetched.length === 0);
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: NOW + 3_600_000 });
+  await checkForUpdate(NOW);
+  ok("update: a check stamped in the future does not block forever", env.fetched.length === 1);
+}
+{
+  const env = fakeUpdateEnv({ canCheckForUpdates: false, latestRelease: "v1.4.0" });
+  await checkForUpdate(NOW);
+  ok("update: turned off, nothing is requested", env.fetched.length === 0);
+  ok("update: turned off, nothing is offered", (await availableUpdate("1.3.1")) === null);
+}
+{
+  const env = fakeUpdateEnv({}, new Error("offline"));
+  await checkForUpdate(NOW);
+  ok("update: a failed request is retried on the next alarm", env.data.updateCheckedAt === undefined);
+}
+{
+  const env = fakeUpdateEnv({ latestRelease: "v1.4.0" }, { ok: false, status: 403, json: async () => ({ message: "rate limited" }) });
+  await checkForUpdate(NOW);
+  ok("update: a refused request waits a day and keeps the last tag", env.data.updateCheckedAt === NOW && env.data.latestRelease === "v1.4.0");
+}
+{
+  const env = fakeUpdateEnv();
+  await Promise.all([checkForUpdate(NOW), checkForUpdate(NOW)]);
+  ok("update: overlapping checks share one request", env.fetched.length === 1);
+}
+delete globalThis.chrome;
+globalThis.fetch = realFetch;
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

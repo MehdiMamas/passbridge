@@ -124,6 +124,7 @@ export function PopupScreen({
   noteTone,
   pinError,
   showFavicons,
+  update,
   onVerify,
   onNewCode,
   onFill,
@@ -135,6 +136,8 @@ export function PopupScreen({
   onRefresh,
   onSettings,
   onReport,
+  onOpenUpdate,
+  onDismissUpdate,
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
@@ -189,6 +192,26 @@ export function PopupScreen({
       </header>
       {agentOn && (
         <p className="shrink-0 px-3 pt-1.5 text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">Agent sign-in on</p>
+      )}
+      {update && (
+        <div
+          data-passbridge="update"
+          className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,var(--color-accent)_10%,Canvas)] py-1.5 pr-1.5 pl-3 text-[12px]"
+        >
+          <span className="min-w-0 flex-1 truncate">PassBridge {update.version} is available!</span>
+          <button type="button" className="shrink-0 cursor-pointer font-semibold text-accent" onClick={onOpenUpdate}>
+            View release
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss update notice"
+            title="Dismiss"
+            className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg text-sm opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
+            onClick={onDismissUpdate}
+          >
+            ×
+          </button>
+        </div>
       )}
       {unlocked && (
         <div className="shrink-0 px-3 pt-2">
