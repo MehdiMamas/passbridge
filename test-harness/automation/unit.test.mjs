@@ -8,6 +8,7 @@ import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update-check.js";
+import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
 import { digestHex, verifyRelease } from "../../src/update-verify.js";
 
 let failed = 0;
@@ -314,6 +315,66 @@ const NOW = Date.UTC(2026, 9, 25);
   const env = fakeUpdateEnv();
   await Promise.all([checkForUpdate(NOW), checkForUpdate(NOW)]);
   ok("update: overlapping checks share one request", env.fetched.length === 1);
+}
+
+function fakePage() {
+  const win = new EventTarget();
+  const hosts = [{ removed: false, remove() { this.removed = true; } }, { removed: false, remove() { this.removed = true; } }];
+  win.document = { querySelectorAll: () => hosts };
+  return { win, hosts };
+}
+{
+  const { win, hosts } = fakePage();
+  const runtime = { id: "abc" };
+  const life = createLifecycle({ win, runtime });
+  let fired = 0;
+  life.listen(win, "ping", () => fired++);
+  let cleaned = 0;
+  life.onTeardown(() => cleaned++);
+  win.dispatchEvent(new Event("ping"));
+  ok("lifecycle: a fresh copy is alive and keeps its own listeners", life.alive() && !life.isDead() && fired === 1);
+  ok("lifecycle: invalidated errors are recognised", isInvalidated(new Error("Extension context invalidated.")) && !isInvalidated(new Error("boom")));
+  life.noteError(new Error("boom"));
+  ok("lifecycle: an unrelated error leaves the copy running", !life.isDead());
+  delete runtime.id;
+  ok("lifecycle: a dead runtime id means not alive", life.alive() === false);
+  life.noteError(new Error("Extension context invalidated."));
+  win.dispatchEvent(new Event("ping"));
+  ok("lifecycle: teardown removes injected hosts, runs cleanups and drops listeners", life.isDead() && hosts.every((h) => h.removed) && cleaned === 1 && fired === 1);
+  life.teardown();
+  ok("lifecycle: a second teardown is harmless", cleaned === 1);
+  let late = 0;
+  life.listen(win, "ping", () => late++);
+  win.dispatchEvent(new Event("ping"));
+  ok("lifecycle: nothing is registered after teardown", late === 0);
+}
+{
+  const { win, hosts } = fakePage();
+  const old = createLifecycle({ win, runtime: { id: "abc" } });
+  ok("lifecycle: the first copy does not tear itself down", !old.isDead());
+  const fresh = createLifecycle({ win, runtime: { id: "abc" } });
+  ok("lifecycle: a newer copy replaces the older one", old.isDead() && hosts.every((h) => h.removed));
+  ok("lifecycle: the newer copy survives its own event", !fresh.isDead() && fresh.alive());
+  ok("lifecycle: the replaced event name is stable", REPLACED_EVENT === "passbridge:replaced");
+}
+{
+  const calls = [];
+  const runtime = { getManifest: () => ({ content_scripts: [{ js: ["src/content.js"] }] }) };
+  const tabs = { query: async (q) => (calls.push(["query", q]), [{ id: 1, url: "https://a.test/" }, { id: 2, url: "https://locked.test/" }, { id: 3, url: "http://b.test/" }, { url: "https://noid.test/" }]) };
+  const scripting = {
+    executeScript: async (o) => {
+      calls.push(["inject", o.target.tabId, o.target.allFrames, o.files]);
+      if (o.target.tabId === 2) throw new Error("Cannot access contents of the page");
+    },
+  };
+  const n = await reinjectContentScripts({ tabs, scripting, runtime });
+  const injected = calls.filter((c) => c[0] === "inject");
+  ok("reinject: queries only http and https tabs", JSON.stringify(calls[0][1].url) === JSON.stringify(["http://*/*", "https://*/*"]));
+  ok("reinject: injects every frame with the manifest's script path", injected.length === 3 && injected.every((c) => c[2] === true && c[3][0] === "src/content.js"));
+  ok("reinject: a refused page does not stop the others", n === 2 && injected.map((c) => c[1]).join() === "1,2,3");
+  ok("reinject: a failing tab query injects nothing", (await reinjectContentScripts({ tabs: { query: async () => { throw new Error("x"); } }, scripting, runtime })) === 0);
+  const real = JSON.parse((await import("node:fs")).readFileSync(new URL("../../manifest.json", import.meta.url), "utf8"));
+  ok("manifest: asks for scripting and lists a content script to inject", real.permissions.includes("scripting") && real.content_scripts[0].js[0] === "src/content.js");
 }
 delete globalThis.chrome;
 globalThis.fetch = realFetch;

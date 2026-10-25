@@ -4,6 +4,7 @@ import { generateAlphanumericPassword, generateApplePassword } from "./password-
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
 import { SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
+import { createLifecycle } from "./reload-recovery.js";
 import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
 
 const UPSTREAM_USER = new Set(
@@ -17,6 +18,23 @@ function hitsUpstreamName(el) {
 
 // OTP inputs are never fillable login fields, that misclassification is apple's balloon-on-every-OTP bug
 console.log("[PassBridge] content script v1.0.0 loaded");
+
+// dispatches the replaced event, so an older copy on this page removes its UI
+const life = createLifecycle();
+const listen = life.listen;
+// runtime calls fail with "context invalidated" after a reload, which ends this copy
+const gone = (e) => { life.noteError(e); };
+life.onTeardown(() => {
+  removeSuggestion();
+  removeIcon();
+  hideSaveBar();
+  hideTotpBar();
+});
+// chrome event listeners also have to go, a newer copy would answer the same message twice
+function onChrome(event, fn) {
+  event.addListener(fn);
+  life.onTeardown(() => event.removeListener(fn));
+}
 
 let pbSettings = { ...SETTINGS_DEFAULTS };
 // page-load fill waits on this, the defaults would say autofill is off
@@ -32,7 +50,7 @@ try {
     if (!chrome.runtime.lastError && o) pbSettings = { ...SETTINGS_DEFAULTS, ...o };
     markSettingsLoaded();
   });
-  chrome.storage?.onChanged?.addListener((ch, area) => {
+  onChrome(chrome.storage.onChanged, (ch, area) => {
     if (area !== "local") return;
     for (const [k, v] of Object.entries(ch)) {
       if (k in SETTINGS_DEFAULTS) pbSettings[k] = v.newValue;
@@ -321,7 +339,7 @@ async function passwordsMatch(hash, password) {
   return hash === (await sha256Hex(password));
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
   if (msg?.type !== "fill") return false;
   // host must match the origin the background pinned the cred to, so site A's cred never lands on site B
   // the first reply wins, so a frame on another host or with no login fields stays silent
@@ -351,7 +369,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
   switch (msg?.type) {
     case "collectReport": {
       // every frame answers on its own message, a reply here would reach only the first frame
@@ -361,7 +379,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       } catch (e) {
         frame = { url: scrubUrl(location.href), top: window === window.top, error: String(e?.message ?? e) };
       }
-      chrome.runtime.sendMessage({ type: "reportFrame", id: msg.id, frame }).catch(() => {});
+      chrome.runtime.sendMessage({ type: "reportFrame", id: msg.id, frame }).catch(gone);
       return false;
     }
     case "fillOtp": {
@@ -487,11 +505,11 @@ function showSaveBar(msg) {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
     const action = e.data.action;
     hideSaveBar();
-    if (action === "save") chrome.runtime.sendMessage({ type: "confirmSave" }).catch(() => {});
-    else if (action === "never") chrome.runtime.sendMessage({ type: "neverSave" }).catch(() => {});
-    else chrome.runtime.sendMessage({ type: "dismissSave" }).catch(() => {});
+    if (action === "save") chrome.runtime.sendMessage({ type: "confirmSave" }).catch(gone);
+    else if (action === "never") chrome.runtime.sendMessage({ type: "neverSave" }).catch(gone);
+    else chrome.runtime.sendMessage({ type: "dismissSave" }).catch(gone);
   };
-  window.addEventListener("message", saveListener);
+  listen(window, "message", saveListener);
 }
 
 /** @type {HTMLInputElement | null} */
@@ -647,7 +665,8 @@ function eventHitsMenu(e) {
   return false;
 }
 
-document.addEventListener(
+listen(
+  document,
   "click",
   (e) => {
     if (!rowPressAt || Date.now() - rowPressAt > 700) return;
@@ -986,14 +1005,14 @@ async function buildLockedSuggestion(field, onUnlock) {
   again.addEventListener("click", async () => {
     setStatus(`Asking ${place} for a new code...`, false);
     input.value = "";
-    await chrome.runtime.sendMessage({ type: "requestChallenge" }).catch(() => {});
+    await chrome.runtime.sendMessage({ type: "requestChallenge" }).catch(gone);
     setStatus(`Enter the new code on ${place}`, false);
     input.focus();
   });
   box.appendChild(again);
 
   // a second prompt would invalidate the code the user is reading
-  chrome.runtime.sendMessage({ type: "requestChallenge", ifNeeded: true }).catch(() => {});
+  chrome.runtime.sendMessage({ type: "requestChallenge", ifNeeded: true }).catch(gone);
 
   // also reached from the background's "unlocked" message via lockedResume
   let unlockDone = false;
@@ -1008,14 +1027,14 @@ async function buildLockedSuggestion(field, onUnlock) {
       return;
     }
     cachedLogins = null;
-    const r2 = await chrome.runtime.sendMessage({ type: "inlineLogins" }).catch(() => null);
+    const r2 = await chrome.runtime.sendMessage({ type: "inlineLogins" }).catch((e) => (gone(e), null));
     /** @type {string[]} */
     const logins = r2?.logins || [];
     cachedLogins = logins;
     if (logins.length === 1) {
       removeSuggestion();
       fillAnchor = field;
-      chrome.runtime.sendMessage({ type: "inlineFill", loginName: logins[0] }).catch(() => {});
+      chrome.runtime.sendMessage({ type: "inlineFill", loginName: logins[0] }).catch(gone);
     } else if (logins.length > 1) {
       buildChooser(field, logins);
     } else {
@@ -1531,7 +1550,7 @@ function appendOneTimeCodeRows(box, field, rows) {
       otpAnchor = field;
       const resp = await chrome.runtime
         .sendMessage({ type: "inlineFillOneTimeCode", id: r.id })
-        .catch((err) => ({ ok: false, error: String(err?.message ?? err) }));
+        .catch((err) => (gone(err), { ok: false, error: String(err?.message ?? err) }));
       filling = false;
       if (resp?.ok && resp.filled) {
         removeSuggestion();
@@ -1674,6 +1693,7 @@ function frameIsSafe() {
 }
 
 async function onFocusIn(e) {
+  if (!life.alive()) return life.teardown();
   if (credFilling) return;
   if (hostBlocked(location.hostname, pbSettings.blockedDomains)) return;
   const path = typeof e.composedPath === "function" ? e.composedPath() : [];
@@ -1711,24 +1731,25 @@ async function onFocusIn(e) {
   buildOfferSuggestion(field);
 }
 
-document.addEventListener("focusin", onFocusIn, true);
+listen(document, "focusin", onFocusIn, true);
 /** @type {HTMLInputElement | null} */
 let contextField = null;
-document.addEventListener("contextmenu", (e) => {
+listen(document, "contextmenu", (e) => {
   const t = eventField(e);
   contextField = t instanceof HTMLInputElement ? t : null;
 }, true);
 // capture so Enter is intercepted before the page's own submit handling
-document.addEventListener("keydown", onSuggestionKeydown, true);
+listen(document, "keydown", onSuggestionKeydown, true);
 // focusing auto-scrolls the field, which used to fire this and kill the offer
 const repositionAll = () => {
   positionBox();
   repositionIcon();
 };
-document.addEventListener("scroll", repositionAll, true);
-window.addEventListener("resize", repositionAll, true);
+listen(document, "scroll", repositionAll, true);
+listen(window, "resize", repositionAll, true);
 // focus moving into the box (inline PIN field) is kept
-document.addEventListener(
+listen(
+  document,
   "focusout",
   (e) => {
     const target = eventField(e);
@@ -1769,7 +1790,8 @@ document.addEventListener(
   },
   true,
 );
-document.addEventListener(
+listen(
+  document,
   "mousedown",
   (e) => {
     const target = eventField(e);
@@ -1971,10 +1993,11 @@ async function maybeOfferSave(scope) {
       generated,
       newPwCtx,
     })
-    .catch(() => {});
+    .catch(gone);
 }
 
-document.addEventListener(
+listen(
+  document,
   "submit",
   (e) => {
     if (!e.isTrusted) return;
@@ -1983,7 +2006,8 @@ document.addEventListener(
   },
   true,
 );
-document.addEventListener(
+listen(
+  document,
   "click",
   (e) => {
     if (!e.isTrusted || !(e.target instanceof Element)) return;
@@ -1992,7 +2016,8 @@ document.addEventListener(
   },
   true,
 );
-document.addEventListener(
+listen(
+  document,
   "keydown",
   (e) => {
     if (!e.isTrusted || e.key !== "Enter") return;
@@ -2019,11 +2044,11 @@ if (window === window.top) {
       const field = Array.from(document.querySelectorAll("input")).find((i) => isVisible(i) && isLoginField(i));
       if (!field || (field.value || "").trim()) return;
       fillAnchor = field;
-      chrome.runtime.sendMessage({ type: "inlineFill", loginName: res.logins[0] }).catch(() => {});
-    }).catch(() => {});
+      chrome.runtime.sendMessage({ type: "inlineFill", loginName: res.logins[0] }).catch(gone);
+    }).catch(gone);
   };
   if (document.readyState === "complete") tryPageLoadFill();
-  else window.addEventListener("load", tryPageLoadFill, { once: true });
+  else listen(window, "load", tryPageLoadFill, { once: true });
 }
 
-installQrPage();
+installQrPage(listen);
