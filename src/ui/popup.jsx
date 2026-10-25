@@ -17,6 +17,8 @@ function PopupApp() {
   const [showFavicons, setShowFavicons] = useState(true);
   const [lookupUrl, setLookupUrl] = useState(null);
   const [update, setUpdate] = useState(null);
+  const [canInstallUpdate, setCanInstallUpdate] = useState(false);
+  const [installing, setInstalling] = useState(false);
   const lookupGen = useRef(0);
   const lookupTimer = useRef(0);
 
@@ -73,6 +75,7 @@ function PopupApp() {
     if (res.label) setLabel(res.label);
     setShowFavicons(res.settings?.showFavicons !== false);
     setUpdate(res.update || null);
+    setCanInstallUpdate(!!res.canInstallUpdate);
     setCaps(res.caps || {});
     let next = res.state || "connecting";
     if (next === "disconnected") next = "connecting";
@@ -123,6 +126,8 @@ function PopupApp() {
       pinError={pinError}
       showFavicons={showFavicons}
       update={update}
+      canInstallUpdate={canInstallUpdate}
+      installingUpdate={installing}
       onVerify={async (pin) => {
         if (pin.length < 4) return false;
         setPinError("");
@@ -201,6 +206,14 @@ function PopupApp() {
       onOpenUpdate={async () => {
         await chrome.tabs.create({ url: update.url });
         window.close();
+      }}
+      onInstallUpdate={async () => {
+        setInstalling(true);
+        const res = await send({ type: "installUpdate" });
+        if (!res?.ok) {
+          setInstalling(false);
+          showNote(res?.error || "Couldn't install the update.", "danger");
+        }
       }}
       onDismissUpdate={() => {
         setUpdate(null);
