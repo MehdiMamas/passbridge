@@ -6,7 +6,7 @@ export const REPLACED_EVENT = "passbridge:replaced";
 
 /** @param {unknown} err */
 export function isInvalidated(err) {
-  return /context invalidated|receiving end does not exist/i.test(String(/** @type {any} */ (err)?.message ?? err));
+  return /context invalidated/i.test(String(/** @type {any} */ (err)?.message ?? err));
 }
 
 /**
