@@ -42,6 +42,16 @@ const screens = [
       caps: { newPasswordSheet: true },
     },
   ],
+  [
+    "update_available",
+    {
+      state: "unlocked",
+      site: "accounts.example",
+      showFavicons: false,
+      logins: [{ username: "ada@example.com" }, { username: "grace@example.com" }],
+      update: { version: "1.4.0", url: "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.0" },
+    },
+  ],
 ];
 
 function Frame({ title, scheme, props }) {
@@ -65,6 +75,8 @@ function Frame({ title, scheme, props }) {
         onRefresh={noop}
         onSettings={noop}
         onReport={noop}
+        onOpenUpdate={noop}
+        onDismissUpdate={noop}
         {...props}
       />
     </section>

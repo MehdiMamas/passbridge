@@ -16,6 +16,7 @@ function PopupApp() {
   const [pinError, setPinError] = useState("");
   const [showFavicons, setShowFavicons] = useState(true);
   const [lookupUrl, setLookupUrl] = useState(null);
+  const [update, setUpdate] = useState(null);
   const lookupGen = useRef(0);
   const lookupTimer = useRef(0);
 
@@ -71,6 +72,7 @@ function PopupApp() {
     if (res.os) setOs(res.os);
     if (res.label) setLabel(res.label);
     setShowFavicons(res.settings?.showFavicons !== false);
+    setUpdate(res.update || null);
     setCaps(res.caps || {});
     let next = res.state || "connecting";
     if (next === "disconnected") next = "connecting";
@@ -120,6 +122,7 @@ function PopupApp() {
       noteTone={noteTone}
       pinError={pinError}
       showFavicons={showFavicons}
+      update={update}
       onVerify={async (pin) => {
         if (pin.length < 4) return false;
         setPinError("");
@@ -194,6 +197,14 @@ function PopupApp() {
         const res = await send({ type: "reportPage" });
         if (res?.ok) window.close();
         else showNote(res?.error || "Couldn't read this page.", "danger");
+      }}
+      onOpenUpdate={async () => {
+        await chrome.tabs.create({ url: update.url });
+        window.close();
+      }}
+      onDismissUpdate={() => {
+        setUpdate(null);
+        send({ type: "dismissUpdate" });
       }}
     />
   );

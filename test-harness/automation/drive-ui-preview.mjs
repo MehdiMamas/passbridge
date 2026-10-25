@@ -24,7 +24,13 @@ await main(async () => {
       await page.goto(pageUrl, { waitUntil: "networkidle" });
       await page.screenshot({ path: join(SHOTS, "ui-preview.png"), fullPage: true });
       const count = await page.locator("[data-screen]").count();
-      ok("preview renders 10 screens (5 states x light/dark)", count === 10, `got ${count}`);
+      ok("preview renders 12 screens (6 states x light/dark)", count === 12, `got ${count}`);
+      const notice = page.locator('[data-screen="update_available"][data-scheme="light"] [data-passbridge="update"]');
+      const noticeText = (await notice.innerText()).replace(/\s+/g, " ").trim();
+      ok("update: the notice names the new version and links its release", noticeText.includes("PassBridge 1.4.0 is available!") && noticeText.includes("View release"), noticeText);
+      ok("update: the notice can be dismissed", (await notice.locator('button[aria-label="Dismiss update notice"]').count()) === 1, "no dismiss button");
+      const quiet = await page.locator('[data-screen="unlocked"] [data-passbridge="update"]').count();
+      ok("update: no notice without an update", quiet === 0, `notices=${quiet}`);
       const frame = page.locator('[data-screen="grouped_codes"][data-scheme="light"]');
       const rows = (await frame.locator("li").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
       ok("grouped: 8 rows, one li per code", rows.length === 8, `rows=${rows.length}`);

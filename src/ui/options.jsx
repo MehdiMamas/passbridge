@@ -203,6 +203,7 @@ function OptionsApp() {
       <Section title="Browser" className="mt-6">
         {check("enableContextMenu", "Context menu")}
         {check("enableBadge", "Badge count on the toolbar icon")}
+        {check("canCheckForUpdates", "Check for updates")}
         <p className="py-2">
           <button type="button" className="text-[13px] text-accent" onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}>
             Keyboard shortcuts
