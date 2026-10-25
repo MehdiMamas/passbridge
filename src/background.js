@@ -12,6 +12,7 @@ import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
+import { availableUpdate, checkForUpdate, dismissUpdate } from "./update-check.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -316,6 +317,13 @@ chrome.alarms.onAlarm.addListener((a) => {
   // touching an extension API resets the idle timer
   chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError);
   sweepExpiredSecrets();
+});
+
+// hourly, checkForUpdate itself waits a day between requests
+const UPDATE_ALARM = "update-check";
+chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: 60 });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === UPDATE_ALARM) checkForUpdate();
 });
 
 async function ensureConnected() {
@@ -710,12 +718,24 @@ async function refreshTab(tab) {
       logins = uniqueByUsername(orderByMru(hostnameOf(url), await siteLogins(tab.id, url)));
     } catch {}
   }
-  if (tab?.id != null) {
-    const n = settings.enableBadge ? logins.length : 0;
-    chrome.action.setBadgeText({ text: n > 9 ? "9+" : n ? String(n) : "", tabId: tab.id }).catch(() => {});
-    if (n) chrome.action.setBadgeBackgroundColor({ color: "#0a84ff", tabId: tab.id }).catch(() => {});
-  }
+  if (tab?.id != null) setCountBadge(tab.id, settings.enableBadge ? logins.length : 0);
   await rebuildContextMenu(settings, tab, url, logins.slice(0, 8));
+}
+
+const BADGE_COLOR = "#0a84ff";
+
+// no count drops the tab's own text, so the global update badge shows through
+function setCountBadge(tabId, n) {
+  chrome.action.setBadgeText(n ? { text: n > 9 ? "9+" : String(n), tabId } : { tabId }).catch(() => {});
+  if (n) chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR, tabId }).catch(() => {});
+}
+
+async function syncUpdateBadge() {
+  const update = await availableUpdate();
+  const { name } = chrome.runtime.getManifest();
+  chrome.action.setBadgeText({ text: update ? "NEW" : "" }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR }).catch(() => {});
+  chrome.action.setTitle({ title: update ? `${name} ${update.version} is available!` : name }).catch(() => {});
 }
 
 async function rebuildContextMenu(settings, tab, url, logins) {
@@ -768,7 +788,7 @@ async function reportPage(tab) {
 function clearBadges() {
   chrome.tabs.query({}, (tabs) => {
     for (const t of tabs || []) {
-      if (t.id != null) chrome.action.setBadgeText({ text: "", tabId: t.id }).catch(() => {});
+      if (t.id != null) setCountBadge(t.id, 0);
     }
   });
 }
@@ -854,7 +874,7 @@ chrome.windows?.onFocusChanged.addListener((windowId) => {
 });
 chrome.tabs?.onUpdated.addListener((tabId, info) => {
   // a navigated tab drops its old count for free; it is looked up again once it is active
-  if (info.url) chrome.action.setBadgeText({ text: "", tabId }).catch(() => {});
+  if (info.url) setCountBadge(tabId, 0);
   if (info.status !== "complete") return;
   focusedTab()
     .then((tab) => {
@@ -874,7 +894,11 @@ chrome.storage?.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.enableBadge?.newValue === false) clearBadges();
   if (changes.enableContextMenu || changes.enableBadge) refreshActiveTab();
+  if (changes.latestRelease || changes.dismissedRelease || changes.canCheckForUpdates) syncUpdateBadge();
+  if (changes.canCheckForUpdates?.newValue) checkForUpdate();
 });
+checkForUpdate();
+syncUpdateBadge();
 // main_frame in the filter, not the callback: every image and XHR would otherwise wake the worker
 try {
   chrome.webRequest?.onCompleted.addListener((details) => {
@@ -1220,6 +1244,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             label: labelForOs(platformOs),
             hasChallenge: client.hasChallenge,
             settings: await getSettings(),
+            update: await availableUpdate(),
             caps: {
               oneTimeCodes: client.canFillOneTimeCodes,
               newPasswordSheet: client.canOpenPasswordsAppToNewPasswordSheet,
@@ -1413,6 +1438,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "clearCache":
           pwCacheClear();
+          sendResponse({ ok: true });
+          break;
+
+        case "dismissUpdate":
+          await dismissUpdate();
           sendResponse({ ok: true });
           break;
 
