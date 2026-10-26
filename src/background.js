@@ -13,7 +13,7 @@ import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
-import { availableUpdate, checkForUpdate, dismissUpdate } from "./update/check.js";
+import { availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
 import { installUpdate, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
@@ -350,13 +350,11 @@ chrome.runtime.onInstalled.addListener((d) => {
 });
 
 const UPDATE_PAGE = "src/update.html";
-// the folder update marks the version it installed before restarting, the page then shows the result
+// both installs mark the version before restarting, the page then checks it is the one running
 chrome.runtime.onInstalled.addListener(async (d) => {
   if (d?.reason !== "update") return;
-  const { updatedTo } = await chrome.storage.local.get("updatedTo");
-  if (!updatedTo) return;
-  await chrome.storage.local.remove("updatedTo");
-  chrome.tabs.create({ url: chrome.runtime.getURL(`${UPDATE_PAGE}?updated=${encodeURIComponent(String(updatedTo))}`) });
+  const updatedTo = await takeUpdatedTo();
+  if (updatedTo) chrome.tabs.create({ url: chrome.runtime.getURL(`${UPDATE_PAGE}?updated=${encodeURIComponent(updatedTo)}`) });
 });
 // a folder update cut off halfway leaves its journal in the folder, the page puts the old files back
 chrome.runtime.onStartup.addListener(async () => {

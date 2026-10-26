@@ -7,7 +7,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
-import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update/check.js";
+import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
 import { digestHex, verifyRelease } from "../../src/update/verify.js";
 import { downloadRelease, latestRelease } from "../../src/update/release.js";
@@ -799,6 +799,35 @@ function folderEnv(saved, { own = true, pickThrows = false } = {}) {
   serve(releaseJson([full[0]]));
   const helper = await installUpdate("1.4.1");
   ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(helper.error));
+
+  // the updater host answering, with storage and reload stubbed
+  const helperEnv = (hostReply) => {
+    const env = fakeUpdateEnv();
+    env.sent = [];
+    env.reloads = 0;
+    Object.assign(globalThis.chrome.runtime, {
+      sendNativeMessage: async (host, msg) => (env.sent.push(msg), hostReply),
+      reload: () => env.reloads++,
+    });
+    serve(releaseJson(full), { "passbridge.zip": zip, "passbridge.zip.sig": sig });
+    return env;
+  };
+  let env = helperEnv({ ok: true });
+  const installed = await installUpdate("1.4.1", { publicKey });
+  await new Promise((r) => setTimeout(r, 350));
+  ok("helper update: a finished install marks the version for the result page, then reloads", installed.ok && env.sent[0]?.op === "install" && env.data.updatedTo === "1.4.2" && env.reloads === 1);
+  env = helperEnv({ ok: false, error: "disk full" });
+  const refused = await installUpdate("1.4.1", { publicKey });
+  await new Promise((r) => setTimeout(r, 350));
+  ok("helper update: a refused install marks nothing and does not reload", !refused.ok && env.data.updatedTo === undefined && env.reloads === 0);
+  delete globalThis.chrome;
+}
+{
+  const env = fakeUpdateEnv();
+  await markUpdatedTo("1.4.2");
+  const first = await takeUpdatedTo();
+  ok("update: the marked version is handed over once", first === "1.4.2" && env.data.updatedTo === undefined && (await takeUpdatedTo()) === null);
+  delete globalThis.chrome;
 }
 globalThis.fetch = realFetch;
 

@@ -1,4 +1,5 @@
 // one-click update: download the latest release, verify it here, hand the zip to the updater host, reload
+import { markUpdatedTo } from "./check.js";
 import { downloadRelease, latestRelease } from "./release.js";
 import { PUBLIC_KEY_B64 } from "./verify.js";
 
@@ -30,12 +31,12 @@ const MESSAGES = {
 };
 
 // returns {ok:true} (the extension reloads right after) or {ok:false, error} with short text for the popup
-export async function installUpdate(currentVersion = chrome.runtime.getManifest().version) {
+export async function installUpdate(currentVersion = chrome.runtime.getManifest().version, { publicKey = PUBLIC_KEY_B64 } = {}) {
   const fail = (key, extra) => ({ ok: false, error: extra || MESSAGES[key] });
-  if (!PUBLIC_KEY_B64) return fail("nokey");
+  if (!publicKey) return fail("nokey");
   const release = await latestRelease(currentVersion);
   if (!release.ok) return fail(release.error === "unsigned" ? "unsigned" : "download");
-  const got = await downloadRelease(release);
+  const got = await downloadRelease(release, { publicKey });
   if (!got.ok) return fail(got.error);
   let reply;
   try {
@@ -44,6 +45,7 @@ export async function installUpdate(currentVersion = chrome.runtime.getManifest(
     return fail("host");
   }
   if (!reply?.ok) return fail("host", reply?.error ? `Update failed: ${String(reply.error).slice(0, 120)}` : MESSAGES.host);
+  await markUpdatedTo(release.version);
   // give the reply time to reach the popup before the extension restarts
   setTimeout(() => chrome.runtime.reload(), 300);
   return { ok: true };

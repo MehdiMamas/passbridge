@@ -69,7 +69,7 @@ Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_
 
 ### One-click update (macOS)
 
-The popup's update notice always shows Update now. When the updater host (`com.passbridge.updater`, installed by `install.sh`) answers, the update runs through it: the extension downloads `passbridge.zip` and `passbridge.zip.sig` from the latest release, checks the signature against the key pinned in `src/update/verify.js` and the SHA-256 GitHub lists for the asset, then the host swaps the unpacked folder and the extension reloads. Without a `.sig` on the release the update is refused.
+The popup's update notice always shows Update now. When the updater host (`com.passbridge.updater`, installed by `install.sh`) answers, the update runs through it: the extension downloads `passbridge.zip` and `passbridge.zip.sig` from the latest release, checks the signature against the key pinned in `src/update/verify.js` and the SHA-256 GitHub lists for the asset, then the host swaps the unpacked folder and the extension reloads. After the restart the update page opens and checks that the new version is the one running. Without a `.sig` on the release the update is refused.
 
 Maintainer: the private key is the Keychain item "PassBridge release signing key" (account `passbridge`, service `passbridge-release-signing`, the PKCS8 PEM base64 encoded on one line), with a backup in the maintainer's password manager. It never goes on GitHub. The matching public key is pinned as `PUBLIC_KEY_B64` in `src/update/verify.js`.
 

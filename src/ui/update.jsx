@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { UpdateScreen } from "./update-screen.jsx";
+import { markUpdatedTo } from "../update/check.js";
 import { downloadRelease, latestRelease } from "../update/release.js";
 import { manifestProblem, readZip } from "../update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../update/files.js";
@@ -107,7 +108,7 @@ function UpdateApp() {
     }
     advance("restart");
     await setUpdating(false);
-    await chrome.storage.local.set({ updatedTo: release.version });
+    await markUpdatedTo(release.version);
     setTimeout(() => chrome.runtime.reload(), 600);
   }
 

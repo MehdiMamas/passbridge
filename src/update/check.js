@@ -68,6 +68,23 @@ export async function availableUpdate(currentVersion = chrome.runtime.getManifes
   };
 }
 
+// both installs mark the version before the restart; the background then opens the page that checks it landed
+/**
+ * @param {string} version
+ * @returns {Promise<void>}
+ */
+export function markUpdatedTo(version) {
+  return chrome.storage.local.set({ updatedTo: version });
+}
+
+/** @returns {Promise<string | null>} */
+export async function takeUpdatedTo() {
+  const { updatedTo } = await chrome.storage.local.get("updatedTo");
+  if (!updatedTo) return null;
+  await chrome.storage.local.remove("updatedTo");
+  return String(updatedTo);
+}
+
 export async function dismissUpdate() {
   const { latestRelease } = await chrome.storage.local.get("latestRelease");
   if (latestRelease) await chrome.storage.local.set({ dismissedRelease: latestRelease });
