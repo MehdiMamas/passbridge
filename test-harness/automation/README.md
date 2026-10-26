@@ -72,3 +72,14 @@ closed-shadow menu), `srp-reference.mjs` (independent SRP used by the mock helpe
 `build-test-extensions.mjs` (mock builds), `run-all.mjs` (runs every `.mjs` above).
 
 Outputs screenshots to `shots/` (gitignored).
+
+## Folder update end to end (by hand)
+
+Playwright cannot drive the folder picker or Chrome's permission prompts, so `run-all.mjs` leaves this one out.
+`node test-harness/automation/update-e2e.mjs` walks a person through the update page in a real Chrome: it builds
+an installed version and five updates with a throwaway signing key (`releaseSource` and `version` in
+`buildExtension`, refused outside test builds), serves them as a fake GitHub release on 127.0.0.1, opens Chrome on
+a fresh profile, says what to click, and after every round compares the extension folder with the build it
+should hold. Rounds: the first update; permission again with a dropped file, a dropped folder and an added file; a
+broken signature; an unsigned release; one click after a browser restart; a restart that did not land. Needs `zip`;
+off macOS set `CHROME` to the Chrome binary.

@@ -15,6 +15,7 @@ import { installUpdate } from "../../src/update-install.js";
 import { manifestProblem, readZip } from "../../src/update-zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update-files.js";
 import { folderForUpdate, pickFolder } from "../../src/update-folder.js";
+import { buildExtension } from "../../scripts/build.mjs";
 
 let failed = 0;
 function ok(name, cond) {
@@ -800,6 +801,18 @@ function folderEnv(saved, { own = true, pickThrows = false } = {}) {
   ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(helper.error));
 }
 globalThis.fetch = realFetch;
+
+{
+  const { mkdtempSync, readdirSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const out = mkdtempSync(join(tmpdir(), "pb-build-guard-"));
+  const source = { latestUrl: "http://127.0.0.1:1/releases/latest", publicKey: "AAAA" };
+  ok("build: a release build refuses a test release source", (await settles(buildExtension({ out, releaseSource: source }))).startsWith("rejected"));
+  ok("build: a release build refuses a test version", (await settles(buildExtension({ out, version: "9.9.9.1" }))).startsWith("rejected"));
+  ok("build: a refused build writes nothing", readdirSync(out).length === 0);
+  rmSync(out, { recursive: true, force: true });
+}
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

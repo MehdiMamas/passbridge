@@ -2,9 +2,10 @@
 
 import { getSettings } from "./settings.js";
 import { REPORT_REPO } from "./report-scrub.js";
+import { RELEASE_SOURCE } from "./update-source.js";
 
 export const UPDATE_CHECK_MS = 24 * 60 * 60 * 1000;
-export const LATEST_RELEASE_URL = `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
+export const LATEST_RELEASE_URL = RELEASE_SOURCE?.latestUrl ?? `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
 
 export function releasePageUrl(tag) {
   return `https://github.com/${REPORT_REPO}/releases/tag/${encodeURIComponent(tag)}`;

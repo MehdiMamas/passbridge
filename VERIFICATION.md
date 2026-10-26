@@ -54,7 +54,8 @@ Verified (automated, in `test-harness/automation/`):
   permission flow in `npm run test:unit`; the same engine on Chrome's own File System Access code (OPFS)
   in `drive-update-fs.mjs`
 
-Verified by hand, because Playwright intercepts the folder picker (Chrome 156, macOS, unpacked build):
+Verified by hand, because Playwright intercepts the folder picker (Chrome 156, macOS, unpacked build).
+`test-harness/automation/update-e2e.mjs` repeats these runs and checks the folder after each one:
 - the running extension can replace its own files through a picked folder, and `chrome.runtime.reload()`
   comes back as the new version
 - the folder handle survives a browser restart. After an extension reload, `requestPermission` on it only

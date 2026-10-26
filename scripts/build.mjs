@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cp, mkdir, readdir, readFile, rm, stat } from "fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { execFileSync } from "child_process";
 import { dirname, join, relative } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -27,6 +27,22 @@ function mockPlugin(kind) {
       b.onResolve({ filter: /(^|[\\/])mock-client\.js$/ }, () => ({ path: "mock-client", namespace: "pb-mock" }));
       b.onLoad({ filter: /^mock-client$/, namespace: "pb-mock" }, () => ({
         contents: `export function createMockClient() { throw new Error("no mock client in this build"); }\n`,
+        loader: "js",
+      }));
+    },
+  };
+}
+
+// Test builds may also point the update at a local server and a test key; without one the real
+// src/update-source.js (null: GitHub and the pinned key) is bundled.
+function releaseSourcePlugin(source) {
+  return {
+    name: "passbridge-release-source",
+    setup(b) {
+      if (!source) return;
+      b.onResolve({ filter: /(^|[\\/])update-source\.js$/ }, () => ({ path: "release-source", namespace: "pb-mock" }));
+      b.onLoad({ filter: /^release-source$/, namespace: "pb-mock" }, () => ({
+        contents: `export const RELEASE_SOURCE = ${JSON.stringify(source)};\n`,
         loader: "js",
       }));
     },
@@ -86,7 +102,8 @@ async function verify(out) {
   }
 }
 
-export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false } = {}) {
+export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "" } = {}) {
+  if ((releaseSource || version) && !mockKind) throw new Error("releaseSource and version are for test builds (mockKind) only");
   await clean(out);
   const dst = (...p) => join(out, ...p);
 
@@ -94,6 +111,10 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   // LICENSE, NOTICE and licenses/ (Apache-2.0 for the upstream code) ship with every build.
   for (const item of ["manifest.json", "icons", "fonts", "overlay", "LICENSE", "NOTICE", "licenses"]) {
     await cp(at(item), dst(item), { recursive: true });
+  }
+  if (version) {
+    const manifest = JSON.parse(await readFile(dst("manifest.json"), "utf8"));
+    await writeFile(dst("manifest.json"), `${JSON.stringify({ ...manifest, version }, null, 2)}\n`);
   }
   for (const page of ["popup.html", "options.html", "offscreen.html", "report.html", "update.html"]) {
     await cp(at("src", page), dst("src", page));
@@ -108,7 +129,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
     entryPoints: [at("src/background.js")],
     format: "esm",
     outfile: dst("src/background.js"),
-    plugins: [mockPlugin(mockKind)],
+    plugins: [mockPlugin(mockKind), releaseSourcePlugin(releaseSource)],
   });
 
   await build({
@@ -130,6 +151,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
     jsx: "automatic",
     minify: true,
     define: { "process.env.NODE_ENV": "\"production\"" },
+    plugins: [releaseSourcePlugin(releaseSource)],
   };
   await build({
     ...react,
