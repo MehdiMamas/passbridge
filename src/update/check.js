@@ -1,8 +1,8 @@
 // the unpacked build never updates itself, so once a day the latest GitHub release is compared with the manifest
 
-import { getSettings } from "./settings.js";
-import { REPORT_REPO } from "./report-scrub.js";
-import { RELEASE_SOURCE } from "./update-source.js";
+import { getSettings } from "../settings.js";
+import { REPORT_REPO } from "../report-scrub.js";
+import { RELEASE_SOURCE } from "./source.js";
 
 export const UPDATE_CHECK_MS = 24 * 60 * 60 * 1000;
 export const LATEST_RELEASE_URL = RELEASE_SOURCE?.latestUrl ?? `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;

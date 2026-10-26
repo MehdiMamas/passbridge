@@ -1,6 +1,6 @@
 // release check shared by the one-click update: an Ed25519 signature from the maintainer's pinned key
 // plus the SHA-256 GitHub reports for the asset. pure functions, no chrome APIs.
-import { RELEASE_SOURCE } from "./update-source.js";
+import { RELEASE_SOURCE } from "./source.js";
 
 // raw Ed25519 public key (base64) of the maintainer release signing key
 export const PUBLIC_KEY_B64 = RELEASE_SOURCE?.publicKey ?? "sccY06ba0IpGgg5+x6XPsY10TBdARZVzTAeQQCDmaEY=";

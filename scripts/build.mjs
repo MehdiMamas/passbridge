@@ -34,13 +34,16 @@ function mockPlugin(kind) {
 }
 
 // Test builds may also point the update at a local server and a test key; without one the real
-// src/update-source.js (null: GitHub and the pinned key) is bundled.
+// src/update/source.js (null: GitHub and the pinned key) is bundled.
 function releaseSourcePlugin(source) {
   return {
     name: "passbridge-release-source",
     setup(b) {
       if (!source) return;
-      b.onResolve({ filter: /(^|[\\/])update-source\.js$/ }, () => ({ path: "release-source", namespace: "pb-mock" }));
+      // the filter sees the import as written ("./source.js"), so the importer decides
+      b.onResolve({ filter: /(^|[\\/])source\.js$/ }, (args) =>
+        /[\\/]src[\\/]update[\\/]/.test(args.importer) ? { path: "release-source", namespace: "pb-mock" } : undefined,
+      );
       b.onLoad({ filter: /^release-source$/, namespace: "pb-mock" }, () => ({
         contents: `export const RELEASE_SOURCE = ${JSON.stringify(source)};\n`,
         loader: "js",

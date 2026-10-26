@@ -1,7 +1,7 @@
 // the folder-update engine on Chrome's own File System Access code. OPFS stands in for the picked folder,
 // which Playwright cannot reach because it intercepts the picker (VERIFICATION.md has that manual run).
-import { applyUpdate, recoverUpdate } from "../src/update-files.js";
-import { readZip } from "../src/update-zip.js";
+import { applyUpdate, recoverUpdate } from "../src/update/files.js";
+import { readZip } from "../src/update/zip.js";
 
 const enc = (s) => new TextEncoder().encode(s);
 

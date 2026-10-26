@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { UpdateScreen } from "./update-screen.jsx";
-import { downloadRelease, latestRelease } from "../update-release.js";
-import { manifestProblem, readZip } from "../update-zip.js";
-import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../update-files.js";
-import { folderForUpdate, folderStore, pickFolder } from "../update-folder.js";
+import { downloadRelease, latestRelease } from "../update/release.js";
+import { manifestProblem, readZip } from "../update/zip.js";
+import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../update/files.js";
+import { folderForUpdate, folderStore, pickFolder } from "../update/folder.js";
 
 const ERRORS = {
   cancelled: "No folder was chosen.",

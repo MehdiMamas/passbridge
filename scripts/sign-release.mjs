@@ -1,10 +1,10 @@
 // release signing for the one-click update. the private key lives in the maintainer's macOS Keychain, never on GitHub.
 //   node scripts/sign-release.mjs sign <passbridge.zip> [--key <pem file>]
-// writes <zip>.sig (raw 64-byte Ed25519 signature) and checks it against the key pinned in src/update-verify.js.
+// writes <zip>.sig (raw 64-byte Ed25519 signature) and checks it against the key pinned in src/update/verify.js.
 import { createPrivateKey, sign, verify, createPublicKey } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { PUBLIC_KEY_B64 } from "../src/update-verify.js";
+import { PUBLIC_KEY_B64 } from "../src/update/verify.js";
 
 const args = process.argv.slice(2);
 const keyFlag = args.indexOf("--key");
@@ -32,7 +32,7 @@ try {
   const sig = sign(null, data, key);
   const raw = Buffer.from(PUBLIC_KEY_B64, "base64");
   const pub = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), raw]), format: "der", type: "spki" });
-  if (!verify(null, data, pub, sig)) throw new Error("the signature does not match the key pinned in src/update-verify.js");
+  if (!verify(null, data, pub, sig)) throw new Error("the signature does not match the key pinned in src/update/verify.js");
   writeFileSync(`${zip}.sig`, sig);
   console.log(`wrote ${zip}.sig (${sig.length} bytes), verified against the pinned key`);
 } catch (e) {

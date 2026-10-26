@@ -13,9 +13,9 @@ import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
-import { availableUpdate, checkForUpdate, dismissUpdate } from "./update-check.js";
-import { installUpdate, updaterAvailable } from "./update-install.js";
-import { hasInterruptedUpdate } from "./update-files.js";
+import { availableUpdate, checkForUpdate, dismissUpdate } from "./update/check.js";
+import { installUpdate, updaterAvailable } from "./update/install.js";
+import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
 
 const client = createClient();

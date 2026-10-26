@@ -1,7 +1,7 @@
 // the latest release and its verified download, shared by the helper update and the folder update
 
-import { LATEST_RELEASE_URL, isNewerVersion, releasePageUrl } from "./update-check.js";
-import { PUBLIC_KEY_B64, digestHex, verifyRelease } from "./update-verify.js";
+import { LATEST_RELEASE_URL, isNewerVersion, releasePageUrl } from "./check.js";
+import { PUBLIC_KEY_B64, digestHex, verifyRelease } from "./verify.js";
 
 const ZIP_NAME = "passbridge.zip";
 export const MAX_ZIP = 64 * 1024 * 1024;

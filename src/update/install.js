@@ -1,6 +1,6 @@
 // one-click update: download the latest release, verify it here, hand the zip to the updater host, reload
-import { downloadRelease, latestRelease } from "./update-release.js";
-import { PUBLIC_KEY_B64 } from "./update-verify.js";
+import { downloadRelease, latestRelease } from "./release.js";
+import { PUBLIC_KEY_B64 } from "./verify.js";
 
 export const UPDATER_HOST = "com.passbridge.updater";
 

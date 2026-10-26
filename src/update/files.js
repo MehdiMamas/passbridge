@@ -3,7 +3,7 @@
 // replaced and dropped files wait in the backup until the swap is through. dot names only, chrome
 // reserves names starting with "_" and still loads the extension with these left behind.
 
-import { WORK_PREFIX } from "./update-zip.js";
+import { WORK_PREFIX } from "./zip.js";
 
 const STAGING = `${WORK_PREFIX}staging`;
 const BACKUP = `${WORK_PREFIX}backup`;

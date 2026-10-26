@@ -7,14 +7,14 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
-import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update-check.js";
+import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
-import { digestHex, verifyRelease } from "../../src/update-verify.js";
-import { downloadRelease, latestRelease } from "../../src/update-release.js";
-import { installUpdate } from "../../src/update-install.js";
-import { manifestProblem, readZip } from "../../src/update-zip.js";
-import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update-files.js";
-import { folderForUpdate, pickFolder } from "../../src/update-folder.js";
+import { digestHex, verifyRelease } from "../../src/update/verify.js";
+import { downloadRelease, latestRelease } from "../../src/update/release.js";
+import { installUpdate } from "../../src/update/install.js";
+import { manifestProblem, readZip } from "../../src/update/zip.js";
+import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
+import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { buildExtension } from "../../scripts/build.mjs";
 
 let failed = 0;
