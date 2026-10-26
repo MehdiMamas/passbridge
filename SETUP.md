@@ -69,11 +69,15 @@ Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_
 
 ### One-click update (macOS)
 
-The popup's update notice shows Update now when the updater host (`com.passbridge.updater`, installed by `install.sh`) answers. The extension downloads `passbridge.zip` and `passbridge.zip.sig` from the latest release, checks the signature against the key pinned in `src/update-verify.js` and the SHA-256 GitHub lists for the asset, then the host swaps the unpacked folder and the extension reloads. Without a `.sig` on the release the update is refused.
+The popup's update notice always shows Update now. When the updater host (`com.passbridge.updater`, installed by `install.sh`) answers, the update runs through it: the extension downloads `passbridge.zip` and `passbridge.zip.sig` from the latest release, checks the signature against the key pinned in `src/update-verify.js` and the SHA-256 GitHub lists for the asset, then the host swaps the unpacked folder and the extension reloads. Without a `.sig` on the release the update is refused.
 
 Maintainer: the private key is the Keychain item "PassBridge release signing key" (account `passbridge`, service `passbridge-release-signing`, the PKCS8 PEM base64 encoded on one line), with a backup in the maintainer's password manager. It never goes on GitHub. The matching public key is pinned as `PUBLIC_KEY_B64` in `src/update-verify.js`.
 
 For each release, after the tag build uploads `passbridge.zip`: download it, then `node scripts/sign-release.mjs sign passbridge.zip` (reads the key from the Keychain, writes `passbridge.zip.sig` and checks it against the pinned key; `--key <pem file>` uses a PEM file instead), then `gh release upload vX passbridge.zip.sig`.
+
+### Update without the helper
+
+Without the updater host, Update now opens an update page. The first time, choose the PassBridge folder (the one loaded in `chrome://extensions`) and allow PassBridge to edit it. Chrome drops that permission whenever the extension restarts, so the next update opens the folder picker at the same folder: press Select and choose Allow on every visit, and later updates take one click. The page checks the same signature and SHA-256, writes the new files next to the old ones, swaps them in and restarts the extension. If a step fails, the previous files are put back. A browser that blocks the File System Access API gets the release link instead.
 
 ## Windows
 

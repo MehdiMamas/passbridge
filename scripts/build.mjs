@@ -59,6 +59,7 @@ async function verify(out) {
     manifest.options_ui.page,
     "src/offscreen.html",
     "src/report.html",
+    "src/update.html",
     ...Object.values(manifest.icons),
     ...manifest.content_scripts.flatMap((c) => c.js || []),
   ]);
@@ -94,7 +95,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   for (const item of ["manifest.json", "icons", "fonts", "overlay", "LICENSE", "NOTICE", "licenses"]) {
     await cp(at(item), dst(item), { recursive: true });
   }
-  for (const page of ["popup.html", "options.html", "offscreen.html", "report.html"]) {
+  for (const page of ["popup.html", "options.html", "offscreen.html", "report.html", "update.html"]) {
     await cp(at("src", page), dst("src", page));
   }
   if (preview) await cp(at("src/ui/preview.html"), dst("src/preview.html"));
@@ -136,6 +137,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
       popup: at("src/ui/popup.jsx"),
       options: at("src/ui/options.jsx"),
       report: at("src/ui/report.jsx"),
+      update: at("src/ui/update.jsx"),
       ...(preview ? { preview: at("src/ui/preview.jsx") } : {}),
     },
     outdir: dst("src"),

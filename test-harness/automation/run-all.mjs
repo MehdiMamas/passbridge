@@ -23,8 +23,9 @@ const DRIVERS = [
   ["Verification codes (TOTP rows, split-box fill)", "drive-otp.mjs"],
   ["Inline menu host (closed shadow, field icon)", "drive-menu.mjs"],
   ["Login list (search, scroll cap, keyboard)", "drive-login-list.mjs"],
-  ["Popup UI preview (8 screens render)", "drive-ui-preview.mjs"],
-  ["Unit (matching, otpauth, protocol, SRP)", "unit.test.mjs"],
+  ["UI preview (popup screens and the update page)", "drive-ui-preview.mjs"],
+  ["Folder update on Chrome's file system (OPFS)", "drive-update-fs.mjs"],
+  ["Unit (matching, otpauth, protocol, SRP, update)", "unit.test.mjs"],
 ];
 
 if (!existsSync(join(HERE, ".builds", "unlocked"))) {

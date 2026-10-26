@@ -125,7 +125,6 @@ export function PopupScreen({
   pinError,
   showFavicons,
   update,
-  canInstallUpdate,
   installingUpdate,
   onVerify,
   onNewCode,
@@ -201,17 +200,15 @@ export function PopupScreen({
           data-passbridge="update"
           className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,var(--color-accent)_10%,Canvas)] py-1.5 pr-1.5 pl-3 text-[12px]"
         >
-          <span className="min-w-0 flex-1 truncate">PassBridge {update.version} is available!</span>
-          {canInstallUpdate && (
-            <button
-              type="button"
-              disabled={installingUpdate}
-              className="shrink-0 cursor-pointer font-semibold text-accent disabled:opacity-60"
-              onClick={onInstallUpdate}
-            >
-              {installingUpdate ? "Updating…" : "Update now"}
-            </button>
-          )}
+          <span className="min-w-0 flex-1 truncate">v{update.version} is available!</span>
+          <button
+            type="button"
+            disabled={installingUpdate}
+            className="shrink-0 cursor-pointer font-semibold text-accent disabled:opacity-60"
+            onClick={onInstallUpdate}
+          >
+            {installingUpdate ? "Updating…" : "Update now"}
+          </button>
           <button type="button" className="shrink-0 cursor-pointer font-semibold text-accent" onClick={onOpenUpdate}>
             View release
           </button>

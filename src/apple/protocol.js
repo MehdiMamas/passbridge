@@ -278,9 +278,12 @@ export class ApplePasswords {
         .catch(reject);
     });
     this._connectPending = pending;
-    pending.finally(() => {
-      if (this._connectPending === pending) this._connectPending = undefined;
-    });
+    // the caller gets the rejection, this copy only frees the slot
+    pending
+      .finally(() => {
+        if (this._connectPending === pending) this._connectPending = undefined;
+      })
+      .catch(() => {});
     return pending;
   }
 

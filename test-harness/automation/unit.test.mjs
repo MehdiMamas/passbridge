@@ -10,6 +10,11 @@ import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../.
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion } from "../../src/update-check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
 import { digestHex, verifyRelease } from "../../src/update-verify.js";
+import { downloadRelease, latestRelease } from "../../src/update-release.js";
+import { installUpdate } from "../../src/update-install.js";
+import { manifestProblem, readZip } from "../../src/update-zip.js";
+import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update-files.js";
+import { folderForUpdate, pickFolder } from "../../src/update-folder.js";
 
 let failed = 0;
 function ok(name, cond) {
@@ -261,6 +266,10 @@ function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_n
       cb?.();
       return Promise.resolve();
     },
+    remove: (keys) => {
+      for (const k of [keys].flat()) delete data[k];
+      return Promise.resolve();
+    },
   };
   globalThis.chrome = { storage: { local }, runtime: { lastError: undefined } };
   const env = { data, fetched: [] };
@@ -331,6 +340,12 @@ const NOW = Date.UTC(2026, 9, 25);
   await Promise.all([checkForUpdate(NOW), checkForUpdate(NOW)]);
   ok("update: overlapping checks share one request", env.fetched.length === 1);
 }
+{
+  fakeUpdateEnv();
+  // what chrome answers while the worker is shutting down for a reload
+  globalThis.chrome.storage.local.get = (keys, cb) => (cb ? cb({}) : Promise.reject(new Error("No SW")));
+  ok("update: a check while the worker shuts down settles quietly", (await settles(checkForUpdate(NOW))) === "resolved");
+}
 
 function fakePage() {
   const win = new EventTarget();
@@ -392,6 +407,398 @@ function fakePage() {
   ok("manifest: asks for scripting and lists a content script to inject", real.permissions.includes("scripting") && real.content_scripts[0].js[0] === "src/content.js");
 }
 delete globalThis.chrome;
+globalThis.fetch = realFetch;
+
+// a zip built in the test: stored or deflated entries, with optional flags, unix mode and a wrong declared size
+async function makeZip(entries) {
+  const enc = new TextEncoder();
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = enc.encode(e.name);
+    const raw = e.dir ? new Uint8Array() : enc.encode(e.data ?? "");
+    const method = e.dir ? 0 : e.method ?? 8;
+    const body = method === 8 ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer()) : raw;
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(6, e.flags ?? 0, true);
+    local.setUint16(8, method, true);
+    local.setUint32(18, body.length, true);
+    local.setUint32(22, e.size ?? raw.length, true);
+    local.setUint16(26, name.length, true);
+    const central = new DataView(new ArrayBuffer(46));
+    central.setUint32(0, 0x02014b50, true);
+    central.setUint16(4, 3 << 8, true);
+    central.setUint16(8, e.flags ?? 0, true);
+    central.setUint16(10, method, true);
+    central.setUint32(20, body.length, true);
+    central.setUint32(24, e.size ?? raw.length, true);
+    central.setUint16(28, name.length, true);
+    central.setUint32(38, ((e.mode ?? (e.dir ? 0o40755 : 0o100644)) << 16) >>> 0, true);
+    central.setUint32(42, offset, true);
+    locals.push(new Uint8Array(local.buffer), name, body);
+    centrals.push(new Uint8Array(central.buffer), name);
+    offset += 30 + name.length + body.length;
+  }
+  const cdSize = centrals.reduce((n, c) => n + c.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, entries.length, true);
+  end.setUint16(10, entries.length, true);
+  end.setUint32(12, cdSize, true);
+  end.setUint32(16, offset, true);
+  return new Uint8Array(await new Blob([...locals, ...centrals, new Uint8Array(end.buffer)]).arrayBuffer());
+}
+{
+  const zip = await makeZip([
+    { name: "manifest.json", data: '{"version":"1.4.2"}', method: 0 },
+    { name: "src/", dir: true },
+    { name: "src/a.js", data: "A".repeat(500) },
+  ]);
+  const files = await readZip(zip);
+  const text = (f) => new TextDecoder().decode(f.data);
+  ok("zip: stored and deflated files come out with their paths", files.map((f) => f.path).join() === "manifest.json,src/a.js" && text(files[0]) === '{"version":"1.4.2"}' && text(files[1]) === "A".repeat(500));
+  const bad = ["../x", "/x", "a\\b", "C:/x", "a//b", "./x", ".update-staging/x"];
+  const refused = await Promise.all(bad.map(async (name) => (await settles(readZip(await makeZip([{ name, data: "x" }])))).startsWith("rejected")));
+  ok("zip: unsafe paths and our own work folders are refused", refused.every(Boolean));
+  ok("zip: a link is refused", (await settles(readZip(await makeZip([{ name: "l", data: "/etc", mode: 0o120777 }])))).startsWith("rejected"));
+  ok("zip: an encrypted entry is refused", (await settles(readZip(await makeZip([{ name: "a", data: "x", flags: 1 }])))).startsWith("rejected"));
+  ok("zip: a size that does not match is refused", (await settles(readZip(await makeZip([{ name: "a", data: "abc", size: 9 }])))).startsWith("rejected"));
+  ok("zip: bytes that are no zip are refused", (await settles(readZip(new Uint8Array([1, 2, 3])))).startsWith("rejected"));
+  const pkg = (manifest) => [{ path: "manifest.json", data: new TextEncoder().encode(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }];
+  const want = { key: "K", version: "1.4.2" };
+  ok("zip: a manifest with this install's key and the expected version passes", manifestProblem(pkg({ key: "K", version: "1.4.2" }), want) === null);
+  ok("zip: a different key is refused", manifestProblem(pkg({ key: "X", version: "1.4.2" }), want) === "key");
+  ok("zip: an unexpected version is refused", manifestProblem(pkg({ key: "K", version: "1.4.3" }), want) === "version");
+  ok("zip: no manifest or an unreadable one is refused", manifestProblem([], want) === "manifest" && manifestProblem(pkg("{nope"), want) === "manifest");
+}
+
+// FileSystemDirectoryHandle in memory. failAt(op, path) makes the next matching call throw; noMove drops move() like an older Chrome
+function fakeFs({ noMove = false } = {}) {
+  const faults = [];
+  const join = (a, b) => (a ? `${a}/${b}` : b);
+  const trip = (op, path) => {
+    const i = faults.findIndex((f) => f.op === op && f.path === path);
+    if (i >= 0) {
+      faults.splice(i, 1);
+      throw new Error(`fault ${op} ${path}`);
+    }
+  };
+  const missing = () => new DOMException("not found", "NotFoundError");
+  function file(name, parent) {
+    const f = {
+      kind: "file",
+      name,
+      parent,
+      data: new Uint8Array(),
+      path: () => join(f.parent.path, f.name),
+      async getFile() {
+        const data = f.data;
+        return { size: data.length, text: async () => new TextDecoder().decode(data), arrayBuffer: async () => data.slice().buffer };
+      },
+      async createWritable() {
+        let next = new Uint8Array();
+        return {
+          write: async (d) => {
+            trip("write", f.path());
+            next = typeof d === "string" ? new TextEncoder().encode(d) : new Uint8Array(d);
+          },
+          close: async () => {
+            f.data = next;
+          },
+        };
+      },
+    };
+    if (!noMove) {
+      f.move = async (a, b) => {
+        const [dest, nextName] = typeof a === "string" ? [f.parent, a] : [a, b ?? f.name];
+        trip("move", f.path());
+        f.parent.kids.delete(f.name);
+        dest.kids.set(nextName, f);
+        f.parent = dest;
+        f.name = nextName;
+      };
+    }
+    return f;
+  }
+  function dir(name, parent) {
+    const d = {
+      kind: "directory",
+      name,
+      kids: new Map(),
+      get path() {
+        return parent ? join(parent.path, name) : "";
+      },
+      async getDirectoryHandle(n, { create = false } = {}) {
+        const k = d.kids.get(n);
+        if (k?.kind === "directory") return k;
+        if (k || !create) throw missing();
+        const sub = dir(n, d);
+        d.kids.set(n, sub);
+        return sub;
+      },
+      async getFileHandle(n, { create = false } = {}) {
+        const k = d.kids.get(n);
+        if (k?.kind === "file") return k;
+        if (k || !create) throw missing();
+        const f = file(n, d);
+        d.kids.set(n, f);
+        return f;
+      },
+      async removeEntry(n, { recursive = false } = {}) {
+        const k = d.kids.get(n);
+        if (!k) throw missing();
+        if (k.kind === "directory" && k.kids.size && !recursive) throw new DOMException("not empty", "InvalidModificationError");
+        trip("remove", join(d.path, n));
+        d.kids.delete(n);
+      },
+      async *entries() {
+        for (const entry of [...d.kids]) yield entry;
+      },
+    };
+    return d;
+  }
+  const root = dir("otp", null);
+  return { root, failAt: (op, path) => faults.push({ op, path }) };
+}
+async function put(root, path, text) {
+  const parts = path.split("/");
+  let d = root;
+  for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
+  const w = await (await d.getFileHandle(parts.at(-1), { create: true })).createWritable();
+  await w.write(text);
+  await w.close();
+}
+async function snapshot(d, prefix = "") {
+  const out = [];
+  for await (const [name, h] of d.entries()) {
+    if (h.kind === "directory") {
+      const inner = await snapshot(h, `${prefix}${name}/`);
+      out.push(...(inner.length ? inner : [`${prefix}${name}/`]));
+    } else out.push(`${prefix}${name}=${await (await h.getFile()).text()}`);
+  }
+  return out.sort();
+}
+const newFile = (path, text) => ({ path, data: new TextEncoder().encode(text) });
+async function oldInstall(opts) {
+  const fs = fakeFs(opts);
+  await put(fs.root, "manifest.json", "v1");
+  await put(fs.root, "src/a.js", "A1");
+  await put(fs.root, "src/old.js", "O");
+  await put(fs.root, "legacy/x.js", "X");
+  return fs;
+}
+const OLD = ["legacy/x.js=X", "manifest.json=v1", "src/a.js=A1", "src/old.js=O"].join();
+const NEXT = [newFile("manifest.json", "v2"), newFile("src/a.js", "A2"), newFile("src/new/n.js", "N")];
+const NEW = ["manifest.json=v2", "src/a.js=A2", "src/new/n.js=N"].join();
+{
+  const fs = await oldInstall();
+  const steps = [];
+  await applyUpdate(fs.root, NEXT, { version: "1.4.2", onProgress: (done, total) => steps.push([done, total]) });
+  ok("files: the folder ends up holding exactly the new release", (await snapshot(fs.root)).join() === NEW);
+  ok("files: progress climbs one step at a time to the total", steps.length === 8 && steps.every(([d, t], i) => d === i + 1 && t === 8));
+}
+{
+  const fs = await oldInstall();
+  fs.failAt("write", ".update-staging/src/a.js");
+  const err = await applyUpdate(fs.root, NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
+  ok("files: a failed write while staging leaves the old install untouched", err?.restored === false && (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await oldInstall();
+  fs.failAt("move", ".update-staging/src/new/n.js");
+  const err = await applyUpdate(fs.root, NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
+  ok("files: a failed move halfway puts the old install back", err?.restored === true && (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await oldInstall();
+  fs.failAt("move", "legacy/x.js");
+  await settles(applyUpdate(fs.root, NEXT, { version: "1.4.2" }));
+  ok("files: a failure while setting aside a dropped file also puts the old install back", (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await oldInstall({ noMove: true });
+  await applyUpdate(fs.root, NEXT, { version: "1.4.2" });
+  ok("files: without move() the files are copied and the result is the same", (await snapshot(fs.root)).join() === NEW);
+}
+// the state a crash leaves: everything staged, the journal written, a.js swapped and n.js moved in
+async function crashedHalfway() {
+  const fs = await oldInstall();
+  for (const f of NEXT) await put(fs.root, `.update-staging/${f.path}`, new TextDecoder().decode(f.data));
+  await put(fs.root, ".update-journal.json", JSON.stringify({ version: "1.4.2", added: ["src/new/n.js"], removed: ["legacy/x.js", "src/old.js"] }));
+  await put(fs.root, ".update-backup/src/a.js", "A1");
+  await put(fs.root, "src/a.js", "A2");
+  await put(fs.root, "src/new/n.js", "N");
+  return fs;
+}
+{
+  const fs = await crashedHalfway();
+  const first = await recoverUpdate(fs.root);
+  ok("files: an interrupted update is rolled back to the old install", first === true && (await snapshot(fs.root)).join() === OLD);
+  ok("files: a second recovery finds nothing to do", (await recoverUpdate(fs.root)) === false);
+}
+{
+  const fs = await oldInstall();
+  await put(fs.root, ".update-staging/src/a.js", "A2");
+  ok("files: staging left without a journal is only cleaned up", (await recoverUpdate(fs.root)) === false && (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await crashedHalfway();
+  await applyUpdate(fs.root, NEXT, { version: "1.4.2" });
+  ok("files: a new update first recovers an interrupted one", (await snapshot(fs.root)).join() === NEW);
+}
+{
+  const fs = await oldInstall();
+  const other = await oldInstall();
+  const readFrom = (root) => async (name) => (await snapshot(root)).find((l) => l.startsWith(`${name}=`))?.slice(name.length + 1) ?? null;
+  ok("files: the folder the extension runs from is recognised", (await isOwnFolder(fs.root, readFrom(fs.root))) === true);
+  ok("files: a copy elsewhere is not", (await isOwnFolder(fs.root, readFrom(other.root))) === false);
+  ok("files: the probe file is removed afterwards", (await snapshot(fs.root)).join() === OLD);
+}
+
+{
+  const journalEnv = (journal) => {
+    const env = fakeUpdateEnv();
+    globalThis.chrome.runtime.getURL = (p) => `chrome-extension://pb/${p}`;
+    globalThis.fetch = async (url) => {
+      env.fetched.push(String(url));
+      if (!journal) throw new TypeError("Failed to fetch");
+      return new Response("{}");
+    };
+    return env;
+  };
+  let env = journalEnv(true);
+  ok("interrupted: nothing is looked up when no update was running", (await hasInterruptedUpdate()) === false && env.fetched.length === 0);
+  await setUpdating(true);
+  ok("interrupted: a run that left its journal is found", (await hasInterruptedUpdate()) === true && env.fetched.join() === "chrome-extension://pb/.update-journal.json");
+  env = journalEnv(false);
+  await setUpdating(true);
+  ok("interrupted: a run that left no journal is forgotten", (await hasInterruptedUpdate()) === false && env.data.isUpdating === undefined);
+  await setUpdating(true);
+  await setUpdating(false);
+  ok("interrupted: a finished run clears its mark", env.data.isUpdating === undefined);
+  delete globalThis.chrome;
+  globalThis.fetch = realFetch;
+}
+
+// a saved folder handle with scripted permission answers, counting what the user would be asked
+function savedFolder(query, request = "granted") {
+  const h = { asked: 0 };
+  h.queryPermission = async () => query;
+  h.requestPermission = async () => {
+    h.asked++;
+    return request;
+  };
+  return h;
+}
+function folderEnv(saved, { own = true, pickThrows = false } = {}) {
+  const env = { picked: 0, startIn: [], store: { value: saved, get: async () => env.store.value, set: async (v) => (env.store.value = v) } };
+  env.picked_handle = savedFolder("granted");
+  env.deps = {
+    store: env.store,
+    pick: async (startIn) => {
+      env.picked++;
+      env.startIn.push(startIn);
+      if (pickThrows) throw new DOMException("cancelled", "AbortError");
+      return env.picked_handle;
+    },
+    isOwn: async () => own,
+  };
+  return env;
+}
+{
+  const env = folderEnv(null);
+  const r = await folderForUpdate(env.deps);
+  ok("folder: the first update asks for the folder once and keeps it", r.ok && r.folder === env.picked_handle && env.picked === 1 && env.startIn[0] === undefined && env.store.value === env.picked_handle);
+}
+{
+  const saved = savedFolder("prompt", "granted");
+  const env = folderEnv(saved);
+  const r = await folderForUpdate(env.deps);
+  // only a folder that comes through the picker gets chrome's "allow on every visit"; requestPermission offers two buttons
+  ok("folder: after a restart the picker opens at the kept folder instead of the bare permission prompt", r.ok && env.picked === 1 && env.startIn[0] === saved && saved.asked === 0 && env.store.value === env.picked_handle);
+}
+{
+  const saved = savedFolder("granted");
+  const env = folderEnv(saved);
+  const r = await folderForUpdate(env.deps);
+  ok("folder: with allow on every visit nothing is asked", r.ok && saved.asked === 0 && env.picked === 0);
+}
+{
+  const saved = savedFolder("denied");
+  const env = folderEnv(saved);
+  const r = await folderForUpdate(env.deps);
+  ok("folder: a refused permission opens the picker at the kept folder again", r.ok && env.picked === 1 && env.startIn[0] === saved);
+}
+{
+  const env = folderEnv(null, { own: false });
+  const r = await folderForUpdate(env.deps);
+  ok("folder: a folder that is not this install is refused and not kept", r.error === "notown" && env.store.value === null);
+}
+{
+  const env = folderEnv(null, { pickThrows: true });
+  ok("folder: closing the picker is reported as cancelled", (await folderForUpdate(env.deps)).error === "cancelled");
+}
+{
+  const env = folderEnv(savedFolder("granted"), { own: false });
+  ok("folder: a kept folder that no longer holds this install is reported", (await folderForUpdate(env.deps)).error === "notown");
+}
+{
+  const env = folderEnv(savedFolder("granted"));
+  const r = await pickFolder(env.deps);
+  ok("folder: change folder always opens the picker", r.ok && env.picked === 1 && env.store.value === env.picked_handle);
+}
+
+{
+  const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const publicKey = Buffer.from(await crypto.subtle.exportKey("raw", kp.publicKey)).toString("base64");
+  const zip = new TextEncoder().encode("release zip bytes ".repeat(4000));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
+  const asset = (name, extra) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
+  const releaseJson = (assets) => ({ tag_name: "v1.4.2", assets });
+  const full = [asset("passbridge.zip", { size: zip.length, digest: `sha256:${hex}` }), asset("passbridge.zip.sig", { size: 64 })];
+  const cacheModes = new Set();
+  const serve = (json, files = {}) => {
+    globalThis.fetch = async (url, init) => {
+      cacheModes.add(init?.cache);
+      url = String(url);
+      if (url.startsWith("https://api.github.com/")) return json instanceof Error ? Promise.reject(json) : new Response(JSON.stringify(json), { status: 200 });
+      const body = files[url.slice("https://dl.test/".length)];
+      return body ? new Response(body) : new Response("missing", { status: 404 });
+    };
+  };
+  serve(releaseJson(full));
+  const release = await latestRelease("1.4.1");
+  ok("release: a newer signed release is described", release.ok && release.version === "1.4.2" && release.size === zip.length && release.pageUrl === "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.2");
+  serve(releaseJson([full[0]]));
+  const unsigned = await latestRelease("1.4.1");
+  ok("release: no .sig means unsigned, with the version and the page to download by hand", !unsigned.ok && unsigned.error === "unsigned" && unsigned.version === "1.4.2" && unsigned.pageUrl.endsWith("/v1.4.2"));
+  serve(releaseJson([asset("passbridge.zip", { size: zip.length }), full[1]]));
+  ok("release: no digest also means unsigned", (await latestRelease("1.4.1")).error === "unsigned");
+  serve(releaseJson(full));
+  ok("release: the installed version is reported as current", (await latestRelease("1.4.2")).error === "current");
+  serve(new Error("offline"));
+  ok("release: no answer from GitHub is a network error", (await latestRelease("1.4.1")).error === "network");
+
+  serve(releaseJson(full), { "passbridge.zip": zip, "passbridge.zip.sig": sig });
+  const seen = [];
+  const got = await downloadRelease(release, { publicKey, onProgress: (n, total) => seen.push([n, total]) });
+  ok("release: the download is verified and handed back", got.ok && got.zip.length === zip.length);
+  ok("release: download progress reaches the full size", seen.length > 0 && seen.at(-1)[0] === zip.length && seen.at(-1)[1] === zip.length);
+  const tampered = zip.slice();
+  tampered[10] ^= 1;
+  serve(releaseJson(full), { "passbridge.zip": tampered, "passbridge.zip.sig": sig });
+  ok("release: a changed zip fails verification", (await downloadRelease(release, { publicKey })).error === "verify");
+  serve(releaseJson(full), { "passbridge.zip.sig": sig });
+  ok("release: a missing file is a download error", (await downloadRelease(release, { publicKey })).error === "download");
+  ok("release: the lookup and the downloads skip the browser cache", cacheModes.size === 1 && cacheModes.has("no-store"));
+
+  serve(releaseJson([full[0]]));
+  const helper = await installUpdate("1.4.1");
+  ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(helper.error));
+}
 globalThis.fetch = realFetch;
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");

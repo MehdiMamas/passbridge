@@ -4,7 +4,11 @@ import { getSettings } from "./settings.js";
 import { REPORT_REPO } from "./report-scrub.js";
 
 export const UPDATE_CHECK_MS = 24 * 60 * 60 * 1000;
-const LATEST_RELEASE_URL = `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
+export const LATEST_RELEASE_URL = `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
+
+export function releasePageUrl(tag) {
+  return `https://github.com/${REPORT_REPO}/releases/tag/${encodeURIComponent(tag)}`;
+}
 
 function parseVersion(tag) {
   const m = /^v?(\d+(?:\.\d+){0,3})$/.exec(String(tag ?? "").trim());
@@ -41,11 +45,14 @@ async function runCheck(now, force) {
 }
 
 let running = null;
-// force skips the daily wait (a button press); resolves true when GitHub answered
+// force skips the daily wait (a button press); resolves true when GitHub answered.
+// storage calls fail with "No SW" while the worker shuts down for a reload, the next alarm checks again
 export function checkForUpdate(now = Date.now(), { force = false } = {}) {
-  running ||= runCheck(now, force).finally(() => {
-    running = null;
-  });
+  running ||= runCheck(now, force)
+    .catch(() => false)
+    .finally(() => {
+      running = null;
+    });
   return running;
 }
 
@@ -56,7 +63,7 @@ export async function availableUpdate(currentVersion = chrome.runtime.getManifes
   if (latestRelease === dismissedRelease || !isNewerVersion(latestRelease, currentVersion)) return null;
   return {
     version: parseVersion(latestRelease).join("."),
-    url: `https://github.com/${REPORT_REPO}/releases/tag/${encodeURIComponent(latestRelease)}`,
+    url: releasePageUrl(latestRelease),
   };
 }
 

@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { PopupScreen } from "./popup-screen.jsx";
+import { UpdateScreen } from "./update-screen.jsx";
 
 const noop = () => {};
 const screens = [
@@ -83,11 +84,37 @@ function Frame({ title, scheme, props }) {
   );
 }
 
+const release = { version: "1.4.2", pageUrl: "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.2" };
+const updateScreens = [
+  ["ready_first", { phase: "ready", release }, ["light"]],
+  ["ready", { phase: "ready", release, folderName: "passbridge" }, ["light"]],
+  ["working", { phase: "working", release, folderName: "passbridge", step: "write", progress: 0.72 }, ["light", "dark"]],
+  ["failed", { phase: "failed", release, folderName: "passbridge", error: { message: "Couldn't write the new files.", restored: true } }, ["light"]],
+  ["unsigned", { phase: "unsigned", release }, ["light"]],
+  ["interrupted", { phase: "interrupted" }, ["light"]],
+  ["done", { phase: "done", installed: "1.4.2" }, ["light"]],
+  ["stale", { phase: "stale", expected: "1.4.2" }, ["light"]],
+];
+
+function UpdateFrame({ title, scheme, props }) {
+  return (
+    <section className="w-[600px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)] bg-[Canvas] text-[CanvasText]" style={{ colorScheme: scheme }} data-update-screen={title} data-scheme={scheme}>
+      <p className="px-3 py-1 text-[11px] uppercase tracking-wide opacity-50">
+        update page · {title} · {scheme}
+      </p>
+      <UpdateScreen installed="1.4.1" onUpdate={noop} onChangeFolder={noop} onRetry={noop} onRestore={noop} {...props} />
+    </section>
+  );
+}
+
 function Preview() {
   return (
     <div className="flex flex-wrap gap-4 bg-neutral-200 p-4">
       {screens.flatMap(([title, props]) =>
         ["light", "dark"].map((scheme) => <Frame key={`${title}-${scheme}`} title={title} scheme={scheme} props={props} />),
+      )}
+      {updateScreens.flatMap(([title, props, schemes]) =>
+        schemes.map((scheme) => <UpdateFrame key={`update-${title}-${scheme}`} title={title} scheme={scheme} props={props} />),
       )}
     </div>
   );
