@@ -73,9 +73,22 @@ def in_process(module, action):
         module._write_dword, module._delete_value, module.subprocess.run, sys.stdin, sys.stdout, sys.argv = saved
 
 
+# the updater host is wired into the Windows install, uninstall and release zip
+install_ps1 = (NATIVE / "windows" / "install.ps1").read_text(encoding="utf-8")
+uninstall_ps1 = (NATIVE / "windows" / "uninstall.ps1").read_text(encoding="utf-8")
+release_yml = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+ok("install.ps1 registers com.passbridge.updater with a wrapper and manifest",
+   'Write-HostCmd "passbridge-updater.py" "passbridge-updater.cmd"' in install_ps1
+   and 'Write-NmManifest "com.passbridge.updater"' in install_ps1
+   and 'Join-Path $root "com.passbridge.updater"' in install_ps1)
+ok("uninstall.ps1 removes com.passbridge.updater", '"com.passbridge.updater"' in uninstall_ps1)
+win_line = [l for l in release_yml.splitlines() if "helpers/passbridge-windows-helper/" in l and l.strip().startswith("cp ")]
+ok("release.yml puts the updater in the Windows helper zip", win_line and "native/passbridge-updater.py" in win_line[0], win_line)
+
 if sys.platform != "win32":
     print("SKIP policy host checks (they need winreg, Windows only)")
-    sys.exit(0)
+    print(f"\n==== {len(results) - results.count(False)}/{len(results)} PASS ====")
+    sys.exit(1 if False in results else 0)
 else:
     code, msg, err = host(frame({"action": "get"}), origin="chrome-extension://someoneelse/")
     ok("policy host refuses another extension", msg == {"ok": False, "error": "forbidden"}, f"{code} {msg} {err}")

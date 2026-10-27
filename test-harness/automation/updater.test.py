@@ -5,6 +5,7 @@ import io
 import json
 import os
 import struct
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -158,6 +159,61 @@ try:
     ok("lookup: a picked folder without our key is refused", False)
 except up.UpdateError:
     ok("lookup: a picked folder without our key is refused", True)
+
+# Windows paths, run on any OS by passing the platform in
+winroot = Path(TMP) / "localappdata"
+ok("windows: appdir is %LOCALAPPDATA%\\PassBridge", up.default_appdir(True, {"LOCALAPPDATA": "C:\\L"}) == os.path.join("C:\\L", "PassBridge"))
+ok("windows: PASSBRIDGE_APPDIR still overrides", up.default_appdir(True, {"LOCALAPPDATA": "C:\\L", "PASSBRIDGE_APPDIR": "/x/y"}) == "/x/y")
+ok("mac: appdir is unchanged", up.default_appdir(False, {}) == os.path.expanduser("~/Library/Application Support/PassBridge"))
+wa = install_dir("win-a")
+wb = install_dir("win-b")
+for browser, name in [("Google/Chrome/User Data", "Default"), ("Microsoft/Edge/User Data", "Profile 1"), ("BraveSoftware/Brave-Browser/User Data", "Default"),
+                      ("Chromium/User Data", "Default"), ("Vivaldi/User Data", "Default")]:
+    p = winroot / browser / name
+    p.mkdir(parents=True)
+    (p / "Preferences").write_text(json.dumps({"extensions": {"settings": {up.EXT_ID: {"path": str(wa), "location": 4}}}}))
+sp = winroot / "Microsoft/Edge/User Data/Default"
+sp.mkdir(parents=True, exist_ok=True)
+(sp / "Secure Preferences").write_text(json.dumps({"extensions": {"settings": {up.EXT_ID: {"path": str(wb), "location": 4}}}}))
+paths = up.preference_paths(str(winroot), True)
+ok("windows: Preferences and Secure Preferences of all five browsers are read", len(paths) == 6 and sum(p.endswith("Secure Preferences") for p in paths) == 1, paths)
+ok("windows: the mac layout isn't searched on Windows", up.preference_paths(str(support), True) == [])
+ok("windows: two distinct folders are both found", sorted(up.find_folders(str(winroot), True)) == sorted([os.path.realpath(wa), os.path.realpath(wb)]), up.find_folders(str(winroot), True))
+(sp / "Secure Preferences").unlink()
+ok("windows: one folder across browsers is one folder", up.find_folders(str(winroot), True) == [os.path.realpath(wa)])
+# saved folder is reused with no picker and no browser lookup, also on later updates
+forget()
+up.save_folder(str(wa))
+r = up.handle(req(good, "2.0.0"), support=str(Path(TMP) / "nobrowsers"), chooser=lambda: (_ for _ in ()).throw(AssertionError("asked")))
+ok("windows: the saved folder is reused without asking", r.get("ok") and (wa / "src/a.js").exists(), r)
+# a locked folder: rename fails, so it's overwritten in place; a failure restores the old files
+up.WINDOWS = True
+try:
+    lk = install_dir("locked")
+    (lk / "gone.txt").write_text("x")
+    real_rename = os.rename
+    lk2 = Path(TMP) / "locked2"
+    up.os.rename = lambda a, b, *x, **k: (_ for _ in ()).throw(PermissionError("in use")) if str(a) in (os.path.realpath(lk), os.path.realpath(lk2)) else real_rename(a, b)
+    r = run(lk, good, "2.0.0")
+    ok("windows: a locked folder is updated in place", r.get("ok") and (lk / "src/a.js").exists() and not (lk / "old.txt").exists() and not (lk / "gone.txt").exists(), r)
+    ok("windows: in-place update leaves no backup or temp folder", not os.path.exists(str(lk) + ".passbridge-old") and not os.path.exists(str(lk) + ".passbridge-new"))
+    install_dir("locked2")
+    real_copy = shutil.copyfile
+    n = []
+
+    def copy_fail(a, b, *x, **k):
+        n.append(1)
+        if len(n) == 2:
+            raise PermissionError("locked file")
+        return real_copy(a, b, *x, **k)
+
+    up.shutil.copyfile = copy_fail
+    r = run(lk2, make_zip([("manifest.json", manifest("2.0.0")), ("a.js", "1"), ("b.js", "2")]), "2.0.0")
+    up.shutil.copyfile = real_copy
+    ok("windows: a failed in-place update restores the old files", not r["ok"] and (lk2 / "old.txt").exists() and json.load(open(lk2 / "manifest.json"))["version"] == "1.0.0" and not (lk2 / "a.js").exists(), r)
+finally:
+    up.os.rename = real_rename
+    up.WINDOWS = False
 
 # framing over stdio
 msg = json.dumps({"op": "status"}).encode()

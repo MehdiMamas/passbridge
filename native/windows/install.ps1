@@ -104,6 +104,10 @@ if (-not $py) {
 
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 Copy-Item -Force (Join-Path $Here "passbridge-policy.py") (Join-Path $Dest "passbridge-policy.py")
+# the release zip has the updater beside this script; a repo checkout keeps it one folder up
+$updaterSrc = Join-Path $Here "passbridge-updater.py"
+if (-not (Test-Path -LiteralPath $updaterSrc)) { $updaterSrc = Join-Path (Split-Path -Parent $Here) "passbridge-updater.py" }
+Copy-Item -Force $updaterSrc (Join-Path $Dest "passbridge-updater.py")
 
 # hosts earlier versions installed: the pairing-code reader and the verification-code setup helper
 $retired = @("com.passbridge.autopair", "com.passbridge.totpsetup", "com.openpasswords.policy", "com.openpasswords.autopair")
@@ -144,9 +148,12 @@ function Write-NmManifest([string]$Name, [string]$Description, [string]$ExePath)
 }
 
 $policyManifest = Write-NmManifest "com.passbridge.policy" "PassBridge policy helper" $policyCmd
+$updaterCmd = Write-HostCmd "passbridge-updater.py" "passbridge-updater.cmd"
+$updaterManifest = Write-NmManifest "com.passbridge.updater" "PassBridge updater" $updaterCmd
 
 foreach ($root in $browsers) {
   Set-Default (Join-Path $root "com.passbridge.policy") $policyManifest
+  Set-Default (Join-Path $root "com.passbridge.updater") $updaterManifest
   foreach ($old in $retired) {
     $oldKey = Join-Path $root $old
     if (Test-Path -LiteralPath $oldKey) { Remove-Item -LiteralPath $oldKey -Force }
