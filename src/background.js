@@ -7,6 +7,7 @@ import { labelForOs } from "./apple/os-label.js";
 import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
 import { generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
+import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
@@ -665,7 +666,7 @@ async function handOffTotp(offer) {
   const hasKey = !!otpAuthSecret(offer?.uri);
   try {
     await ensureConnected();
-    client.launchPasswordsApp({ totpUri: offer.uri, totpPageUrl: offer.pageUrl });
+    client.launchPasswordsApp(totpHandoff(offer.uri, offer.pageUrl));
   } catch (e) {
     return { ok: true, launched: false, hasKey, filled: false, detail: String(e?.message ?? e) };
   }
@@ -1255,6 +1256,70 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // held until it expires so the bar can offer the setup key on an explicit click
           offer.handedOff = true;
           sendResponse(await handOffTotp(offer));
+          break;
+        }
+
+        // popup flow: the setup key is held here, the popup only ever sees issuer and account
+        case "totpScanTab": {
+          const tab = await activeTab();
+          if (!tab?.id || !/^https?:/i.test(tab.url || "")) return sendResponse({ ok: false, error: "Open the page with the QR code first." });
+          let dataUrl;
+          try {
+            dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+          } catch {
+            return sendResponse({ ok: false, error: "Couldn't capture the page." });
+          }
+          await ensureOffscreen();
+          const decoded = await chrome.runtime.sendMessage({ type: "offscreenDecodeQr", dataUrl, rect: { x: 0, y: 0, w: 1, h: 1, dpr: 1, whole: true } });
+          if (!decoded?.ok) return sendResponse({ ok: false, error: decoded?.error || "Couldn't read the QR code." });
+          const parsed = (decoded.values || []).map(parseOtpAuth).find(Boolean);
+          if (!parsed) {
+            return sendResponse({
+              ok: false,
+              error: (decoded.values || []).length
+                ? "That QR is not a verification-code setup link."
+                : "No QR code visible. Scroll it into view, or paste the setup key.",
+            });
+          }
+          totpOffers.set(tab.id, { at: Date.now(), uri: parsed.uri, pageUrl: tab.url, issuer: parsed.issuer, account: parsed.account, usernames: [] });
+          sendResponse({ ok: true, issuer: parsed.issuer, account: parsed.account });
+          break;
+        }
+
+        case "totpPaste": {
+          const tab = await activeTab();
+          if (!tab?.id || !/^https?:/i.test(tab.url || "")) return sendResponse({ ok: false, error: "Open the page you are setting up first." });
+          const parsed = parseSetupInput(msg.text, hostnameOf(tab.url) || "");
+          if (!parsed) return sendResponse({ ok: false, error: "That is not a setup key or otpauth link." });
+          totpOffers.set(tab.id, { at: Date.now(), uri: parsed.uri, pageUrl: tab.url, issuer: parsed.issuer, account: parsed.account, usernames: [] });
+          sendResponse({ ok: true, issuer: parsed.issuer, account: parsed.account });
+          break;
+        }
+
+        case "totpAdd": {
+          const tab = await activeTab();
+          const offer = tab?.id != null ? totpOffers.get(tab.id) : null;
+          if (!offer || !secretFresh(offer)) return sendResponse({ ok: false, error: "Scan or paste the code again." });
+          await ensureConnected();
+          if (!client.ready || !client.canSetUpTotp) return sendResponse({ ok: false, error: "This Passwords helper can't set up verification codes." });
+          const username = String(msg.username || "").trim();
+          const labelled = withAccount(offer.uri, { username, issuer: offer.issuer || hostnameOf(offer.pageUrl) });
+          if (labelled) offer.uri = labelled;
+          offer.handedOff = true;
+          const res = await handOffTotp(offer);
+          // the protocol carries the page and a labelled link, not an account id: Passwords asks which login
+          sendResponse({ ...res, username, targeted: false });
+          break;
+        }
+
+        case "totpCopyKey": {
+          const tab = await activeTab();
+          const offer = tab?.id != null ? totpOffers.get(tab.id) : null;
+          if (tab?.id != null) totpOffers.delete(tab.id);
+          const secret = offer?.handedOff && secretFresh(offer) ? otpAuthSecret(offer.uri) : "";
+          if (!secret) return sendResponse({ ok: false, error: "The setup key is no longer held. Add it again." });
+          await copyText(secret);
+          sendResponse({ ok: true, copied: true });
           break;
         }
 

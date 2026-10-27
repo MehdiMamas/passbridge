@@ -180,6 +180,10 @@ function PopupApp() {
         await send({ type: "openPasswordsApp", mode, url: mode === "search" ? lookupUrl || undefined : undefined });
         window.close();
       }}
+      onTotpScan={() => send({ type: "totpScanTab" })}
+      onTotpPaste={(text) => send({ type: "totpPaste", text })}
+      onTotpAdd={(username) => send({ type: "totpAdd", username })}
+      onTotpCopyKey={() => send({ type: "totpCopyKey" })}
       onLock={async () => {
         await send({ type: "disconnect" });
         setState("connecting");
