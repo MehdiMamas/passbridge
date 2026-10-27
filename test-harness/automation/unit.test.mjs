@@ -12,6 +12,7 @@ import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts 
 import { digestHex, verifyRelease } from "../../src/update/verify.js";
 import { downloadRelease, latestRelease } from "../../src/update/release.js";
 import { autoInstallUpdate, installUpdate, updateHelper } from "../../src/update/install.js";
+import { helperFirst, isWindows } from "../../src/update/platform.js";
 import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
@@ -1008,6 +1009,11 @@ globalThis.fetch = realFetch;
   const hex = Buffer.from(await crypto.subtle.digest("SHA-256", readFileSync(zipPath))).toString("hex");
   ok("sign-release: a helper zip gets a .sig that verifies", sigBytes.length === 64 && (await verifyRelease(readFileSync(zipPath), sigBytes, hex, raw)));
 }
+
+ok("update page: Windows without the helper offers the helper first", helperFirst({ windows: true, helper: false, skipped: false }));
+ok("update page: Windows with the helper, or after Update anyway, goes straight on", !helperFirst({ windows: true, helper: true, skipped: false }) && !helperFirst({ windows: true, helper: false, skipped: true }));
+ok("update page: other systems never see the helper panel", !helperFirst({ windows: false, helper: false, skipped: false }));
+ok("update page: Windows is read from userAgentData or platform", isWindows({ userAgentData: { platform: "Windows" } }) && isWindows({ platform: "Win32" }) && !isWindows({ platform: "MacIntel" }) && !isWindows({}));
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
