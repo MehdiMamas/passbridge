@@ -6,7 +6,7 @@ import { downloadRelease, latestRelease } from "../update/release.js";
 import { manifestProblem, readZip } from "../update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, looksLikeSource, recoverUpdate, setUpdating } from "../update/files.js";
 import { BUSY_MESSAGE, withUpdateLock } from "../update/lock.js";
-import { HELPER_ZIP_URL, helperFirst, isWindows } from "../update/platform.js";
+import { HELPER_ZIP_URL, isWindows, updateRoute } from "../update/platform.js";
 import { updaterAvailable } from "../update/install.js";
 import { folderForUpdate, folderStore, pickFolder } from "../update/folder.js";
 
@@ -45,8 +45,9 @@ function UpdateApp() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [expected, setExpected] = useState("");
+  const [native, setNative] = useState(false);
 
-  async function check(skipHelper = false) {
+  async function check() {
     setPhase("checking");
     setError(null);
     if (await hasInterruptedUpdate()) return setPhase("interrupted");
@@ -61,8 +62,10 @@ function UpdateApp() {
     setFolderName((await folderStore.get())?.name || "");
     setRelease(found.version ? found : null);
     if (!found.ok) return setPhase(found.error);
-    if (typeof globalThis.showDirectoryPicker !== "function") return setPhase("unsupported");
-    if (helperFirst({ windows: isWindows(), helper: await updaterAvailable(), skipped: skipHelper })) return setPhase("helper");
+    const route = updateRoute({ windows: isWindows(), helper: await updaterAvailable() });
+    if (route === "helper") return setPhase("helper");
+    if (route === "folder" && typeof globalThis.showDirectoryPicker !== "function") return setPhase("unsupported");
+    setNative(route === "native");
     setPhase("ready");
   }
 
@@ -90,8 +93,21 @@ function UpdateApp() {
   }
 
   async function update() {
+    if (native) return installNative();
     const locked = await withUpdateLock(install);
     if (!locked.ok) fail(locked.error);
+  }
+
+  // the background takes the update lock, downloads, verifies and hands the zip to the helper, then restarts
+  async function installNative() {
+    setPhase("working");
+    advance("download");
+    const res = await chrome.runtime.sendMessage({ type: "installUpdate" }).catch(() => null);
+    if (!res?.ok) {
+      setError({ message: res?.error || ERRORS.write, restored: false });
+      return setPhase("failed");
+    }
+    advance("restart");
   }
 
   async function install() {
@@ -161,7 +177,7 @@ function UpdateApp() {
       onUpdate={update}
       onChangeFolder={changeFolder}
       onRetry={() => check()}
-      onSkipHelper={() => check(true)}
+      native={native}
       helperUrl={HELPER_ZIP_URL}
       onRestore={restore}
     />

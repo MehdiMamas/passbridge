@@ -38,7 +38,7 @@ function Progress({ value }) {
   );
 }
 
-export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, onSkipHelper, helperUrl }) {
+export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, helperUrl, native }) {
   const working = phase === "working";
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8 text-[13px]">
@@ -61,7 +61,7 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
             </span>
           </>
         )}
-        {(phase === "ready" || working || phase === "failed") && (
+        {!native && (phase === "ready" || working || phase === "failed") && (
           <>
             <span className={muted}>Folder</span>
             <span className="flex flex-wrap items-baseline gap-x-3">
@@ -124,10 +124,9 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
               <li>Restart Chrome.</li>
               <li>Click Update again.</li>
             </ol>
-            <button type="button" className={`${link} self-start`} onClick={onSkipHelper}>
-              Update anyway
+            <button type="button" className={`${link} self-start`} onClick={onRetry}>
+              Check again
             </button>
-            <p className={muted}>Chrome will ask you to save each file. Click Save every time, or the update is left half done.</p>
           </>
         )}
         {phase === "ready" && (
@@ -136,7 +135,9 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
               Update now
             </button>
             <p className={muted}>
-              {folderName ? (
+              {native ? (
+                <>The helper installs it. No prompts, PassBridge restarts by itself.</>
+              ) : folderName ? (
                 <>
                   If the folder picker opens, press Select and choose <strong>Allow on every visit</strong>. Later updates then take one click.
                 </>
