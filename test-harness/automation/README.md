@@ -60,10 +60,11 @@ Env vars, all optional:
 | `drive-otp.mjs` | otp | Verification-code row on OTP fields; split six-box and single-field fill; no code row on login fields |
 | `drive-menu.mjs` | unlocked | Menu host is up with a closed shadow root, field icon shows, rows still readable |
 | `drive-login-list.mjs` | many, multi | Long lists: username search, scroll cap, arrow keys, search follows the field |
-| `drive-ui-preview.mjs` | preview | The popup preview renders 8 screens (4 states x light/dark) |
+| `drive-ui-preview.mjs` | preview | The preview renders every popup screen in light and dark, plus the update page's states |
+| `drive-update-fs.mjs` | none | The folder update on Chrome's own File System Access code (OPFS): swap, rollback on a refused move, recovery, a `zip -r` zip |
 | `pin-session.test.mjs` | none | SRP against RFC 5054 vectors and fixed leading-zero vectors; challenge lifecycle (reuse, stale, expired codes) |
 | `windows-host.test.mjs` | none | iCloud for Windows quirks (string MSG/ErrCode/SMSG); wrong PIN, other ErrCode and forged HAMK are rejected |
-| `unit.test.mjs` | none | Adapter units: fill script, port names, lookup hosts, setup links |
+| `unit.test.mjs` | none | Adapter units: fill script, port names, lookup hosts, setup links; the update check and the folder update (zip reader, swap and rollback, recovery, folder access, release lookup) |
 | `native-hosts.test.py` | none | Python hosts' `--selftest` modes; Windows policy host over native messaging, including `OPENPASSWORDS_NO_ELEVATE` |
 
 Helpers: `lib.mjs` (Playwright, extension launch, results, the CDP view of the
@@ -71,3 +72,14 @@ closed-shadow menu), `srp-reference.mjs` (independent SRP used by the mock helpe
 `build-test-extensions.mjs` (mock builds), `run-all.mjs` (runs every `.mjs` above).
 
 Outputs screenshots to `shots/` (gitignored).
+
+## Folder update end to end (by hand)
+
+Playwright cannot drive the folder picker or Chrome's permission prompts, so `run-all.mjs` leaves this one out.
+`node test-harness/automation/update-e2e.mjs` walks a person through the update page in a real Chrome: it builds
+an installed version and five updates with a throwaway signing key (`releaseSource` and `version` in
+`buildExtension`, refused outside test builds), serves them as a fake GitHub release on 127.0.0.1, opens Chrome on
+a fresh profile, says what to click, and after every round compares the extension folder with the build it
+should hold. Rounds: the first update; permission again with a dropped file, a dropped folder and an added file; a
+broken signature; an unsigned release; one click after a browser restart; a restart that did not land. Needs `zip`;
+off macOS set `CHROME` to the Chrome binary.

@@ -13,8 +13,9 @@ import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
-import { availableUpdate, checkForUpdate, dismissUpdate } from "./update-check.js";
-import { installUpdate, updaterAvailable } from "./update-install.js";
+import { availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
+import { installUpdate, updaterAvailable } from "./update/install.js";
+import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
 
 const client = createClient();
@@ -346,6 +347,18 @@ chrome.runtime.onInstalled.addListener((d) => {
   if (d?.reason === "install" || d?.reason === "update") {
     reinjectContentScripts({ tabs: chrome.tabs, scripting: chrome.scripting, runtime: chrome.runtime });
   }
+});
+
+const UPDATE_PAGE = "src/update.html";
+// both installs mark the version before restarting, the page then checks it is the one running
+chrome.runtime.onInstalled.addListener(async (d) => {
+  if (d?.reason !== "update") return;
+  const updatedTo = await takeUpdatedTo();
+  if (updatedTo) chrome.tabs.create({ url: chrome.runtime.getURL(`${UPDATE_PAGE}?updated=${encodeURIComponent(updatedTo)}`) });
+});
+// a folder update cut off halfway leaves its journal in the folder, the page puts the old files back
+chrome.runtime.onStartup.addListener(async () => {
+  if (await hasInterruptedUpdate()) chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) });
 });
 ensureConnected();
 
@@ -766,7 +779,13 @@ function setCountBadge(tabId, n) {
 }
 
 async function syncUpdateBadge() {
-  const update = await availableUpdate();
+  let update;
+  try {
+    update = await availableUpdate();
+  } catch {
+    // the worker is shutting down for a reload, the next start syncs the badge
+    return;
+  }
   const { name } = chrome.runtime.getManifest();
   chrome.action.setBadgeText({ text: update ? "NEW" : "" }).catch(() => {});
   chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR }).catch(() => {});

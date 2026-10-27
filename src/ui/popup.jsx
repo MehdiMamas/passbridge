@@ -126,7 +126,6 @@ function PopupApp() {
       pinError={pinError}
       showFavicons={showFavicons}
       update={update}
-      canInstallUpdate={canInstallUpdate}
       installingUpdate={installing}
       onVerify={async (pin) => {
         if (pin.length < 4) return false;
@@ -208,6 +207,12 @@ function PopupApp() {
         window.close();
       }}
       onInstallUpdate={async () => {
+        // without the helper the update page swaps the files through a folder the user picks
+        if (!canInstallUpdate) {
+          await chrome.tabs.create({ url: chrome.runtime.getURL("src/update.html") });
+          window.close();
+          return;
+        }
         setInstalling(true);
         const res = await send({ type: "installUpdate" });
         if (!res?.ok) {

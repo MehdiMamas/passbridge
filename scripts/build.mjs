@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cp, mkdir, readdir, readFile, rm, stat } from "fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { execFileSync } from "child_process";
 import { dirname, join, relative } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -33,6 +33,25 @@ function mockPlugin(kind) {
   };
 }
 
+// Test builds may also point the update at a local server and a test key; without one the real
+// src/update/source.js (null: GitHub and the pinned key) is bundled.
+function releaseSourcePlugin(source) {
+  return {
+    name: "passbridge-release-source",
+    setup(b) {
+      if (!source) return;
+      // the filter sees the import as written ("./source.js"), so the importer decides
+      b.onResolve({ filter: /(^|[\\/])source\.js$/ }, (args) =>
+        /[\\/]src[\\/]update[\\/]/.test(args.importer) ? { path: "release-source", namespace: "pb-mock" } : undefined,
+      );
+      b.onLoad({ filter: /^release-source$/, namespace: "pb-mock" }, () => ({
+        contents: `export const RELEASE_SOURCE = ${JSON.stringify(source)};\n`,
+        loader: "js",
+      }));
+    },
+  };
+}
+
 // Chrome holds the unpacked-extension root open on Windows, so rmdir(out) is EBUSY
 // while the files inside can still be replaced.
 async function clean(out) {
@@ -59,6 +78,7 @@ async function verify(out) {
     manifest.options_ui.page,
     "src/offscreen.html",
     "src/report.html",
+    "src/update.html",
     ...Object.values(manifest.icons),
     ...manifest.content_scripts.flatMap((c) => c.js || []),
   ]);
@@ -85,7 +105,8 @@ async function verify(out) {
   }
 }
 
-export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false } = {}) {
+export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "" } = {}) {
+  if ((releaseSource || version) && !mockKind) throw new Error("releaseSource and version are for test builds (mockKind) only");
   await clean(out);
   const dst = (...p) => join(out, ...p);
 
@@ -94,7 +115,11 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   for (const item of ["manifest.json", "icons", "fonts", "overlay", "LICENSE", "NOTICE", "licenses"]) {
     await cp(at(item), dst(item), { recursive: true });
   }
-  for (const page of ["popup.html", "options.html", "offscreen.html", "report.html"]) {
+  if (version) {
+    const manifest = JSON.parse(await readFile(dst("manifest.json"), "utf8"));
+    await writeFile(dst("manifest.json"), `${JSON.stringify({ ...manifest, version }, null, 2)}\n`);
+  }
+  for (const page of ["popup.html", "options.html", "offscreen.html", "report.html", "update.html"]) {
     await cp(at("src", page), dst("src", page));
   }
   if (preview) await cp(at("src/ui/preview.html"), dst("src/preview.html"));
@@ -107,7 +132,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
     entryPoints: [at("src/background.js")],
     format: "esm",
     outfile: dst("src/background.js"),
-    plugins: [mockPlugin(mockKind)],
+    plugins: [mockPlugin(mockKind), releaseSourcePlugin(releaseSource)],
   });
 
   await build({
@@ -129,6 +154,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
     jsx: "automatic",
     minify: true,
     define: { "process.env.NODE_ENV": "\"production\"" },
+    plugins: [releaseSourcePlugin(releaseSource)],
   };
   await build({
     ...react,
@@ -136,6 +162,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
       popup: at("src/ui/popup.jsx"),
       options: at("src/ui/options.jsx"),
       report: at("src/ui/report.jsx"),
+      update: at("src/ui/update.jsx"),
       ...(preview ? { preview: at("src/ui/preview.jsx") } : {}),
     },
     outdir: dst("src"),

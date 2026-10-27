@@ -46,10 +46,29 @@ Verified (automated, in `test-harness/automation/`):
 - `windows-host.test.mjs`: a full SRP handshake and unlock against a server simulation
   that hard-codes the RFC 5054 prime and sends IV-first AES-GCM replies, including the
   Windows string `MSG` and `ErrCode` quirks
-- `pin-session.test.mjs` (14/14): a code is only accepted for the challenge it was
+- `pin-session.test.mjs`: a code is only accepted for the challenge it was
   shown for, and spent or expired codes re-prompt
 - `npm run test:unit`: site matching, fill scripts, otpauth parsing, password generation
 - `srp.js` refuses to load if the prime is not 768 hex digits (a load-time check, not a test)
+- the update without the helper: zip reading, staging and swap, rollback and recovery, and the folder
+  permission flow in `npm run test:unit`; the same engine on Chrome's own File System Access code (OPFS)
+  in `drive-update-fs.mjs`
+
+Verified by hand, because Playwright intercepts the folder picker (Chrome 156, macOS, unpacked build).
+`test-harness/automation/update-e2e.mjs` repeats these runs and checks the folder after each one:
+- the running extension can replace its own files through a picked folder, and `chrome.runtime.reload()`
+  comes back as the new version
+- the folder handle survives a browser restart. After an extension reload, `requestPermission` on it only
+  offers Allow and Don't allow; the folder picker offers Allow on every visit, and once chosen, updates
+  start without a prompt across reloads and browser restarts
+- the whole update page against a local release signed with a test key, 1.4.1 to 1.4.9 over eight runs,
+  one of them dropping a file and a folder and adding a file: each time the folder matched the new build
+  exactly and no work files were left
+- in a fresh profile: the first update took Update now, pick the folder, Allow; the next one opened the
+  picker at the kept folder and offered Allow on every visit; after a browser restart the one after that
+  started with no prompt at all
+- dot-named leftovers (`.update-staging`, `.update-backup`, `.update-journal.json`) do not stop the
+  extension from loading, and the extension can read them through `chrome.runtime.getURL()`
 
 Checked in code, with no automated test at the moment:
 - SRP range checks on `B` and `u`
