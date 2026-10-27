@@ -7,8 +7,9 @@ import { orderByPageUsername, usernameMatchesPage } from "./session/username-mat
 import { createLifecycle } from "./reload-recovery.js";
 import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
 
+// a bare "login" names the whole form (login-password, login-2fa), so it is not a strong username signal
 const UPSTREAM_USER = new Set(
-  [...AutoFillConstants.UsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
+  [...AutoFillConstants.UnambiguousUsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
 );
 
 function hitsUpstreamName(el) {
