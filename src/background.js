@@ -18,6 +18,7 @@ import { availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from ".
 import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
+import { loginAction, menuItems } from "./menu.js";
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
@@ -794,7 +795,14 @@ async function refreshTab(tab) {
     } catch {}
   }
   if (tab?.id != null) setCountBadge(tab.id, settings.enableBadge ? logins.length : 0);
-  await rebuildContextMenu(settings, tab, url, logins.slice(0, 8));
+  // listing codes needs no Touch ID; Windows may only find synced codes per login, so it keeps the item there
+  let hasCode = false;
+  if (logins.length && settings.enableContextMenu) {
+    try {
+      hasCode = (await platformReady) === "win" || (await client.getOneTimeCodes(tab.id, 0, [url])).entries.length > 0;
+    } catch {}
+  }
+  await rebuildContextMenu(settings, tab, url, logins.slice(0, 8), hasCode);
 }
 
 const BADGE_COLOR = "#0a84ff";
@@ -819,24 +827,13 @@ async function syncUpdateBadge() {
   chrome.action.setTitle({ title: update ? `${name} ${update.version} is available!` : name }).catch(() => {});
 }
 
-async function rebuildContextMenu(settings, tab, url, logins) {
+async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
   if (!chrome.contextMenus) return;
   menuFor = { tabId: null, host: "", logins: [] };
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve(void chrome.runtime.lastError)));
   if (!settings.enableContextMenu) return;
-  const add = (props) => chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
-  add({ id: "pb-root", title: "PassBridge", contexts: ["editable", "page", "image"] });
-  add({ id: "pb-fill", parentId: "pb-root", title: "Autofill login", contexts: ["editable", "page"] });
-  add({ id: "pb-user", parentId: "pb-root", title: "Copy username", contexts: ["editable", "page"] });
-  add({ id: "pb-pass", parentId: "pb-root", title: "Copy password", contexts: ["editable", "page"] });
-  add({ id: "pb-otp", parentId: "pb-root", title: "Copy verification code", contexts: ["editable", "page"] });
-  add({ id: "pb-gen", parentId: "pb-root", title: "Generate password", contexts: ["editable", "page"] });
-  add({ id: "pb-gen-copy", parentId: "pb-root", title: "Generate password and copy", contexts: ["editable", "page"] });
-  add({ id: "pb-qr-image", parentId: "pb-root", title: "Scan this image for a verification code", contexts: ["image"] });
-  add({ id: "pb-report", parentId: "pb-root", title: "Report this page…", contexts: ["page"] });
-  logins.forEach((login, i) => {
-    add({ id: `pb-login-${i}`, parentId: "pb-fill", title: login.username || "(no username)", contexts: ["editable", "page"] });
-  });
+  const ready = !!url && client.ready;
+  for (const props of menuItems({ ready, logins, hasCode })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
   menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
 }
 
@@ -916,33 +913,30 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
       await scanQrFromMenu(info, tab);
       return;
     }
-    if (String(info.menuItemId).startsWith("pb-login-")) {
-      // the list belongs to the tab and site it was built for, anywhere else it names the wrong account
-      const fresh = menuFor.tabId === tab.id && menuFor.host === hostnameOf(tab.url || "");
-      const login = fresh ? menuFor.logins[Number(String(info.menuItemId).slice("pb-login-".length))] : null;
-      if (login) await fillLoginOnTab(tab, login.username);
-      else refreshActiveTab();
+    if (info.menuItemId === "pb-unlock") {
+      chrome.action.openPopup(() => void chrome.runtime.lastError);
       return;
     }
-    if (info.menuItemId === "pb-fill") {
-      await fillLoginOnTab(tab);
-      return;
-    }
-    if (!client.ready || !tab.url) return;
-    const host = hostnameOf(tab.url);
-    let logins = [];
-    try {
-      logins = uniqueByUsername(orderByMru(host, await siteLogins(tab.id, tab.url)));
-    } catch { return; }
-    const login = logins[0];
-    if (!login) return;
-    if (info.menuItemId === "pb-user") await copyText(login.username || "");
-    else if (info.menuItemId === "pb-pass") {
-      const { cred } = await readPasswordForFrame(tab.id, tab.url, login.username);
-      if (cred?.password) await copyText(cred.password);
-    } else if (info.menuItemId === "pb-otp") {
+    if (info.menuItemId === "pb-otp") {
+      if (!client.ready || !tab.url) return;
       const { rows } = await listOneTimeCodes(tab.id, 0, [tab.url]);
       if (rows[0]) await copyText(await resolveOneTimeCode(tab.id, rows[0].id));
+      return;
+    }
+    const pick = loginAction(info.menuItemId);
+    if (!pick) return;
+    // the list belongs to the tab and site it was built for, anywhere else it names the wrong account
+    const fresh = menuFor.tabId === tab.id && menuFor.host === hostnameOf(tab.url || "");
+    const login = fresh ? menuFor.logins[pick.index] : null;
+    if (!login) {
+      refreshActiveTab();
+      return;
+    }
+    if (pick.action === "fill") await fillLoginOnTab(tab, login.username);
+    else if (pick.action === "user") await copyText(login.username || "");
+    else {
+      const { cred } = await readPasswordForFrame(tab.id, tab.url, login.username);
+      if (cred?.password) await copyText(cred.password);
     }
   } catch (e) {
     console.info("[PassBridge] context menu", { item: info.menuItemId, error: String(e?.message ?? e) });

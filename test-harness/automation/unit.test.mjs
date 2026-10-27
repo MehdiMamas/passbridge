@@ -1,6 +1,7 @@
 import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "../../src/totp-setup.js";
+import { loginAction, menuItems } from "../../src/menu.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
@@ -1025,6 +1026,27 @@ ok("update page: Windows with the helper installs through it, never a folder wri
 ok("update page: Windows without the helper shows only the helper step, with no folder fallback", updateRoute({ windows: true, helper: false }) === "helper");
 ok("update page: other systems keep the folder update", updateRoute({ windows: false, helper: false }) === "folder" && updateRoute({ windows: false, helper: true }) === "folder");
 ok("update page: Windows is read from userAgentData or platform", isWindows({ userAgentData: { platform: "Windows" } }) && isWindows({ platform: "Win32" }) && !isWindows({ platform: "MacIntel" }) && !isWindows({}));
+
+{
+  const ids = (state) => menuItems(state).map((i) => i.id);
+  const locked = ids({ ready: false, logins: [{ username: "a" }], hasCode: true });
+  ok("menu: locked shows Unlock and no login or code items", locked.includes("pb-unlock") && !locked.some((id) => /^pb-(fill|user|pass|otp)/.test(id)));
+  const none = menuItems({ ready: true, logins: [], hasCode: false });
+  ok("menu: no logins shows a greyed note", none.find((i) => i.id === "pb-none")?.enabled === false && !none.some((i) => /^pb-(fill|user|pass)-/.test(i.id)));
+  const one = menuItems({ ready: true, logins: [{ username: "me@x.com" }], hasCode: false });
+  ok("menu: one login is flat and named", one.find((i) => i.id === "pb-fill-0")?.title === "Fill me@x.com" && one.find((i) => i.id === "pb-pass-0")?.parentId === "pb-root");
+  ok("menu: no code item without a code", !one.some((i) => i.id === "pb-otp"));
+  const noName = ids({ ready: true, logins: [{ username: "" }], hasCode: false });
+  ok("menu: a login without a username has no Copy username", !noName.includes("pb-user-0"));
+  const two = menuItems({ ready: true, logins: [{ username: "a" }, { username: "b" }], hasCode: true });
+  ok("menu: several logins get one submenu each", two.filter((i) => i.parentId === "pb-acct-1").map((i) => i.id).join() === "pb-fill-1,pb-user-1,pb-pass-1");
+  ok("menu: a submenu parent is not also an action", two.every((i) => !String(i.id).startsWith("pb-acct-") || !loginAction(i.id)));
+  ok("menu: code item shows when the site has a code", two.some((i) => i.id === "pb-otp"));
+  const gen = one.find((i) => i.id === "pb-gen"), genCopy = one.find((i) => i.id === "pb-gen-copy");
+  ok("menu: fill a password only on fields, copy one only on pages", gen.contexts.join() === "editable" && genCopy.contexts.join() === "page");
+  ok("menu: ids are unique", new Set(two.map((i) => i.id)).size === two.length);
+  ok("menu: loginAction reads the id", JSON.stringify(loginAction("pb-pass-2")) === '{"action":"pass","index":2}' && loginAction("pb-acct-1") === null && loginAction("pb-otp") === null);
+}
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
