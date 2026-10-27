@@ -19,6 +19,8 @@ function PopupApp() {
   const [update, setUpdate] = useState(null);
   const [canInstallUpdate, setCanInstallUpdate] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [canCheckUpdate, setCanCheckUpdate] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const lookupGen = useRef(0);
   const lookupTimer = useRef(0);
 
@@ -74,6 +76,7 @@ function PopupApp() {
     if (res.os) setOs(res.os);
     if (res.label) setLabel(res.label);
     setShowFavicons(res.settings?.showFavicons !== false);
+    setCanCheckUpdate(res.settings?.canCheckForUpdates !== false);
     setUpdate(res.update || null);
     setCanInstallUpdate(!!res.canInstallUpdate);
     setCaps(res.caps || {});
@@ -224,6 +227,21 @@ function PopupApp() {
         setUpdate(null);
         send({ type: "dismissUpdate" });
       }}
+      checkingUpdate={checkingUpdate}
+      onCheckUpdate={
+        canCheckUpdate
+          ? async () => {
+              setCheckingUpdate(true);
+              const r = await send({ type: "checkUpdateNow" });
+              setCheckingUpdate(false);
+              if (!r?.ok || !r.reached) showNote("Couldn't reach GitHub. Try again later.", "danger");
+              else if (r.available) {
+                setUpdate(r.available);
+                showNote("", "");
+              } else showNote(`Up to date (${r.current})`, "ok");
+            }
+          : undefined
+      }
     />
   );
 }

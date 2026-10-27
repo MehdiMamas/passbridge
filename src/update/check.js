@@ -1,10 +1,11 @@
-// the unpacked build never updates itself, so once a day the latest GitHub release is compared with the manifest
+// the unpacked build never updates itself, so every 30 minutes the latest GitHub release is compared with the manifest
 
 import { getSettings } from "../settings.js";
 import { REPORT_REPO } from "../report-scrub.js";
 import { RELEASE_SOURCE } from "./source.js";
 
-export const UPDATE_CHECK_MS = 24 * 60 * 60 * 1000;
+// 48 unauthenticated requests a day, well under GitHub's 60 an hour per IP
+export const UPDATE_CHECK_MS = 30 * 60 * 1000;
 export const LATEST_RELEASE_URL = RELEASE_SOURCE?.latestUrl ?? `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
 
 export function releasePageUrl(tag) {
@@ -27,7 +28,7 @@ export function isNewerVersion(latest, current) {
   return false;
 }
 
-// a failed request leaves updateCheckedAt alone so the next alarm retries, a refused one waits a day
+// a failed request leaves updateCheckedAt alone so the next alarm retries, a refused one waits the full interval
 async function runCheck(now, force) {
   if (!(await getSettings()).canCheckForUpdates) return false;
   const { updateCheckedAt } = await chrome.storage.local.get("updateCheckedAt");
@@ -46,7 +47,7 @@ async function runCheck(now, force) {
 }
 
 let running = null;
-// force skips the daily wait (a button press); resolves true when GitHub answered.
+// force skips the wait (a button press); resolves true when GitHub answered.
 // storage calls fail with "No SW" while the worker shuts down for a reload, the next alarm checks again
 export function checkForUpdate(now = Date.now(), { force = false } = {}) {
   running ||= runCheck(now, force)

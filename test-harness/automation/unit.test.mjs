@@ -300,17 +300,17 @@ const NOW = Date.UTC(2026, 9, 25);
 {
   const env = fakeUpdateEnv({ updateCheckedAt: NOW - UPDATE_CHECK_MS + 60_000 });
   await checkForUpdate(NOW);
-  ok("update: no second request inside a day", env.fetched.length === 0);
+  ok("update: no second request inside the interval", env.fetched.length === 0);
 }
 {
   const env = fakeUpdateEnv({ updateCheckedAt: NOW - 60_000 });
   const reached = await checkForUpdate(NOW, { force: true });
-  ok("update: force skips the daily wait", env.fetched.length === 1 && reached === true && env.data.updateCheckedAt === NOW);
+  ok("update: force skips the wait", env.fetched.length === 1 && reached === true && env.data.updateCheckedAt === NOW);
 }
 {
   const env = fakeUpdateEnv({ updateCheckedAt: NOW - 60_000 });
   const reached = await checkForUpdate(NOW, { force: false });
-  ok("update: without force the daily wait still applies", env.fetched.length === 0 && reached === false);
+  ok("update: without force the wait still applies", env.fetched.length === 0 && reached === false);
 }
 {
   const env = fakeUpdateEnv({ canCheckForUpdates: false, updateCheckedAt: 0 });
