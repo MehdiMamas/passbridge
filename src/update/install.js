@@ -51,7 +51,9 @@ export async function updateHelper({ publicKey = PUBLIC_KEY_B64, send = (m) => c
   }
   if (!status?.ok) return { ok: false, error: "host" };
   if (!("helperVersion" in status)) {
-    await chrome.storage.local.set({ helperOutdatedNote: true });
+    // once ever, not on every 30-minute check
+    const { helperNoteShown } = await chrome.storage.local.get("helperNoteShown");
+    if (!helperNoteShown) await chrome.storage.local.set({ helperOutdatedNote: true, helperNoteShown: true });
     return { ok: false, error: "old-helper" };
   }
   const { latestRelease: tag } = await chrome.storage.local.get("latestRelease");

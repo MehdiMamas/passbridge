@@ -28,6 +28,8 @@ AGENT="$APPDIR/passbridge-agent.py"
 cp "$DIR/passbridge-updater.py" "$APPDIR/passbridge-updater.py"
 chmod +x "$APPDIR/passbridge-updater.py"
 UPDATER="$APPDIR/passbridge-updater.py"
+# the release zip says which version this is, so the extension knows when the helper is behind
+if [ -f "$DIR/VERSION" ]; then cp "$DIR/VERSION" "$APPDIR/helper-version"; fi
 
 # the pairing-code reader earlier versions installed
 rm -rf "$APPDIR/passbridge-autopair.py" "$APPDIR/PassBridge Helper.app"

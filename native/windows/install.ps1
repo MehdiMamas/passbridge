@@ -108,6 +108,9 @@ Copy-Item -Force (Join-Path $Here "passbridge-policy.py") (Join-Path $Dest "pass
 $updaterSrc = Join-Path $Here "passbridge-updater.py"
 if (-not (Test-Path -LiteralPath $updaterSrc)) { $updaterSrc = Join-Path (Split-Path -Parent $Here) "passbridge-updater.py" }
 Copy-Item -Force $updaterSrc (Join-Path $Dest "passbridge-updater.py")
+# the release zip says which version this is, so the extension knows when the helper is behind
+$versionSrc = Join-Path $Here "VERSION"
+if (Test-Path -LiteralPath $versionSrc) { Copy-Item -Force $versionSrc (Join-Path $Dest "helper-version") }
 
 # hosts earlier versions installed: the pairing-code reader and the verification-code setup helper
 $retired = @("com.passbridge.autopair", "com.passbridge.totpsetup", "com.openpasswords.policy", "com.openpasswords.autopair")

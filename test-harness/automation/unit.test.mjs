@@ -953,6 +953,9 @@ globalThis.fetch = realFetch;
   ok("helper update: a zip that fails verification is never sent", !e.res.ok && e.res.error === "verify" && !e.sent.some((m) => m.op === "install-helper"));
   e = await run({ ok: true });
   ok("helper update: an old helper without install-helper gets a one-time note and no download", e.res.error === "old-helper" && e.data.helperOutdatedNote === true && e.urls.length === 0);
+  delete e.data.helperOutdatedNote; // the popup took the note
+  await updateHelper({ publicKey, send: async () => ({ ok: true }), platform: "macOS" });
+  ok("helper update: the old-helper note is not set again on the next check", !("helperOutdatedNote" in e.data));
   delete globalThis.chrome;
   globalThis.fetch = realFetch;
 }
