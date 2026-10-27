@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { UpdateScreen } from "./update-screen.jsx";
 import { markUpdatedTo } from "../update/check.js";
@@ -47,7 +47,11 @@ function UpdateApp() {
   const [expected, setExpected] = useState("");
   const [native, setNative] = useState(false);
 
-  async function check() {
+  // once the user picks the update without the helper, Retry keeps that choice for this visit
+  const noHelper = useRef(false);
+
+  async function check(skipHelper = false) {
+    if (skipHelper) noHelper.current = true;
     setPhase("checking");
     setError(null);
     if (await hasInterruptedUpdate()) return setPhase("interrupted");
@@ -62,7 +66,7 @@ function UpdateApp() {
     setFolderName((await folderStore.get())?.name || "");
     setRelease(found.version ? found : null);
     if (!found.ok) return setPhase(found.error);
-    const route = updateRoute({ windows: isWindows(), helper: await updaterAvailable() });
+    const route = updateRoute({ windows: isWindows(), helper: await updaterAvailable(), noHelper: noHelper.current });
     if (route === "helper") return setPhase("helper");
     if (route === "folder" && typeof globalThis.showDirectoryPicker !== "function") return setPhase("unsupported");
     setNative(route === "native");
@@ -178,6 +182,7 @@ function UpdateApp() {
       onChangeFolder={changeFolder}
       onRetry={() => check()}
       native={native}
+      onNoHelper={() => check(true)}
       helperUrl={HELPER_ZIP_URL}
       onRestore={restore}
     />

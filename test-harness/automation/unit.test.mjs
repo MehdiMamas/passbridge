@@ -1023,7 +1023,9 @@ globalThis.fetch = realFetch;
 }
 
 ok("update page: Windows with the helper installs through it, never a folder write", updateRoute({ windows: true, helper: true }) === "native");
-ok("update page: Windows without the helper shows only the helper step, with no folder fallback", updateRoute({ windows: true, helper: false }) === "helper");
+ok("update page: Windows without the helper offers the helper step first", updateRoute({ windows: true, helper: false }) === "helper");
+ok("update page: Windows without the helper can choose the folder update instead", updateRoute({ windows: true, helper: false, noHelper: true }) === "folder");
+ok("update page: Windows with the helper always installs through it", updateRoute({ windows: true, helper: true, noHelper: true }) === "native");
 ok("update page: other systems keep the folder update", updateRoute({ windows: false, helper: false }) === "folder" && updateRoute({ windows: false, helper: true }) === "folder");
 ok("update page: Windows is read from userAgentData or platform", isWindows({ userAgentData: { platform: "Windows" } }) && isWindows({ platform: "Win32" }) && !isWindows({ platform: "MacIntel" }) && !isWindows({}));
 

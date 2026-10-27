@@ -38,7 +38,7 @@ function Progress({ value }) {
   );
 }
 
-export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, helperUrl, native }) {
+export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, helperUrl, native, onNoHelper }) {
   const working = phase === "working";
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8 text-[13px]">
@@ -127,6 +127,11 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
             <button type="button" className={`${link} self-start`} onClick={onRetry}>
               Check again
             </button>
+            <p className={muted}>Rather not install the helper?</p>
+            <button type="button" className={`${link} self-start`} onClick={onNoHelper}>
+              Update without the helper
+            </button>
+            <p className={muted}>You pick the PassBridge folder and Chrome asks you to save each file. Click Save every time, or the update is left half done.</p>
           </>
         )}
         {phase === "ready" && (
