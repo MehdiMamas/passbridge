@@ -62,6 +62,9 @@ try {
 
 const OTP_AUTOCOMPLETE = /one-time-code/i;
 const OTP_HINT = /\b(otp|one[\s-]?time|verification|2fa|mfa|sms[\s-]?code|auth[\s-]?code|security[\s-]?code|passcode)\b/i;
+// Okta names its password input credentials.passcode; a type=password field that says "password" is the password
+const PASSWORD_LABEL = /passw|pwd/i;
+const ONE_TIME_PASSWORD = /one[\s-]?time[\s-]?pass(?:word|code)?|\botp\b/gi;
 
 function attrBlob(el) {
   // snapchat's web login leaves the input bare and labels it via <label>/aria-labelledby
@@ -83,7 +86,8 @@ function isOtpField(el) {
   if (OTP_AUTOCOMPLETE.test(ac)) return true;
   const max = parseInt(el.getAttribute("maxlength") || "0", 10);
   if (el.inputMode === "numeric" && max === 1) return true;
-  if (OTP_HINT.test(attrBlob(el))) return true;
+  const hint = attrBlob(el);
+  if (OTP_HINT.test(hint) && !(isPasswordField(el) && PASSWORD_LABEL.test(hint.replace(ONE_TIME_PASSWORD, "")))) return true;
   return false;
 }
 

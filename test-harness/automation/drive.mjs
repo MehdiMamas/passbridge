@@ -31,6 +31,20 @@ await main(async () => {
     ok(`unlocked/${pg}: no dropdown on OTP`, !(await menuShown(page)), "dropdown appeared on OTP");
     await page.close();
   }
+  {
+    const okta = await ctx.newPage();
+    await okta.goto(`${BASE}/login-okta-passcode.html`, { waitUntil: "domcontentloaded" });
+    await okta.waitForTimeout(300);
+    await okta.focus('input[name="credentials.passcode"]');
+    await okta.waitForTimeout(500);
+    const t = await menuText(okta);
+    ok("unlocked/okta-passcode: offer on the password", /test@example.com/i.test(t) && !/Verification code/.test(t), `got "${t}"`);
+    await clickMenu(okta, "test@example.com");
+    await okta.waitForTimeout(500);
+    const pw = await okta.inputValue('input[name="credentials.passcode"]');
+    ok("unlocked/okta-passcode: fills the password", pw.length > 0, `value="${pw}"`);
+    await okta.close();
+  }
   const page = await ctx.newPage();
   await page.goto(`${BASE}/forum.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);

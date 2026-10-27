@@ -37,6 +37,20 @@ await main(async () => {
 
   {
     const page = await ctx.newPage();
+    await page.goto(`${BASE}/login-okta-passcode.html`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      document.querySelector('label[for="input28"]').textContent = "Enter code";
+    });
+    await page.waitForTimeout(300);
+    await page.focus('input[name="credentials.passcode"]');
+    await page.waitForTimeout(600);
+    const t = await menuText(page);
+    ok("okta passcode labelled as a code: code row offered", /Verification code/.test(t), `got "${t}"`);
+    await page.close();
+  }
+
+  {
+    const page = await ctx.newPage();
     await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(300);
     await page.focus('input[name="username"]');
