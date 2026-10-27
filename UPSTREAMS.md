@@ -10,6 +10,10 @@ PassBridge is three layers. Each upstream is pinned. `npm run sync -- <name> [co
 
 Pins live in `vendor/<name>/PINNED`. The mirrors under `vendor/` are the diff baseline, not a second runtime. Nothing from `bitwarden_license/` is included. The Bitwarden name and logo are not used.
 
+## Weekly check
+
+`.github/workflows/upstream-check.yml` runs every Monday (and on demand). `npm run upstream:check` does the same locally and prints a JSON summary per upstream: pinned and latest commit, changed files, files removed upstream, and a compare link. In CI (`--issues`) it opens or updates one issue labelled `upstream` per upstream whose tracked files changed. It never changes a pin; accepting stays manual.
+
 ## Autofill spike
 
 Compiling Bitwarden's browser autofill content scripts was rejected. At `fc5de86` the content entry imports `AutofillService`, overlay abstractions, and `@bitwarden/common` vault types. Shipping that stack would pull their account and cipher services into every page, which fails the size and "pure utilities only" gate.

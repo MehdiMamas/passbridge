@@ -16,6 +16,7 @@ import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { buildExtension } from "../../scripts/build.mjs";
+import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
 let failed = 0;
 function ok(name, cond) {
@@ -842,6 +843,26 @@ globalThis.fetch = realFetch;
   ok("build: a refused build writes nothing", readdirSync(out).length === 0);
   rmSync(out, { recursive: true, force: true });
 }
+{
+  ok("upstream: a short pin matches the full latest sha", samePin("fc5de86", "fc5de86abc1234") === true);
+  ok("upstream: a different sha does not match", samePin("fc5de86", "0123456abc") === false);
+  ok("upstream: an empty pin never matches", samePin("", "abc") === false);
+  const s = summarize({
+    name: "bitwarden",
+    repo: "bitwarden/clients",
+    pinned: "fc5de86",
+    latest: "aaaa111",
+    diffs: [{ rel: "a.ts", kind: "changed" }, { rel: "b.ts", kind: "new" }],
+    missing: [{ path: "gone.ts", status: 404 }, { path: "x.ts", status: 500 }],
+  });
+  ok("upstream: summary splits changed, new, removed and failed", s.changed.join() === "a.ts,b.ts" && s.new.join() === "b.ts" && s.removed.join() === "gone.ts" && s.failed.join() === "500 x.ts");
+  ok("upstream: compare link uses pinned and latest", s.compare === "https://github.com/bitwarden/clients/compare/fc5de86...aaaa111");
+  ok("upstream: a 404 counts as a change", changeCount(s) === 3);
+  ok("upstream: title starts with the upstream prefix", issueTitle(s) === "Upstream: bitwarden changed 3 tracked file(s)" && issueTitle(s).startsWith(titlePrefix("bitwarden")));
+  const body = issueBody(s);
+  ok("upstream: body has commits, compare link, files and steps", body.includes("fc5de86") && body.includes("aaaa111") && body.includes(s.compare) && body.includes("`gone.ts`") && body.includes("npm run sync -- bitwarden aaaa111 --accept"));
+}
+
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
