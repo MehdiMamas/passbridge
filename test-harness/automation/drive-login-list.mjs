@@ -58,7 +58,7 @@ await main(async () => {
 
   const searchNode = view.find((n) => attrs(n).placeholder === "Search usernames");
   await view.client.send("DOM.focus", { nodeId: searchNode.nodeId });
-  await page.keyboard.press("Control+A");
+  await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("riot");
   await page.waitForTimeout(150);
   view = await pierced(page);
@@ -66,7 +66,7 @@ await main(async () => {
   ok("search matches username only", /No matching usernames/.test(siteMiss) && !/alice@example.com/.test(siteMiss), siteMiss);
 
   await view.client.send("DOM.focus", { nodeId: view.find((n) => attrs(n).placeholder === "Search usernames").nodeId });
-  await page.keyboard.press("Control+A");
+  await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("mehdi.one");
   await page.waitForTimeout(150);
   view = await pierced(page);
