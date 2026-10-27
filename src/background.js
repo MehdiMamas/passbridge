@@ -14,7 +14,7 @@ import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
 import { availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
-import { installUpdate, updaterAvailable } from "./update/install.js";
+import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
 
@@ -327,7 +327,7 @@ chrome.alarms.onAlarm.addListener((a) => {
 const UPDATE_ALARM = "update-check";
 chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: 30 });
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === UPDATE_ALARM) checkForUpdate();
+  if (a.name === UPDATE_ALARM) (async () => { await checkForUpdate(); await autoInstallUpdate(); })().catch(() => {});
 });
 
 async function ensureConnected() {
@@ -350,11 +350,21 @@ chrome.runtime.onInstalled.addListener((d) => {
 });
 
 const UPDATE_PAGE = "src/update.html";
+// an old helper can't update itself: say so in the popup once
+async function takeHelperNote() {
+  const { helperOutdatedNote } = await chrome.storage.local.get("helperOutdatedNote");
+  if (!helperOutdatedNote) return false;
+  await chrome.storage.local.remove("helperOutdatedNote");
+  return true;
+}
 // both installs mark the version before restarting, the page then checks it is the one running
 chrome.runtime.onInstalled.addListener(async (d) => {
   if (d?.reason !== "update") return;
   const updatedTo = await takeUpdatedTo();
-  if (updatedTo) chrome.tabs.create({ url: chrome.runtime.getURL(`${UPDATE_PAGE}?updated=${encodeURIComponent(updatedTo)}`) });
+  const auto = await takeAutoUpdatedTo();
+  if (updatedTo && auto === updatedTo) {
+    chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: "PassBridge", message: `PassBridge updated to ${auto}` });
+  } else if (updatedTo) chrome.tabs.create({ url: chrome.runtime.getURL(`${UPDATE_PAGE}?updated=${encodeURIComponent(updatedTo)}`) });
 });
 // a folder update cut off halfway leaves its journal in the folder, the page puts the old files back
 chrome.runtime.onStartup.addListener(async () => {
@@ -969,7 +979,7 @@ chrome.storage?.onChanged.addListener((changes, area) => {
   if (changes.latestRelease || changes.dismissedRelease || changes.canCheckForUpdates) syncUpdateBadge();
   if (changes.canCheckForUpdates?.newValue) checkForUpdate(Date.now(), { force: true });
 });
-checkForUpdate();
+(async () => { await checkForUpdate(); await autoInstallUpdate(); })().catch(() => {});
 syncUpdateBadge();
 // main_frame in the filter, not the callback: every image and XHR would otherwise wake the worker
 try {
@@ -1338,6 +1348,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             hasChallenge: client.hasChallenge,
             settings: await getSettings(),
             update: await availableUpdate(),
+            helperNote: await takeHelperNote(),
             canInstallUpdate: (await availableUpdate()) ? await updaterAvailable() : false,
             caps: {
               oneTimeCodes: client.canFillOneTimeCodes,
