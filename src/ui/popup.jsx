@@ -78,6 +78,7 @@ function PopupApp() {
     setShowFavicons(res.settings?.showFavicons !== false);
     setCanCheckUpdate(res.settings?.canCheckForUpdates !== false);
     setUpdate(res.update || null);
+    if (res.helperNote) showNote("The PassBridge helper is old. Install it once more from the release page and it will update itself from then on.", "");
     setCanInstallUpdate(!!res.canInstallUpdate);
     setCaps(res.caps || {});
     let next = res.state || "connecting";

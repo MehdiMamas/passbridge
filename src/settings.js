@@ -24,6 +24,8 @@ export const SETTINGS_DEFAULTS = {
   agentSignIn: false,
   agentAllowlist: ["github.com", "google.com", "vercel.com", "apple.com"],
   canCheckForUpdates: true,
+  // installs a newer signed release on its own when the update helper is there
+  autoInstallUpdates: true,
 };
 
 // settings follow the Chrome profile to every signed-in machine; machine state stays in local

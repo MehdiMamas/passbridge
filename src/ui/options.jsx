@@ -222,6 +222,7 @@ function OptionsApp() {
         {check("enableContextMenu", "Context menu")}
         {check("enableBadge", "Badge count on the toolbar icon")}
         {check("canCheckForUpdates", "Check for updates")}
+        {settings.canCheckForUpdates && check("autoInstallUpdates", "Install updates automatically")}
         {settings.canCheckForUpdates && (
           <Row label="Check for updates now" note={updateMsg || undefined}>
             <button

@@ -11,7 +11,7 @@ import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewe
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
 import { digestHex, verifyRelease } from "../../src/update/verify.js";
 import { downloadRelease, latestRelease } from "../../src/update/release.js";
-import { installUpdate } from "../../src/update/install.js";
+import { autoInstallUpdate, installUpdate, updateHelper } from "../../src/update/install.js";
 import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
@@ -866,7 +866,7 @@ function folderEnv(saved, { own = true, source = true, pickThrows = false } = {}
   let env = helperEnv({ ok: true });
   const installed = await installUpdate("1.4.1", { publicKey });
   await new Promise((r) => setTimeout(r, 350));
-  ok("helper update: a finished install marks the version for the result page, then reloads", installed.ok && env.sent[0]?.op === "install" && env.data.updatedTo === "1.4.2" && env.reloads === 1);
+  ok("helper update: a finished install marks the version for the result page, then reloads", installed.ok && env.sent.some((m) => m.op === "install") && env.data.updatedTo === "1.4.2" && env.reloads === 1);
   env = helperEnv({ ok: false, error: "disk full" });
   const refused = await installUpdate("1.4.1", { publicKey });
   await new Promise((r) => setTimeout(r, 350));
@@ -881,6 +881,84 @@ function folderEnv(saved, { own = true, source = true, pickThrows = false } = {}
   delete globalThis.chrome;
 }
 globalThis.fetch = realFetch;
+
+{
+  // automatic install: the setting, the host and the failed-once memory decide
+  const setup = (seed) => {
+    const env = fakeUpdateEnv({ latestRelease: "v1.5.0", ...seed });
+    globalThis.chrome.runtime.getManifest = () => ({ version: "1.4.0" });
+    env.installs = [];
+    env.helpers = 0;
+    env.deps = (host, installReply = { ok: true }) => ({
+      available: async () => host,
+      install: async (v, o) => (env.installs.push(o), installReply),
+      helper: async () => (env.helpers++, { ok: true }),
+    });
+    return env;
+  };
+  let env = setup({});
+  let r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: a newer release with the host present and the setting on installs by itself", r.ok && env.installs.length === 1 && env.installs[0].auto === true);
+  env = setup({ autoInstallUpdates: false });
+  r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: the setting off means nothing is installed", !r.ran && env.installs.length === 0);
+  env = setup({});
+  r = await autoInstallUpdate(env.deps(false));
+  ok("auto update: no updater host means nothing is installed", !r.ran && r.why === "no-host" && env.installs.length === 0);
+  env = setup({ canCheckForUpdates: false });
+  ok("auto update: with update checks off nothing is installed", !(await autoInstallUpdate(env.deps(true))).ran);
+  env = setup({});
+  r = await autoInstallUpdate(env.deps(true, { ok: false, error: "x" }));
+  ok("auto update: a failed install is remembered for that version", !r.ok && env.data.autoInstallFailed === "1.5.0");
+  r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: the same version is not retried after a failure", !r.ran && r.why === "failed-before" && env.installs.length === 1);
+  env = setup({ latestRelease: "v1.4.0" });
+  r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: no newer extension release installs nothing but checks the helper", !r.ran && env.installs.length === 0 && env.helpers === 1);
+  delete globalThis.chrome;
+}
+{
+  // helper update: only when the helper is older than the release, verified like the extension zip
+  const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const publicKey = Buffer.from(await crypto.subtle.exportKey("raw", kp.publicKey)).toString("base64");
+  const zip = new TextEncoder().encode("helper zip bytes ".repeat(500));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
+  const asset = (name, extra) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
+  const json = { tag_name: "v1.5.0", assets: ["passbridge-macos-helper.zip", "passbridge-windows-helper.zip"].flatMap((n) => [asset(n, { size: zip.length, digest: `sha256:${hex}` }), asset(`${n}.sig`)]) };
+  const run = async (status, platform = "macOS", tamper = false) => {
+    const env = fakeUpdateEnv({ latestRelease: "v1.5.0" });
+    env.sent = [];
+    env.urls = [];
+    const bad = zip.slice();
+    bad[3] ^= 1;
+    globalThis.fetch = async (url) => {
+      url = String(url);
+      env.urls.push(url);
+      if (url.startsWith("https://api.github.com/")) return new Response(JSON.stringify(json));
+      return new Response(url.endsWith(".sig") ? sig : tamper ? bad : zip);
+    };
+    const send = async (m) => (env.sent.push(m), m.op === "status" ? status : { ok: true });
+    env.res = await updateHelper({ publicKey, send, platform });
+    return env;
+  };
+  let e = await run({ ok: true, helperVersion: "1.4.5" });
+  const inst = e.sent.find((m) => m.op === "install-helper");
+  ok("helper update: an older helper is replaced with the verified macOS zip", e.res.ok && inst?.version === "1.5.0" && e.urls.some((u) => u.endsWith("/passbridge-macos-helper.zip")) && inst.zip.length > 0);
+  e = await run({ ok: true, helperVersion: "1.5.0" });
+  ok("helper update: a helper at the release version is left alone", e.res.skipped && !e.sent.some((m) => m.op === "install-helper") && e.urls.length === 0);
+  e = await run({ ok: true, helperVersion: null }, "Windows");
+  ok("helper update: an unknown helper version gets the Windows zip", e.sent.some((m) => m.op === "install-helper") && e.urls.some((u) => u.endsWith("/passbridge-windows-helper.zip")));
+  e = await run({ ok: true, helperVersion: "1.4.5" }, "macOS", true);
+  ok("helper update: a zip that fails verification is never sent", !e.res.ok && e.res.error === "verify" && !e.sent.some((m) => m.op === "install-helper"));
+  e = await run({ ok: true });
+  ok("helper update: an old helper without install-helper gets a one-time note and no download", e.res.error === "old-helper" && e.data.helperOutdatedNote === true && e.urls.length === 0);
+  delete e.data.helperOutdatedNote; // the popup took the note
+  await updateHelper({ publicKey, send: async () => ({ ok: true }), platform: "macOS" });
+  ok("helper update: the old-helper note is not set again on the next check", !("helperOutdatedNote" in e.data));
+  delete globalThis.chrome;
+  globalThis.fetch = realFetch;
+}
 
 {
   const { mkdtempSync, readdirSync, rmSync } = await import("node:fs");
@@ -913,6 +991,23 @@ globalThis.fetch = realFetch;
   ok("upstream: body has commits, compare link, files and steps", body.includes("fc5de86") && body.includes("aaaa111") && body.includes(s.compare) && body.includes("`gone.ts`") && body.includes("npm run sync -- bitwarden aaaa111 --accept"));
 }
 
+
+{
+  // sign-release.mjs signs a helper zip and the result verifies
+  const { execFileSync } = await import("node:child_process");
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { mkdtempSync, writeFileSync, readFileSync } = await import("node:fs"); const path = await import("node:path"); const os = await import("node:os");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "pb-sign-"));
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  writeFileSync(path.join(dir, "k.pem"), privateKey.export({ type: "pkcs8", format: "pem" }));
+  const zipPath = path.join(dir, "passbridge-macos-helper.zip");
+  writeFileSync(zipPath, "helper zip bytes");
+  const raw = publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64");
+  execFileSync("node", ["scripts/sign-release.mjs", "sign", zipPath, "--key", path.join(dir, "k.pem"), "--pub", raw], { stdio: "pipe" });
+  const sigBytes = readFileSync(`${zipPath}.sig`);
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", readFileSync(zipPath))).toString("hex");
+  ok("sign-release: a helper zip gets a .sig that verifies", sigBytes.length === 64 && (await verifyRelease(readFileSync(zipPath), sigBytes, hex, raw)));
+}
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

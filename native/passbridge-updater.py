@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # update host: the extension verifies a release zip, this swaps it into the unpacked extension folder.
-# ops: "status" (is there a folder we can update) and "install" (zip as base64 plus the version expected).
+# ops: "status" (the folder we can update and the helper version), "install" (zip as base64 plus the version expected)
+# and "install-helper" (the helper zip: replaces these scripts in APPDIR).
 # it never fetches anything and trusts the zip only as far as the checks below.
 import base64
 import glob
@@ -275,11 +276,83 @@ def swap(folder, zip_bytes, version):
     shutil.rmtree(old, ignore_errors=True)
 
 
-def handle(msg, support=None, chooser=None):
+HELPER_VERSION_FILE = "helper-version"
+
+
+def helper_version():
+    try:
+        with open(os.path.join(APPDIR, HELPER_VERSION_FILE), encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def run_installer(root):
+    """re-register the hosts from the new helper folder; install.sh / install.ps1 ask nothing"""
+    if WINDOWS:
+        cmd = ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", os.path.join(root, "install.ps1")]
+    else:
+        cmd = ["/bin/sh", os.path.join(root, "install.sh")]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if r.returncode != 0:
+        raise UpdateError("The helper installer failed.")
+
+
+def install_helper(zip_bytes, version, installer=None):
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="pb-helper-")
+    try:
+        safe_extract(zip_bytes, tmp)
+        root = tmp
+        entries = [e for e in os.listdir(tmp) if not e.startswith(".")]
+        if len(entries) == 1 and os.path.isdir(os.path.join(tmp, entries[0])):
+            root = os.path.join(tmp, entries[0])
+        try:
+            with open(os.path.join(root, "VERSION"), encoding="utf-8") as f:
+                got = f.read().strip()
+        except OSError:
+            raise UpdateError("The helper update has no VERSION file.")
+        if got != version:
+            raise UpdateError("The helper update has a different version than expected.")
+        scripts = sorted(n for n in os.listdir(root) if n.endswith(".py") and os.path.isfile(os.path.join(root, n)))
+        if not scripts:
+            raise UpdateError("The helper update has no scripts.")
+        os.makedirs(APPDIR, exist_ok=True)
+        new_hosts = [n for n in scripts if not os.path.exists(os.path.join(APPDIR, n))]
+        # this script last: the running copy is already loaded, the others are free
+        scripts.sort(key=lambda n: n == os.path.basename(__file__))
+        for name in scripts:
+            dest = os.path.join(APPDIR, name)
+            part = dest + ".new"
+            shutil.copyfile(os.path.join(root, name), part)
+            os.chmod(part, 0o755)
+            os.replace(part, dest)
+        if new_hosts:
+            (installer or run_installer)(root)
+        with open(os.path.join(APPDIR, HELPER_VERSION_FILE), "w", encoding="utf-8") as f:
+            f.write(version)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def handle(msg, support=None, chooser=None, installer=None):
     op = msg.get("op") if isinstance(msg, dict) else None
     try:
         if op == "status":
-            return {"ok": True, "folder": locate(False, support)}
+            return {"ok": True, "folder": locate(False, support), "helperVersion": helper_version()}
+        if op == "install-helper":
+            version = msg.get("version")
+            if not isinstance(version, str) or not version or not isinstance(msg.get("zip"), str):
+                raise UpdateError("Bad request.")
+            try:
+                data = base64.b64decode(msg["zip"], validate=True)
+            except ValueError:
+                raise UpdateError("Bad request.")
+            if len(data) > MAX_ZIP:
+                raise UpdateError("The update is too large.")
+            install_helper(data, version, installer)
+            return {"ok": True, "helperVersion": version}
         if op == "install":
             version = msg.get("version")
             if not isinstance(version, str) or not version or not isinstance(msg.get("zip"), str):
