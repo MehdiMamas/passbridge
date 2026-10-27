@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Okta - Verify with your password</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f3f4f6; color: #1f2937; }
+    .scenario-banner { background: #fffbeb; border-bottom: 1px solid #fde68a; padding: 10px 16px; font-size: 13px; color: #92400e; }
+    .wrap { max-width: 420px; margin: 48px auto; padding: 32px; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+    input[type=password] { width: 100%; box-sizing: border-box; padding: 11px 12px; font-size: 15px; border: 1px solid #d1d5db; border-radius: 8px; }
+    input[type=submit] { width: 100%; margin-top: 22px; padding: 12px; font-size: 15px; color: #fff; background: #2b6cb0; border: 0; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="scenario-banner">
+    <b>Scenario: Okta Identity Engine password step (issue #65).</b> The password input is named <code>credentials.passcode</code> with <code>autocomplete="off"</code>.
+    <b>Correct behavior:</b> it is a password, not a one-time code: the extension offers the saved login and fills the password.
+  </div>
+  <main class="wrap">
+    <form method="POST" action="javascript:void(0)" id="form20">
+      <h2>Verify with your password</h2>
+      <div class="identifier-container"><span class="identifier" data-se="identifier">test@example.com</span></div>
+      <div data-se="o-form-fieldset-credentials.passcode">
+        <label for="input28">Password&nbsp;</label>
+        <input type="password" placeholder="" name="credentials.passcode" id="input28" aria-label="" autocomplete="off" class="password-with-toggle" spellcheck="false">
+      </div>
+      <input class="button button-primary" type="submit" value="Verify">
+    </form>
+  </main>
+</body>
+</html>
