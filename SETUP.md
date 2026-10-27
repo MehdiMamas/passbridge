@@ -75,6 +75,15 @@ Maintainer: the private key is the Keychain item "PassBridge release signing key
 
 For each release, after the tag build uploads `passbridge.zip`: download it, then `node scripts/sign-release.mjs sign passbridge.zip` (reads the key from the Keychain, writes `passbridge.zip.sig` and checks it against the pinned key; `--key <pem file>` uses a PEM file instead), then `gh release upload vX passbridge.zip.sig`.
 
+### Automatic updates (Windows)
+
+Install the helper once and every later update installs by itself, with no folder picker and no "Save X.js?" prompts:
+
+1. Install [Python](https://www.python.org/downloads/) and tick "Add python.exe to PATH".
+2. Download `passbridge-windows-helper.zip` from the [latest release](https://github.com/MehdiMamas/passbridge/releases/latest) and unzip it.
+3. In that folder run `powershell -ExecutionPolicy Bypass -File ./install.ps1`. It should end with "Updates now install by themselves". If it says Python was not found, fix step 1 and run it again.
+4. Fully quit Chrome (check the tray) and reopen it.
+
 ### Update without the helper
 
 Without the updater host, Update now opens an update page. The first time, choose the PassBridge folder (the one loaded in `chrome://extensions`) and allow PassBridge to edit it. Chrome drops that permission whenever the extension restarts, so the next update opens the folder picker at the same folder: press Select and choose Allow on every visit, and later updates take one click. The page checks the same signature and SHA-256, writes the new files next to the old ones, swaps them in and restarts the extension. If a step fails, the previous files are put back. A browser that blocks the File System Access API gets the release link instead.
@@ -116,7 +125,7 @@ The installer points Chrome at the WindowsApps alias for `iCloudPasswordsExtensi
 
 `native/windows/uninstall.ps1` removes the PassBridge host keys and the older `com.openpasswords.*` keys, and clears the password-manager policy if PassBridge set it. It does not remove iCloud for Windows.
 
-Python is needed only for the "Hide Chrome's password manager" setting. Filling passwords does not need Python. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
+Python is needed for automatic updates and the "Hide Chrome's password manager" setting. Filling passwords does not need Python. Without it, `install.ps1` installs only Apple's helper, and every update asks for the PassBridge folder and Chrome asks to save each file. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
 
 On some PCs `HKCU\Software\Policies` is locked. Then the setting asks for a UAC approval and imports the policy into your own user hive, even when a different administrator account approves it.
 

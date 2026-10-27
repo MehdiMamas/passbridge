@@ -97,8 +97,11 @@ foreach ($name in @("py", "python")) {
   if ($py) { break }
 }
 if (-not $py) {
-  Write-Output "Python was not found, so the policy helper was not registered."
-  Write-Output "Install Python, then run this script again. Password fill does not need it."
+  Write-Output ""
+  Write-Output "Python was not found, so the update and policy helpers were NOT installed."
+  Write-Output "Without them every update asks for the PassBridge folder and Chrome asks to save each file."
+  Write-Output "Install Python from https://www.python.org/downloads/ (tick 'Add python.exe to PATH'), then run this script again."
+  Write-Output "Password fill does not need Python."
   exit 0
 }
 
@@ -165,4 +168,5 @@ foreach ($root in $browsers) {
 
 Write-Output ""
 Write-Output "Helpers installed to $Dest"
-Write-Output "Fully quit and reopen the browser, then use the toggle in PassBridge settings."
+Write-Output "Updates now install by themselves: no folder picker and no Save prompts."
+Write-Output "Fully quit the browser (check the tray) and reopen it once so it finds the helpers."
