@@ -38,7 +38,7 @@ function Progress({ value }) {
   );
 }
 
-export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore }) {
+export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, onSkipHelper, helperUrl }) {
   const working = phase === "working";
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8 text-[13px]">
@@ -108,6 +108,26 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
             <a className={`${primary} self-start`} href={release?.pageUrl} target="_blank" rel="noopener">
               Download from the release page
             </a>
+          </>
+        )}
+        {phase === "helper" && (
+          <>
+            <p className="font-semibold">Install the PassBridge helper once, then every update installs by itself with no prompts.</p>
+            <a className={`${primary} self-start`} href={helperUrl} target="_blank" rel="noopener">
+              Download the helper
+            </a>
+            <ol className="ml-5 flex list-decimal flex-col gap-1">
+              <li>Extract the zip and open the folder.</li>
+              <li>
+                Run <code className="font-mono">powershell -ExecutionPolicy Bypass -File .\install.ps1</code>
+              </li>
+              <li>Restart Chrome.</li>
+              <li>Click Update again.</li>
+            </ol>
+            <button type="button" className={`${link} self-start`} onClick={onSkipHelper}>
+              Update anyway
+            </button>
+            <p className={muted}>Chrome will ask you to save each file. Click Save every time, or the update is left half done.</p>
           </>
         )}
         {phase === "ready" && (
