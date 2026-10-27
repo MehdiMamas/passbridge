@@ -15,9 +15,26 @@ import sys
 import zipfile
 
 EXT_ID = "pejdijmoenmkgeppbflobdenhhabjlaj"
-APPDIR = os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", "~/Library/Application Support/PassBridge"))
+WINDOWS = os.name == "nt"
+
+
+def local_appdata(env=None):
+    env = os.environ if env is None else env
+    return env.get("LOCALAPPDATA") or os.path.expanduser("~/AppData/Local")
+
+
+def default_appdir(windows=WINDOWS, env=None):
+    env = os.environ if env is None else env
+    if env.get("PASSBRIDGE_APPDIR"):
+        return os.path.expanduser(env["PASSBRIDGE_APPDIR"])
+    if windows:
+        return os.path.join(local_appdata(env), "PassBridge")
+    return os.path.expanduser("~/Library/Application Support/PassBridge")
+
+
+APPDIR = default_appdir()
 SAVED = "updater.json"
-SUPPORT = os.path.expanduser("~/Library/Application Support")
+SUPPORT = local_appdata() if WINDOWS else os.path.expanduser("~/Library/Application Support")
 # same browsers install.sh registers hosts for
 BROWSER_DIRS = [
     "Google/Chrome",
@@ -29,6 +46,14 @@ BROWSER_DIRS = [
     "Arc/User Data",
     "Vivaldi",
     "BraveSoftware/*",
+]
+# the same browsers install.ps1 registers hosts for, under %LOCALAPPDATA%
+BROWSER_DIRS_WIN = [
+    "Google/Chrome/User Data",
+    "Microsoft/Edge/User Data",
+    "BraveSoftware/Brave-Browser/User Data",
+    "Chromium/User Data",
+    "Vivaldi/User Data",
 ]
 UNPACKED = 4  # extensions.settings[id].location for "load unpacked"
 MAX_ZIP = 64 * 1024 * 1024
@@ -54,20 +79,21 @@ def our_folder(path, key=None):
     return key is None or m["key"] == key
 
 
-def preference_paths(support=None):
+def preference_paths(support=None, windows=WINDOWS):
     support = support or SUPPORT
     out = []
-    for pattern in BROWSER_DIRS:
+    for pattern in BROWSER_DIRS_WIN if windows else BROWSER_DIRS:
         for browser in glob.glob(os.path.join(glob.escape(support), pattern)):
             for name in ("Preferences", "Secure Preferences"):
+                # Windows keeps the profiles beside "User Data"'s own files, so "*" is Default, Profile 1 ...
                 out += glob.glob(os.path.join(glob.escape(browser), "*", name))
     return out
 
 
-def find_folders(support=None):
+def find_folders(support=None, windows=WINDOWS):
     """distinct unpacked folders for our id whose manifest carries a key, from every browser profile"""
     found = []
-    for prefs in preference_paths(support):
+    for prefs in preference_paths(support, windows):
         try:
             with open(prefs, encoding="utf-8") as f:
                 data = json.load(f)
@@ -97,7 +123,29 @@ def save_folder(path):
         json.dump({"folder": path}, f)
 
 
+def choose_folder_windows():
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "$d = New-Object System.Windows.Forms.FolderBrowserDialog;"
+        "$d.Description = 'Choose the PassBridge folder';"
+        "$d.ShowNewFolderButton = $false;"
+        "$top = New-Object System.Windows.Forms.Form; $top.TopMost = $true;"
+        "if ($d.ShowDialog($top) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }"
+    )
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-STA", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    path = r.stdout.strip()
+    return os.path.realpath(path) if r.returncode == 0 and path else None
+
+
 def choose_folder():
+    if WINDOWS:
+        return choose_folder_windows()
     r = subprocess.run(
         ["osascript", "-e", 'POSIX path of (choose folder with prompt "Choose the PassBridge folder")'],
         capture_output=True,
@@ -156,8 +204,29 @@ def safe_extract(zip_bytes, dest):
                 os.chmod(target, 0o755)
 
 
+def overlay(src, dest):
+    """make dest hold exactly src's files, writing into the existing folder (works while files are open elsewhere)"""
+    keep = set()
+    for base, dirs, files in os.walk(src):
+        rel = os.path.relpath(base, src)
+        target = dest if rel == "." else os.path.join(dest, rel)
+        os.makedirs(target, exist_ok=True)
+        for name in files:
+            keep.add(os.path.normpath(os.path.join(target, name)))
+            shutil.copyfile(os.path.join(base, name), os.path.join(target, name))
+    for base, dirs, files in os.walk(dest, topdown=False):
+        for name in files:
+            path = os.path.normpath(os.path.join(base, name))
+            if path not in keep:
+                os.remove(path)
+        for name in dirs:
+            path = os.path.join(base, name)
+            if not os.listdir(path):
+                os.rmdir(path)
+
+
 def swap(folder, zip_bytes, version):
-    folder = folder.rstrip("/")
+    folder = folder.rstrip("/\\" if WINDOWS else "/")
     old_manifest = manifest_of(folder)
     if not old_manifest or not old_manifest.get("key"):
         raise UpdateError("The current folder has no manifest key.")
@@ -168,6 +237,7 @@ def swap(folder, zip_bytes, version):
             shutil.rmtree(stale, ignore_errors=True)
     os.makedirs(tmp)
     moved = False
+    inplace = False
     try:
         safe_extract(zip_bytes, tmp)
         new_manifest = manifest_of(tmp)
@@ -175,11 +245,27 @@ def swap(folder, zip_bytes, version):
             raise UpdateError("The update isn't signed for this install (key differs).")
         if new_manifest.get("version") != version:
             raise UpdateError("The update has a different version than expected.")
-        os.rename(folder, old)
-        moved = True
-        os.rename(tmp, folder)
+        try:
+            os.rename(folder, old)
+        except OSError:
+            if not WINDOWS:
+                raise
+            # Chrome holds files open in the folder, so it can't be renamed: back it up, then overwrite in place
+            shutil.copytree(folder, old)
+            inplace = True
+            overlay(tmp, folder)
+            shutil.rmtree(tmp, ignore_errors=True)
+        else:
+            moved = True
+            os.rename(tmp, folder)
     except BaseException as exc:
-        if moved:
+        if inplace:
+            try:
+                overlay(old, folder)
+                shutil.rmtree(old, ignore_errors=True)
+            except OSError:
+                pass
+        elif moved:
             shutil.rmtree(folder, ignore_errors=True)
             os.rename(old, folder)
         shutil.rmtree(tmp, ignore_errors=True)
@@ -223,6 +309,11 @@ def send(obj):
 
 
 def main():
+    if WINDOWS:
+        import msvcrt
+
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
     raw = sys.stdin.buffer.read(4)
     if len(raw) < 4:
         sys.exit(0)
