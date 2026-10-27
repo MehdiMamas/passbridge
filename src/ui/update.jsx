@@ -5,13 +5,13 @@ import { markUpdatedTo } from "../update/check.js";
 import { downloadRelease, latestRelease } from "../update/release.js";
 import { manifestProblem, readZip } from "../update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, looksLikeSource, recoverUpdate, setUpdating } from "../update/files.js";
-import { withUpdateLock } from "../update/lock.js";
+import { BUSY_MESSAGE, withUpdateLock } from "../update/lock.js";
 import { folderForUpdate, folderStore, pickFolder } from "../update/folder.js";
 
 const ERRORS = {
   cancelled: "No folder was chosen.",
   notsource: "That folder doesn't hold the PassBridge source (no PassBridge manifest.json). Choose the folder loaded in chrome://extensions.",
-  busy: "An update is already running in another PassBridge page.",
+  busy: BUSY_MESSAGE,
   notown: "That folder isn't the one PassBridge runs from. Choose the folder loaded in chrome://extensions.",
   download: "Couldn't download the update.",
   verify: "The update failed its signature check.",

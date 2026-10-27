@@ -825,6 +825,10 @@ function folderEnv(saved, { own = true, source = true, pickThrows = false } = {}
   const helper = await installUpdate("1.4.1");
   ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(helper.error));
 
+  const heldLocks = { request: async (name, opts, cb) => cb(null) };
+  const busy = await installUpdate("1.4.1", { publicKey, locks: heldLocks });
+  ok("helper update: refused with the plain message while another update holds the lock", !busy.ok && busy.error === "An update is already running in another PassBridge page.");
+
   // the updater host answering, with storage and reload stubbed
   const helperEnv = (hostReply) => {
     const env = fakeUpdateEnv();

@@ -1,6 +1,7 @@
 // one-click update: download the latest release, verify it here, hand the zip to the updater host, reload
 import { markUpdatedTo } from "./check.js";
 import { downloadRelease, latestRelease } from "./release.js";
+import { BUSY_MESSAGE, withUpdateLock } from "./lock.js";
 import { PUBLIC_KEY_B64 } from "./verify.js";
 
 export const UPDATER_HOST = "com.passbridge.updater";
@@ -30,8 +31,14 @@ const MESSAGES = {
   nokey: "This build can't verify updates yet.",
 };
 
-// returns {ok:true} (the extension reloads right after) or {ok:false, error} with short text for the popup
-export async function installUpdate(currentVersion = chrome.runtime.getManifest().version, { publicKey = PUBLIC_KEY_B64 } = {}) {
+// returns {ok:true} (the extension reloads right after) or {ok:false, error} with short text for the popup.
+// shares one lock with the folder update page, so only one update runs across all PassBridge pages
+export async function installUpdate(currentVersion = chrome.runtime.getManifest().version, { publicKey = PUBLIC_KEY_B64, locks } = {}) {
+  const locked = await withUpdateLock(() => runInstall(currentVersion, publicKey), locks);
+  return locked.ok ? locked.value : { ok: false, error: BUSY_MESSAGE };
+}
+
+async function runInstall(currentVersion, publicKey) {
   const fail = (key, extra) => ({ ok: false, error: extra || MESSAGES[key] });
   if (!publicKey) return fail("nokey");
   const release = await latestRelease(currentVersion);

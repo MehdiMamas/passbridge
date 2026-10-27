@@ -1,5 +1,6 @@
 // one update at a time across every open PassBridge page: the web lock is shared by the whole extension
 export const UPDATE_LOCK = "passbridge-update";
+export const BUSY_MESSAGE = "An update is already running in another PassBridge page.";
 
 /**
  * @template T
