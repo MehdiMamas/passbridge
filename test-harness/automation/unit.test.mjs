@@ -13,7 +13,7 @@ import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts 
 import { digestHex, verifyRelease } from "../../src/update/verify.js";
 import { downloadRelease, latestRelease } from "../../src/update/release.js";
 import { autoInstallUpdate, installUpdate, updateHelper } from "../../src/update/install.js";
-import { helperFirst, isWindows } from "../../src/update/platform.js";
+import { isWindows, updateRoute } from "../../src/update/platform.js";
 import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
@@ -1021,9 +1021,9 @@ globalThis.fetch = realFetch;
   ok("sign-release: a helper zip gets a .sig that verifies", sigBytes.length === 64 && (await verifyRelease(readFileSync(zipPath), sigBytes, hex, raw)));
 }
 
-ok("update page: Windows without the helper offers the helper first", helperFirst({ windows: true, helper: false, skipped: false }));
-ok("update page: Windows with the helper, or after Update anyway, goes straight on", !helperFirst({ windows: true, helper: true, skipped: false }) && !helperFirst({ windows: true, helper: false, skipped: true }));
-ok("update page: other systems never see the helper panel", !helperFirst({ windows: false, helper: false, skipped: false }));
+ok("update page: Windows with the helper installs through it, never a folder write", updateRoute({ windows: true, helper: true }) === "native");
+ok("update page: Windows without the helper shows only the helper step, with no folder fallback", updateRoute({ windows: true, helper: false }) === "helper");
+ok("update page: other systems keep the folder update", updateRoute({ windows: false, helper: false }) === "folder" && updateRoute({ windows: false, helper: true }) === "folder");
 ok("update page: Windows is read from userAgentData or platform", isWindows({ userAgentData: { platform: "Windows" } }) && isWindows({ platform: "Win32" }) && !isWindows({ platform: "MacIntel" }) && !isWindows({}));
 
 console.log(failed ? `\n${failed} failed` : "\nunit ok");

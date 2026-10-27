@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "./chrome.js";
+
+async function helperReady(tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    if ((await send({ type: "updaterAvailable" }))?.ok) return true;
+    if (i < tries - 1) await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
 import { PopupScreen } from "./popup-screen.jsx";
 
 function PopupApp() {
@@ -215,8 +223,9 @@ function PopupApp() {
         window.close();
       }}
       onInstallUpdate={async () => {
-        // without the helper the update page swaps the files through a folder the user picks
-        if (!canInstallUpdate) {
+        // the helper can be slow when the popup opens: ask again before falling back to the update page,
+        // which on Windows only offers the helper and elsewhere swaps the files through a folder the user picks
+        if (!canInstallUpdate && !(await helperReady())) {
           await chrome.tabs.create({ url: chrome.runtime.getURL("src/update.html") });
           window.close();
           return;

@@ -1016,7 +1016,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
       const fromUi = isFromOwnUi(sender);
       const fromContent = sender.id === chrome.runtime.id && sender.tab !== undefined;
-      if (!fromUi && !(fromContent && CONTENT_ALLOWED.has(msg?.type))) {
+      // the update page runs in a tab, so it is told apart by its own extension URL and may only install
+      const fromUpdatePage = sender.id === chrome.runtime.id && !!sender.url?.startsWith(chrome.runtime.getURL(UPDATE_PAGE));
+      if (!fromUi && !(fromContent && CONTENT_ALLOWED.has(msg?.type)) && !(fromUpdatePage && msg?.type === "installUpdate")) {
         sendResponse({ ok: false, error: "forbidden" });
         return;
       }
@@ -1611,6 +1613,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true });
           break;
 
+        case "updaterAvailable":
+          sendResponse({ ok: await updaterAvailable() });
+          break;
         case "installUpdate":
           sendResponse(await installUpdate());
           break;
