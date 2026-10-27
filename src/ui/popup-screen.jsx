@@ -126,6 +126,7 @@ export function PopupScreen({
   showFavicons,
   update,
   installingUpdate,
+  checkingUpdate,
   onVerify,
   onNewCode,
   onFill,
@@ -140,6 +141,7 @@ export function PopupScreen({
   onOpenUpdate,
   onInstallUpdate,
   onDismissUpdate,
+  onCheckUpdate,
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
@@ -354,6 +356,11 @@ export function PopupScreen({
             <button type="button" className="text-xs text-accent" onClick={onReport}>
               Report this page
             </button>
+            {onCheckUpdate && (
+              <button type="button" disabled={checkingUpdate} className="text-xs text-accent disabled:opacity-60" onClick={onCheckUpdate}>
+                {checkingUpdate ? "Checking…" : "Check for updates"}
+              </button>
+            )}
             <button type="button" className="text-xs text-accent" onClick={onSettings}>
               Settings
             </button>

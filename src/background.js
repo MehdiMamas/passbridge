@@ -323,9 +323,9 @@ chrome.alarms.onAlarm.addListener((a) => {
   sweepExpiredSecrets();
 });
 
-// hourly, checkForUpdate itself waits a day between requests
+// every 30 minutes, checkForUpdate itself skips a request made inside UPDATE_CHECK_MS
 const UPDATE_ALARM = "update-check";
-chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: 60 });
+chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: 30 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === UPDATE_ALARM) checkForUpdate();
 });
