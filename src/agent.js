@@ -1,6 +1,6 @@
 // agent sign-in: a local program asks over a native host to fill a login into a tab.
 // replies carry status and usernames only, never a password or a code.
-import { getSettings, hostBlocked } from "./settings.js";
+import { SETTINGS_AREA, getSettings, hostBlocked } from "./settings.js";
 
 const HOST = "com.passbridge.agent";
 const LOG_KEY = "agentLog";
@@ -209,7 +209,7 @@ export function initAgent(deps) {
   }
 
   chrome.storage?.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.agentSignIn) {
+    if (area === SETTINGS_AREA && changes.agentSignIn) {
       delay = 1000;
       sync();
     }

@@ -4,7 +4,7 @@
 import { State, setDeviceLabel } from "./apple/protocol.js";
 import { createClient } from "./session/create-client.js";
 import { labelForOs } from "./apple/os-label.js";
-import { getSettings, hostBlocked } from "./settings.js";
+import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
 import { generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { passwordSearchSteps } from "./session/password-search.js";
@@ -377,9 +377,24 @@ function suppressChromeAutofill() {
     } catch (_) {}
   });
 }
+function applySyncedPrivacy(changes) {
+  const svc = chrome.privacy?.services;
+  /** @type {[string, chrome.types.ChromeSetting<boolean> | undefined][]} */
+  const pairs = [
+    ["suppressSaveBubble", svc?.passwordSavingEnabled],
+    ["suppressAddressAutofill", svc?.autofillAddressEnabled],
+  ];
+  for (const [key, pref] of pairs) {
+    if (!changes[key] || !pref) continue;
+    try {
+      if (changes[key].newValue) pref.set({ value: false }, () => void chrome.runtime.lastError);
+      else pref.clear({}, () => void chrome.runtime.lastError);
+    } catch (_) {}
+  }
+}
 chrome.runtime.onInstalled.addListener(suppressChromeAutofill);
 chrome.runtime.onStartup.addListener(suppressChromeAutofill);
-suppressChromeAutofill();
+migrateSettingsToSync().catch(() => {}).then(suppressChromeAutofill);
 
 // content messages carry sender.tab, the popup never does
 function isFromOwnUi(sender) {
@@ -946,9 +961,11 @@ chrome.tabs?.onUpdated.addListener((tabId, info) => {
   }
 });
 chrome.storage?.onChanged.addListener((changes, area) => {
-  if (area !== "local") return;
+  if (area !== "local" && area !== SETTINGS_AREA) return;
   if (changes.enableBadge?.newValue === false) clearBadges();
   if (changes.enableContextMenu || changes.enableBadge) refreshActiveTab();
+  // switched in another Chrome of this profile: apply it to this one too
+  if (area === SETTINGS_AREA) applySyncedPrivacy(changes);
   if (changes.latestRelease || changes.dismissedRelease || changes.canCheckForUpdates) syncUpdateBadge();
   if (changes.canCheckForUpdates?.newValue) checkForUpdate(Date.now(), { force: true });
 });
@@ -1256,7 +1273,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (site) {
             const settings = await getSettings();
             const excludedDomains = Array.from(new Set([...(settings.excludedDomains || []), site]));
-            await chrome.storage.local.set({ excludedDomains });
+            await settingsStore().set({ excludedDomains });
           }
           sendResponse({ ok: true });
           break;

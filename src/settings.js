@@ -26,9 +26,23 @@ export const SETTINGS_DEFAULTS = {
   canCheckForUpdates: true,
 };
 
+// settings follow the Chrome profile to every signed-in machine; machine state stays in local
+export const SETTINGS_AREA = "sync";
+export const settingsStore = () => chrome.storage[SETTINGS_AREA];
+
+// one-time move of a machine's local settings into sync; values already in sync win
+export async function migrateSettingsToSync() {
+  const keys = Object.keys(SETTINGS_DEFAULTS);
+  const local = await chrome.storage.local.get(keys);
+  if (!Object.keys(local).length) return;
+  const synced = await settingsStore().get(keys);
+  if (!Object.keys(synced).length) await settingsStore().set(local);
+  await chrome.storage.local.remove(keys);
+}
+
 export function getSettings() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(SETTINGS_DEFAULTS, (o) => {
+    settingsStore().get(SETTINGS_DEFAULTS, (o) => {
       const settings = chrome.runtime.lastError
         ? { ...SETTINGS_DEFAULTS }
         : { ...SETTINGS_DEFAULTS, ...o };

@@ -151,7 +151,7 @@ export function PopupScreen({
 
   useEffect(() => {
     try {
-      chrome.storage.local.get({ agentSignIn: false }, (o) => setAgentOn(o?.agentSignIn === true));
+      chrome.storage.sync.get({ agentSignIn: false }, (o) => setAgentOn(o?.agentSignIn === true));
     } catch {}
   }, []);
 

@@ -24,7 +24,7 @@ await main(async () => {
   const t2 = await menuText(page);
   ok("http default: refusal names HTTPS", /non-HTTPS/.test(t2), `got "${t2}"`);
 
-  await sw.evaluate(() => chrome.storage.local.set({ canFillOnHttp: true }));
+  await sw.evaluate(() => chrome.storage.sync.set({ canFillOnHttp: true }));
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);
   await page.focus('input[name="username"]');
