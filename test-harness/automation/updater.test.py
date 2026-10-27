@@ -151,7 +151,7 @@ ok("lookup: a non-unpacked entry is ignored", up.find_folders(str(support)) == [
 profile("Microsoft Edge", "Default", a, ext_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 profile("Vivaldi", "Default", nokey)
 ok("lookup: other ids and folders without our key are ignored", up.find_folders(str(support)) == [os.path.realpath(a)])
-ok("lookup: status returns the single folder", up.handle({"op": "status"}, support=str(support)) == {"ok": True, "folder": os.path.realpath(a)})
+ok("lookup: status returns the single folder", up.handle({"op": "status"}, support=str(support)) == {"ok": True, "folder": os.path.realpath(a), "helperVersion": None})
 r = up.handle(req(good, "2.0.0"), support=str(support), chooser=lambda: (_ for _ in ()).throw(AssertionError("asked")))
 ok("lookup: a single folder installs without asking", r.get("ok") and (a / "src/a.js").exists(), r)
 try:
@@ -214,6 +214,44 @@ try:
 finally:
     up.os.rename = real_rename
     up.WINDOWS = False
+
+# install-helper
+def helper_zip(version="2.0.0", extra=(), root="passbridge-macos-helper"):
+    entries = [(f"{root}/passbridge-policy.py", "# new policy"), (f"{root}/passbridge-updater.py", "# new updater")]
+    if version is not None:
+        entries.append((f"{root}/VERSION", version + "\n"))
+    return make_zip(entries + list(extra))
+
+
+def hreq(z, version):
+    return {"op": "install-helper", "zip": base64.b64encode(z).decode(), "version": version}
+
+
+app = Path(TMP) / "app"
+app.mkdir(parents=True, exist_ok=True)
+(app / "passbridge-policy.py").write_text("# old policy")
+ok("status: helperVersion is null when unknown", up.handle({"op": "status"}, support=TMP).get("helperVersion", 1) is None)
+ran = []
+r = up.handle(hreq(helper_zip(), "2.0.0"), installer=lambda root: ran.append(root))
+ok("install-helper: replaces the scripts", r.get("ok") and (app / "passbridge-policy.py").read_text() == "# new policy" and (app / "passbridge-updater.py").read_text() == "# new updater", r)
+ok("install-helper: writes helper-version and status returns it", (app / "helper-version").read_text() == "2.0.0" and up.handle({"op": "status"}, support=TMP)["helperVersion"] == "2.0.0")
+ok("install-helper: a new host script runs the installer, no leftover temp files", len(ran) == 1 and not list(app.glob("*.new")), ran)
+ran.clear()
+r = up.handle(hreq(helper_zip(), "2.0.0"), installer=lambda root: ran.append(root))
+ok("install-helper: no new host means no installer run", r.get("ok") and not ran, (r, ran))
+for label, z, v in [
+    ("no VERSION file", helper_zip(None), "3.0.0"),
+    ("path traversal", helper_zip("3.0.0", [("passbridge-macos-helper/../../evil.py", "x")]), "3.0.0"),
+    ("absolute path", helper_zip("3.0.0", [("/tmp/pb-evil.py", "x")]), "3.0.0"),
+    ("version mismatch", helper_zip("3.0.0"), "9.9.9"),
+]:
+    before = (app / "passbridge-policy.py").read_text()
+    r = up.handle(hreq(z, v), installer=lambda root: None)
+    ok(f"install-helper: {label} is refused and nothing changes", not r["ok"] and (app / "passbridge-policy.py").read_text() == before and (app / "helper-version").read_text() == "2.0.0" and not (Path(TMP) / "evil.py").exists(), r)
+hl = zipfile.ZipInfo("passbridge-macos-helper/link.py")
+hl.external_attr = 0o120777 << 16
+r = up.handle(hreq(helper_zip("3.0.0", [hl]), "3.0.0"), installer=lambda root: None)
+ok("install-helper: a symlink entry is refused", not r["ok"], r)
 
 # framing over stdio
 msg = json.dumps({"op": "status"}).encode()
