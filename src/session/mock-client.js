@@ -109,7 +109,10 @@ export function createMockClient(kind) {
       client.state = "needs_pin";
       throw err;
     },
-    async saveLogin() {},
+    async saveLogin(tabId, url, username, password) {
+      // lets a driver read what would have gone to Apple's sheet
+      (globalThis.__mockSaved ||= []).push({ url, username, password });
+    },
     launchPasswordsApp() {},
   };
   return client;
