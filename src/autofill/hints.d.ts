@@ -2,5 +2,5 @@
 // not against @bitwarden/common's types. Only the lists content.js reads are declared.
 export declare class AutoFillConstants {
   static readonly EmailFieldNames: string[];
-  static readonly UsernameFieldNames: string[];
+  static readonly UnambiguousUsernameFieldNames: string[];
 }

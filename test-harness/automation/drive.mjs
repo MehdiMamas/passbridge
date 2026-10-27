@@ -45,6 +45,18 @@ await main(async () => {
     ok("unlocked/okta-passcode: fills the password", pw.length > 0, `value="${pw}"`);
     await okta.close();
   }
+  {
+    const words = await ctx.newPage();
+    await words.goto(`${BASE}/login-form-words.html`, { waitUntil: "domcontentloaded" });
+    await words.waitForTimeout(300);
+    await words.focus("#login-company");
+    await words.waitForTimeout(500);
+    ok("unlocked/form-words: no offer on login-company", !(await menuShown(words)), "dropdown appeared on the workspace box");
+    await words.focus("#login-email");
+    await words.waitForTimeout(500);
+    ok("unlocked/form-words: offer on login-email", await menuShown(words), "no dropdown on the email box");
+    await words.close();
+  }
   const page = await ctx.newPage();
   await page.goto(`${BASE}/forum.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);
