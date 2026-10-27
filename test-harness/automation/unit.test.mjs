@@ -1,4 +1,5 @@
 import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.js";
+import { isBareCodeOtp } from "../../src/otp-field.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "../../src/totp-setup.js";
 import { loginAction, menuItems } from "../../src/menu.js";
@@ -1050,5 +1051,11 @@ ok("update page: Windows is read from userAgentData or platform", isWindows({ us
   ok("menu: loginAction reads the id", JSON.stringify(loginAction("pb-pass-2")) === '{"action":"pass","index":2}' && loginAction("pb-acct-1") === null && loginAction("pb-otp") === null);
 }
 
+const backblazeForm = "Two-Factor Verification Enter the 6-digit verification code from your authentication application Code Enter Code";
+ok("backblaze two-factor code field is a one-time code", isBareCodeOtp(["code-field", "code-field", "Code"], backblazeForm));
+ok("a coupon code field is not a one-time code", !isBareCodeOtp(["coupon-code", "coupon-code", "Coupon code"], "Apply a coupon Coupon code Apply"));
+ok("a bare code field with no two-factor text is not a one-time code", !isBareCodeOtp(["code", "code", "Code"], "Redeem your code Code Redeem"));
+ok("a zip code field on a verification form is not a one-time code", !isBareCodeOtp(["zip-code", "zip", "Zip code"], backblazeForm));
+ok("a big page around a bare code field is not used as context", !isBareCodeOtp(["code"], backblazeForm + " x".repeat(400)));
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
