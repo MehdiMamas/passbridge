@@ -1,5 +1,6 @@
 import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
+import { parseSetupInput, totpHandoff, withAccount } from "../../src/totp-setup.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
@@ -107,6 +108,16 @@ ok("setup key is the base32 secret without padding", otpAuthSecret(otp.uri) === 
 ok("a non-setup link has no setup key", otpAuthSecret("https://example.com/?secret=JBSWY3DPEHPK3PXP") === "");
 ok("wifi and migration QR codes are not setup links", parseOtpAuth("WIFI:S:cafe;T:WPA;P:secret;;") === null && parseOtpAuth("otpauth-migration://offline?data=abc") === null);
 ok("a grouped setup key with spaces is accepted", otpAuthSecret("otpauth://totp/Work?secret=JBSW%20Y3DP%20EHPK%203PXP") === "JBSWY3DPEHPK3PXP");
+{
+  const pasted = parseSetupInput("jbsw y3dp ehpk 3pxp", "chatgpt.com");
+  ok("a pasted grouped setup key becomes an otpauth link", otpAuthSecret(pasted?.uri) === "JBSWY3DPEHPK3PXP" && pasted.account === "chatgpt.com");
+  ok("a pasted otpauth link inside text is found", parseSetupInput("scan: otpauth://totp/A:b?secret=JBSWY3DPEHPK3PXP&issuer=A ok")?.issuer === "A");
+  ok("junk and short keys are refused", parseSetupInput("not a key!") === null && parseSetupInput("ABC") === null && parseSetupInput("") === null);
+  const linked = withAccount(pasted.uri, { username: "me@x.com", issuer: "ChatGPT" });
+  const lp = parseOtpAuth(linked);
+  ok("the chosen login becomes the account and the secret is kept", lp?.account === "me@x.com" && lp?.issuer === "ChatGPT" && otpAuthSecret(linked) === "JBSWY3DPEHPK3PXP");
+  ok("the client message carries only the link and the page", JSON.stringify(Object.keys(totpHandoff(linked, "https://chatgpt.com/connector/mfa")).sort()) === '["totpPageUrl","totpUri"]');
+}
 ok("apple-otpauth totp is accepted", parseOtpAuth("apple-otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP&issuer=Work")?.account === "Work");
 const [scanned, synced] = normalizeOtpEntries([
   { source: "totp", domain: "7E8A4488-FB35-4AC8-B885-3CB52740EFBB", customTitle: "Cashapp", username: "a" },

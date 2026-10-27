@@ -134,6 +134,10 @@ export function PopupScreen({
   onCopy,
   onLookup,
   onOpenApp,
+  onTotpScan,
+  onTotpPaste,
+  onTotpAdd,
+  onTotpCopyKey,
   onLock,
   onRefresh,
   onSettings,
@@ -146,6 +150,12 @@ export function PopupScreen({
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
   const [agentOn, setAgentOn] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [pasted, setPasted] = useState("");
+  const [held, setHeld] = useState(null);
+  const [target, setTarget] = useState("");
+  const [addMsg, setAddMsg] = useState("");
+  const [added, setAdded] = useState(false);
   const win = os === "win";
   const unlocked = state === "unlocked";
 
@@ -325,6 +335,88 @@ export function PopupScreen({
                 <CodeRow key={row.id} row={row} site={site} grouped={false} onCopy={onCopy} onFillCode={onFillCode} />
               ))}
             </ul>
+            {caps?.setUpTotp && onTotpScan && (
+              <div data-passbridge="add-totp" className="flex flex-col gap-1.5">
+                {!addOpen ? (
+                  <button type="button" className="self-start text-xs font-semibold text-accent" onClick={() => setAddOpen(true)}>
+                    Add verification code…
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2">
+                    {!held && (
+                      <>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
+                          onClick={async () => {
+                            setAddMsg("Scanning the visible page…");
+                            const res = await onTotpScan();
+                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || "Couldn't read a QR code.");
+                          }}
+                        >
+                          Scan the visible page
+                        </button>
+                        <input
+                          value={pasted}
+                          onChange={(e) => setPasted(e.target.value)}
+                          placeholder="Or paste the setup key"
+                          aria-label="Setup key"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1 text-[13px]"
+                        />
+                        <button
+                          type="button"
+                          disabled={!pasted.trim()}
+                          className="self-start rounded-lg border border-accent px-2 py-1 text-xs font-semibold text-accent disabled:opacity-50"
+                          onClick={async () => {
+                            const res = await onTotpPaste(pasted);
+                            setPasted("");
+                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || "Not a setup key.");
+                          }}
+                        >
+                          Use this key
+                        </button>
+                      </>
+                    )}
+                    {held && !added && (
+                      <>
+                        <p className="text-[12px]">Which login is this code for?</p>
+                        {logins.length === 0 && <p className="text-[12px] opacity-70">No saved login here. You can pick it in Passwords.</p>}
+                        {logins.map((login) => (
+                          <label key={login.username} className="flex items-center gap-2 text-[13px]">
+                            <input type="radio" name="totp-login" checked={target === login.username} onChange={() => setTarget(login.username)} />
+                            <span className="truncate">{login.username || "(no username)"}</span>
+                          </label>
+                        ))}
+                        <button
+                          type="button"
+                          disabled={logins.length > 0 && !target}
+                          className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                          onClick={async () => {
+                            const res = await onTotpAdd(target);
+                            if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || "Couldn't open Passwords.");
+                          }}
+                        >
+                          Add to Passwords
+                        </button>
+                      </>
+                    )}
+                    {added && (
+                      <>
+                        <p className="text-[12px]">
+                          Passwords is open. It can't be pointed at one login, so choose {target ? <b>{target}</b> : "the login"} there and confirm.
+                        </p>
+                        <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? "Setup key copied." : r?.error || ""); }}>
+                          Copy setup key
+                        </button>
+                      </>
+                    )}
+                    {addMsg && <p className="text-xs opacity-80">{addMsg}</p>}
+                  </div>
+                )}
+              </div>
+            )}
             {note && (
               <p className={`text-xs ${noteTone === "danger" ? "text-danger" : noteTone === "ok" ? "text-ok" : "opacity-70"}`}>{note}</p>
             )}
