@@ -4,29 +4,32 @@
 // folder: update, select, allow on every visit once, then every later update is one click.
 
 /**
- * @param {{ store: { get: () => Promise<any>, set: (h: any) => Promise<void> }, pick: (startIn?: any) => Promise<any>, isOwn: (h: any) => Promise<boolean> }} deps
+ * @param {{ store: { get: () => Promise<any>, set: (h: any) => Promise<void> }, pick: (startIn?: any) => Promise<any>, isOwn: (h: any) => Promise<boolean>, isSource: (h: any) => Promise<boolean> }} deps
  * @param {any} [startIn]
- * @returns {Promise<{ ok: true, folder: any } | { ok: false, error: "cancelled" | "notown" }>}
+ * @returns {Promise<{ ok: true, folder: any } | { ok: false, error: "cancelled" | "notsource" | "notown" }>}
  */
-export async function pickFolder({ store, pick, isOwn }, startIn) {
+export async function pickFolder({ store, pick, isOwn, isSource }, startIn) {
   let folder;
   try {
     folder = await pick(startIn);
   } catch {
     return { ok: false, error: "cancelled" };
   }
+  // checked first: the ownership probe writes a file, which a wrong folder must never get
+  if (!(await isSource(folder))) return { ok: false, error: "notsource" };
   if (!(await isOwn(folder))) return { ok: false, error: "notown" };
   await store.set(folder);
   return { ok: true, folder };
 }
 
 /**
- * @param {{ store: { get: () => Promise<any>, set: (h: any) => Promise<void> }, pick: (startIn?: any) => Promise<any>, isOwn: (h: any) => Promise<boolean> }} deps
- * @returns {Promise<{ ok: true, folder: any } | { ok: false, error: "cancelled" | "notown" }>}
+ * @param {{ store: { get: () => Promise<any>, set: (h: any) => Promise<void> }, pick: (startIn?: any) => Promise<any>, isOwn: (h: any) => Promise<boolean>, isSource: (h: any) => Promise<boolean> }} deps
+ * @returns {Promise<{ ok: true, folder: any } | { ok: false, error: "cancelled" | "notsource" | "notown" }>}
  */
 export async function folderForUpdate(deps) {
   const saved = await deps.store.get();
   if (!saved || (await saved.queryPermission({ mode: "readwrite" })) !== "granted") return pickFolder(deps, saved || undefined);
+  if (!(await deps.isSource(saved))) return { ok: false, error: "notsource" };
   if (!(await deps.isOwn(saved))) return { ok: false, error: "notown" };
   return { ok: true, folder: saved };
 }
