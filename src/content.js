@@ -1,6 +1,7 @@
 // @ts-check
 import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
+import { isBareCodeOtp } from "./otp-field.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
 import { SETTINGS_AREA, SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
@@ -82,6 +83,18 @@ function attrBlob(el) {
     .join(" ");
 }
 
+// a bare "code" text field counts when the form around it talks about two-factor or a verification code
+function isBareCodeField(el) {
+  if (!(el instanceof HTMLInputElement) || !/^(text|tel|number|)$/i.test(el.type)) return false;
+  try {
+    const names = [el.name, el.id, el.getAttribute("aria-label"), el.placeholder];
+    if (el.labels?.length) names.push(...Array.from(el.labels, (l) => l.textContent));
+    return isBareCodeOtp(names, (el.form || el.parentElement?.parentElement)?.textContent);
+  } catch {
+    return false;
+  }
+}
+
 function isOtpField(el) {
   const ac = el.getAttribute("autocomplete") || "";
   if (OTP_AUTOCOMPLETE.test(ac)) return true;
@@ -89,7 +102,7 @@ function isOtpField(el) {
   if (el.inputMode === "numeric" && max === 1) return true;
   const hint = attrBlob(el);
   if (OTP_HINT.test(hint) && !(isPasswordField(el) && PASSWORD_LABEL.test(hint.replace(ONE_TIME_PASSWORD, "")))) return true;
-  return false;
+  return isBareCodeField(el);
 }
 
 function isPasswordField(el) {
