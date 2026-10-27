@@ -10,6 +10,7 @@
     "test": "node scripts/test.mjs",
     "test:unit": "node test-harness/automation/unit.test.mjs",
     "sync": "node scripts/sync-upstream.mjs",
+    "upstream:check": "node scripts/upstream-check.mjs",
     "sync:bitwarden": "node scripts/sync-upstream.mjs bitwarden"
   },
   "dependencies": {
