@@ -1,6 +1,6 @@
 // the folder-update engine on Chrome's own File System Access code. OPFS stands in for the picked folder,
 // which Playwright cannot reach because it intercepts the picker (VERIFICATION.md has that manual run).
-import { applyUpdate, recoverUpdate } from "../src/update/files.js";
+import { applyUpdate, looksLikeSource, recoverUpdate } from "../src/update/files.js";
 import { readZip } from "../src/update/zip.js";
 
 const enc = (s) => new TextEncoder().encode(s);
@@ -58,6 +58,15 @@ window.runUpdateFsChecks = async (zipBytes) => {
   const probe = await (await fresh(opfs, "probe")).getFileHandle("f", { create: true });
   check("files can be moved in place", typeof probe.move === "function");
 
+  const named = await fresh(opfs, "named");
+  await put(named, "manifest.json", '{"name":"PassBridge","version":"1.4.1"}');
+  check("a folder with the PassBridge manifest is accepted", (await looksLikeSource(named)) === true);
+  const other = await fresh(opfs, "other");
+  await put(other, "manifest.json", '{"name":"Something Else"}');
+  check("a folder with another extension's manifest is refused", (await looksLikeSource(other)) === false);
+  check("a folder with a broken manifest is refused", (await looksLikeSource(await oldInstall(opfs, "broken"))) === false);
+  check("an empty folder is refused", (await looksLikeSource(await fresh(opfs, "empty"))) === false);
+
   const applied = await oldInstall(opfs, "apply");
   await applyUpdate(applied, NEXT, { version: "1.4.2" });
   const after = await snapshot(applied);
@@ -85,7 +94,7 @@ window.runUpdateFsChecks = async (zipBytes) => {
     check("a zip made by zip -r reads back", list === "manifest.json=19,src/a.js=600", list);
   }
 
-  for (const name of ["probe", "apply", "clash", "crash"]) await opfs.removeEntry(name, { recursive: true }).catch(() => {});
+  for (const name of ["probe", "named", "other", "broken", "empty", "apply", "clash", "crash"]) await opfs.removeEntry(name, { recursive: true }).catch(() => {});
   document.getElementById("log").textContent = rows.map(([n, p, d]) => `${p ? "PASS" : "FAIL"} ${n}${p ? "" : ` · ${d}`}`).join("\n");
   return rows;
 };

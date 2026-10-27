@@ -175,6 +175,19 @@ export async function hasInterruptedUpdate() {
   return found;
 }
 
+// only a PassBridge source folder is ever written to: its manifest.json names the extension
+/**
+ * @param {FileSystemDirectoryHandle} root
+ * @returns {Promise<boolean>}
+ */
+export async function looksLikeSource(root) {
+  try {
+    return JSON.parse((await readText(root, "manifest.json")) || "null")?.name === "PassBridge";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * @param {FileSystemDirectoryHandle} root
  * @param {(name: string) => Promise<string | null>} readBack

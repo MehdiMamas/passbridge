@@ -15,6 +15,7 @@ import { installUpdate } from "../../src/update/install.js";
 import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
+import { withUpdateLock } from "../../src/update/lock.js";
 import { buildExtension } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -694,7 +695,7 @@ function savedFolder(query, request = "granted") {
   };
   return h;
 }
-function folderEnv(saved, { own = true, pickThrows = false } = {}) {
+function folderEnv(saved, { own = true, source = true, pickThrows = false } = {}) {
   const env = { picked: 0, startIn: [], store: { value: saved, get: async () => env.store.value, set: async (v) => (env.store.value = v) } };
   env.picked_handle = savedFolder("granted");
   env.deps = {
@@ -705,6 +706,7 @@ function folderEnv(saved, { own = true, pickThrows = false } = {}) {
       if (pickThrows) throw new DOMException("cancelled", "AbortError");
       return env.picked_handle;
     },
+    isSource: async () => source,
     isOwn: async () => own,
   };
   return env;
@@ -737,6 +739,28 @@ function folderEnv(saved, { own = true, pickThrows = false } = {}) {
   const env = folderEnv(null, { own: false });
   const r = await folderForUpdate(env.deps);
   ok("folder: a folder that is not this install is refused and not kept", r.error === "notown" && env.store.value === null);
+}
+{
+  const env = folderEnv(null, { source: false });
+  const r = await folderForUpdate(env.deps);
+  ok("folder: a folder without the PassBridge manifest is refused and not kept", r.error === "notsource" && env.store.value === null);
+}
+{
+  const env = folderEnv(savedFolder("granted"), { source: false });
+  ok("folder: a kept folder that lost the PassBridge manifest is refused", (await folderForUpdate(env.deps)).error === "notsource");
+}
+{
+  // the same lock semantics as navigator.locks with ifAvailable: the second request gets null while the first runs
+  let held = false;
+  const locks = { request: async (name, opts, cb) => (held ? cb(null) : ((held = true), cb({ name }).finally(() => (held = false)))) };
+  let release;
+  const first = withUpdateLock(() => new Promise((r) => (release = r)), locks);
+  let ran = false;
+  const second = await withUpdateLock(async () => (ran = true), locks);
+  ok("lock: a second update started while one runs is refused and never runs", second.ok === false && second.error === "busy" && !ran);
+  release("done");
+  ok("lock: the first update still finishes", (await first).value === "done");
+  ok("lock: after it finishes a new update can start", (await withUpdateLock(async () => 1, locks)).ok === true);
 }
 {
   const env = folderEnv(null, { pickThrows: true });
@@ -800,6 +824,10 @@ function folderEnv(saved, { own = true, pickThrows = false } = {}) {
   serve(releaseJson([full[0]]));
   const helper = await installUpdate("1.4.1");
   ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(helper.error));
+
+  const heldLocks = { request: async (name, opts, cb) => cb(null) };
+  const busy = await installUpdate("1.4.1", { publicKey, locks: heldLocks });
+  ok("helper update: refused with the plain message while another update holds the lock", !busy.ok && busy.error === "An update is already running in another PassBridge page.");
 
   // the updater host answering, with storage and reload stubbed
   const helperEnv = (hostReply) => {
