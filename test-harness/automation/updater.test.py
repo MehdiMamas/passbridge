@@ -128,7 +128,8 @@ support = Path(TMP) / "support"
 
 
 def profile(browser, profile_name, ext_path, location=4, file="Preferences", ext_id=up.EXT_ID):
-    p = support / browser / profile_name
+    # Windows browsers keep profiles under "User Data"; macOS ones sit directly in the browser folder
+    p = support / browser / ("User Data" if up.WINDOWS else "") / profile_name
     p.mkdir(parents=True, exist_ok=True)
     (p / file).write_text(json.dumps({"extensions": {"settings": {ext_id: {"path": str(ext_path), "location": location}}}}))
 
@@ -177,7 +178,11 @@ sp.mkdir(parents=True, exist_ok=True)
 (sp / "Secure Preferences").write_text(json.dumps({"extensions": {"settings": {up.EXT_ID: {"path": str(wb), "location": 4}}}}))
 paths = up.preference_paths(str(winroot), True)
 ok("windows: Preferences and Secure Preferences of all five browsers are read", len(paths) == 6 and sum(p.endswith("Secure Preferences") for p in paths) == 1, paths)
-ok("windows: the mac layout isn't searched on Windows", up.preference_paths(str(support), True) == [])
+macroot = Path(TMP) / "maclayout"
+mp = macroot / "Google/Chrome/Default"
+mp.mkdir(parents=True, exist_ok=True)
+(mp / "Preferences").write_text("{}")
+ok("windows: the mac layout isn't searched on Windows", up.preference_paths(str(macroot), True) == [])
 ok("windows: two distinct folders are both found", sorted(up.find_folders(str(winroot), True)) == sorted([os.path.realpath(wa), os.path.realpath(wb)]), up.find_folders(str(winroot), True))
 (sp / "Secure Preferences").unlink()
 ok("windows: one folder across browsers is one folder", up.find_folders(str(winroot), True) == [os.path.realpath(wa)])
