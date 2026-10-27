@@ -2,7 +2,7 @@
 import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
-import { SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
+import { SETTINGS_AREA, SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
 import { createLifecycle } from "./reload-recovery.js";
 import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
@@ -47,12 +47,12 @@ function autoUiAllowed() {
   return pbSettings.inlineMenuVisibility !== "off" && !hostBlocked(location.hostname, pbSettings.blockedDomains);
 }
 try {
-  chrome.storage?.local?.get(SETTINGS_DEFAULTS, (o) => {
+  chrome.storage?.[SETTINGS_AREA]?.get(SETTINGS_DEFAULTS, (o) => {
     if (!chrome.runtime.lastError && o) pbSettings = { ...SETTINGS_DEFAULTS, ...o };
     markSettingsLoaded();
   });
   onChrome(chrome.storage.onChanged, (ch, area) => {
-    if (area !== "local") return;
+    if (area !== SETTINGS_AREA) return;
     for (const [k, v] of Object.entries(ch)) {
       if (k in SETTINGS_DEFAULTS) pbSettings[k] = v.newValue;
     }

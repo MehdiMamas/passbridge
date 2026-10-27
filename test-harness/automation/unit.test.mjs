@@ -16,6 +16,7 @@ import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
+import { migrateSettingsToSync } from "../../src/settings.js";
 import { buildExtension } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -274,7 +275,8 @@ function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_n
       return Promise.resolve();
     },
   };
-  globalThis.chrome = { storage: { local }, runtime: { lastError: undefined } };
+  // settings live in sync, machine state in local; one in-memory map serves both
+  globalThis.chrome = { storage: { local, sync: local }, runtime: { lastError: undefined } };
   const env = { data, fetched: [] };
   globalThis.fetch = async (url) => {
     env.fetched.push(String(url));
@@ -348,6 +350,26 @@ const NOW = Date.UTC(2026, 9, 25);
   // what chrome answers while the worker is shutting down for a reload
   globalThis.chrome.storage.local.get = (keys, cb) => (cb ? cb({}) : Promise.reject(new Error("No SW")));
   ok("update: a check while the worker shuts down settles quietly", (await settles(checkForUpdate(NOW))) === "resolved");
+}
+
+{
+  // two areas this time, so a move from local to sync shows
+  const area = (data) => ({
+    data,
+    get: async (keys) => Object.fromEntries(keys.filter((k) => k in data).map((k) => [k, data[k]])),
+    set: async (o) => void Object.assign(data, o),
+    remove: async (keys) => keys.forEach((k) => delete data[k]),
+  });
+  const local = area({ askToSave: false, updateCheckedAt: 5 });
+  const sync = area({});
+  globalThis.chrome = { storage: { local, sync }, runtime: {} };
+  await migrateSettingsToSync();
+  ok("settings: a machine's local settings move to sync once", sync.data.askToSave === false && !("askToSave" in local.data));
+  ok("settings: machine state stays in local", local.data.updateCheckedAt === 5 && !("updateCheckedAt" in sync.data));
+  local.data.askToSave = true;
+  sync.data.askToSave = false;
+  await migrateSettingsToSync();
+  ok("settings: values already in sync win over a second machine's", sync.data.askToSave === false && !("askToSave" in local.data));
 }
 
 function fakePage() {

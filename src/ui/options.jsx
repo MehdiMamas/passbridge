@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { SETTINGS_DEFAULTS as DEFAULTS } from "../settings.js";
+import { SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
 
 function Row({ label, note, children }) {
   return (
@@ -61,11 +61,11 @@ function OptionsApp() {
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
 
   useEffect(() => {
-    chrome.storage.local.get(DEFAULTS, (saved) => {
+    settingsStore().get(DEFAULTS, (saved) => {
       const next = { ...DEFAULTS, ...saved };
       if (!Number(next.clipboardClearMs)) {
         next.clipboardClearMs = DEFAULTS.clipboardClearMs;
-        chrome.storage.local.set({ clipboardClearMs: next.clipboardClearMs });
+        settingsStore().set({ clipboardClearMs: next.clipboardClearMs });
       }
       setSettings(next);
       setExcludedText((next.excludedDomains || []).join("\n"));
@@ -83,13 +83,18 @@ function OptionsApp() {
     });
     readPrivacy("passwordSavingEnabled", setBubble);
     readPrivacy("autofillAddressEnabled", setAddress);
-    return () => chrome.storage.onChanged.removeListener(onLog);
+    addEventListener("pagehide", flushSettings);
+    return () => {
+      chrome.storage.onChanged.removeListener(onLog);
+      removeEventListener("pagehide", flushSettings);
+      flushSettings();
+    };
   }, []);
 
   function persist(partial) {
     const next = { ...settings, ...partial };
     setSettings(next);
-    chrome.storage.local.set(partial);
+    queueSettings(partial);
   }
 
   async function checkNow() {
@@ -313,10 +318,28 @@ function readPrivacy(name, setRow) {
   });
 }
 
+// sync allows 120 writes a minute, and the domain lists save on every keystroke: batch them
+let pendingSettings = {};
+let flushTimer = 0;
+function queueSettings(partial) {
+  Object.assign(pendingSettings, partial);
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushSettings, 600);
+}
+function flushSettings() {
+  clearTimeout(flushTimer);
+  if (!Object.keys(pendingSettings).length) return;
+  const partial = pendingSettings;
+  pendingSettings = {};
+  settingsStore().set(partial, () => {
+    if (chrome.runtime.lastError) console.warn("PassBridge: settings not saved", chrome.runtime.lastError.message);
+  });
+}
+
 function setPrivacy(name, on, setRow, storageKey) {
   const pref = chrome.privacy?.services?.[name];
   if (!pref) return;
-  chrome.storage.local.set({ [storageKey]: on });
+  settingsStore().set({ [storageKey]: on });
   const done = () => readPrivacy(name, setRow);
   if (on) pref.set({ value: false }, done);
   else pref.clear({}, done);
