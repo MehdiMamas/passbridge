@@ -441,6 +441,7 @@ const CONTENT_ALLOWED = new Set([
   "verifyPin",
   "resolveSave",
   "getPlatform",
+  "getSaveDraft",
   "confirmSave",
   "neverSave",
   "dismissSave",
@@ -1183,6 +1184,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
 
+        case "getSaveDraft": {
+          // only our own bar iframe gets the captured password back, to show it for editing
+          const tabId = sender.tab?.id;
+          const offer = tabId != null ? saveOffers.get(tabId) : null;
+          if (!secretFresh(offer) || !(sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
+            return sendResponse({ ok: false, error: "nothing to edit" });
+          }
+          sendResponse({ ok: true, username: offer.target || "", password: offer.password });
+          break;
+        }
+
         case "confirmSave": {
           const tabId = sender.tab?.id;
           const offer = tabId != null ? saveOffers.get(tabId) : null;
@@ -1192,7 +1204,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           saveOffers.delete(tabId);
           await ensureConnected();
-          await client.saveLogin(offer.tabId, offer.frameUrl, offer.target, offer.password);
+          // the bar lets the user fix a missing username or a wrong password before saving
+          const username = typeof msg.username === "string" ? msg.username.trim() : offer.target;
+          const password = typeof msg.password === "string" && msg.password ? msg.password : offer.password;
+          await client.saveLogin(offer.tabId, offer.frameUrl, username, password);
           sendResponse({ ok: true, saved: true });
           break;
         }

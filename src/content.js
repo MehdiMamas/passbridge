@@ -483,7 +483,7 @@ function showSaveBar(msg) {
   iframe.src = chrome.runtime.getURL(`overlay/save-bar.html?token=${token}&update=${msg.update ? "1" : "0"}&user=${encodeURIComponent(msg.username || "")}`);
   Object.assign(iframe.style, {
     width: "360px",
-    height: "148px",
+    height: "268px",
     border: "none",
     borderRadius: "14px",
     background: "transparent",
@@ -500,7 +500,7 @@ function showSaveBar(msg) {
     overflow: "hidden",
     zIndex: "2147483647",
     width: "360px",
-    height: "148px",
+    height: "268px",
   });
   (document.body || document.documentElement).appendChild(host);
   try { host.showPopover(); } catch {}
@@ -509,8 +509,9 @@ function showSaveBar(msg) {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
     const action = e.data.action;
     hideSaveBar();
-    if (action === "save") chrome.runtime.sendMessage({ type: "confirmSave" }).catch(gone);
-    else if (action === "never") chrome.runtime.sendMessage({ type: "neverSave" }).catch(gone);
+    // "save" is sent by the bar itself, so the edited password never crosses the page's message events
+    if (action === "save") return;
+    if (action === "never") chrome.runtime.sendMessage({ type: "neverSave" }).catch(gone);
     else chrome.runtime.sendMessage({ type: "dismissSave" }).catch(gone);
   };
   listen(window, "message", saveListener);
