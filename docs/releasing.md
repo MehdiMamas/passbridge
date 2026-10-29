@@ -12,4 +12,6 @@
    done
    ```
 
+   The workflow leaves the release as a draft, so nobody is offered it unsigned. Publish it once the three `.sig` files are on it: `gh release edit vX.Y.Z --draft=false --latest`. `releases/latest` only shows it after that.
+
 An unsigned zip is never installed: the extension checks each one against the pinned key and the digest GitHub reports. With "Install updates automatically with the helper" on, running extensions install the extension zip and update the helper from its zip with no click.

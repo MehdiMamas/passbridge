@@ -34,6 +34,7 @@ jobs:
           zip -r ../passbridge-windows-helper.zip passbridge-windows-helper
       - uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: |
             passbridge.zip
             passbridge-macos-helper.zip

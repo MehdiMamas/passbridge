@@ -274,7 +274,11 @@ ok("update: a tag that is no version is never newer", !isNewerVersion("desktop-p
 
 // chrome.storage.local in memory, callback and promise forms, plus a fetch that counts its calls
 const realFetch = globalThis.fetch;
-function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_name: "v1.4.0" }) }) {
+const signedAssets = [
+  { name: "passbridge.zip", size: 1, digest: `sha256:${"a".repeat(64)}`, browser_download_url: "https://dl.test/passbridge.zip" },
+  { name: "passbridge.zip.sig", browser_download_url: "https://dl.test/passbridge.zip.sig" },
+];
+function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets }) }) {
   const data = { ...seed };
   const pick = (keys) => {
     if (typeof keys === "string") keys = [keys];
@@ -295,9 +299,10 @@ function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_n
   };
   // settings live in sync, machine state in local; one in-memory map serves both
   globalThis.chrome = { storage: { local, sync: local }, runtime: { lastError: undefined } };
-  const env = { data, fetched: [] };
-  globalThis.fetch = async (url) => {
+  const env = { data, fetched: [], inits: [] };
+  globalThis.fetch = async (url, init) => {
     env.fetched.push(String(url));
+    env.inits.push(init);
     if (reply instanceof Error) throw reply;
     return reply;
   };
@@ -356,7 +361,25 @@ const NOW = Date.UTC(2026, 9, 25);
 {
   const env = fakeUpdateEnv({ latestRelease: "v1.4.0" }, { ok: false, status: 403, json: async () => ({ message: "rate limited" }) });
   await checkForUpdate(NOW);
-  ok("update: a refused request waits a day and keeps the last tag", env.data.updateCheckedAt === NOW && env.data.latestRelease === "v1.4.0");
+  ok("update: a refused request is retried on the next alarm and keeps the last tag", env.data.updateCheckedAt === undefined && env.data.latestRelease === "v1.4.0");
+}
+{
+  const unsigned = fakeUpdateEnv({}, { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets.slice(0, 1) }) });
+  await checkForUpdate(NOW);
+  ok("update: a newer release without its .sig is not offered", (await availableUpdate("1.3.1")) === null && unsigned.data.latestRelease === "v1.4.0");
+  fakeUpdateEnv();
+  await checkForUpdate(NOW);
+  ok("update: a newer release with its .sig is offered", (await availableUpdate("1.3.1"))?.version === "1.4.0");
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: 5 }, { ok: false, status: 403, json: async () => ({}) });
+  await checkForUpdate(NOW, { force: true });
+  ok("update: a refused request does not stamp the check time", env.data.updateCheckedAt === 5);
+}
+{
+  const env = fakeUpdateEnv();
+  await checkForUpdate(NOW, { force: true });
+  ok("update: the check bypasses the HTTP cache", env.inits[0]?.cache === "no-store");
 }
 {
   const env = fakeUpdateEnv();
