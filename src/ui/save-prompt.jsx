@@ -5,6 +5,7 @@ const params = new URLSearchParams(location.search);
 const token = params.get("token") || "";
 const update = params.get("update") === "1";
 const user = params.get("user") || "";
+document.documentElement.style.colorScheme = params.get("scheme") || "";
 
 // "close" only tells the page to remove the bar; the password never goes through window.postMessage,
 // where the page's own listeners would see it. Save talks to the background directly.

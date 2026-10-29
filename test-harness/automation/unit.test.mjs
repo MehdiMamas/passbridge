@@ -20,7 +20,7 @@ import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
-import { migrateSettingsToSync } from "../../src/settings.js";
+import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
 import { OPTION_TABS, helperView, policyMessage, tabFromHash } from "../../src/ui/options-model.js";
 import { buildExtension } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
@@ -1080,6 +1080,9 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("options: a toggle with no helper note still says to restart", policyMessage({ ok: true, hidden: false, needsApproval: true }, true) === "Fully quit and reopen the browser to apply this.");
   ok("options: a toggle shows the helper's own note", policyMessage({ ok: true, hidden: true, note: "Approve it in Windows." }, true) === "Approve it in Windows.");
   ok("options: a failed toggle shows the error or a fallback", policyMessage({ ok: false, error: "denied" }, true) === "denied" && policyMessage({ ok: false }, true) === "Couldn't change the policy.");
+  ok("theme: system is the default", SETTINGS_DEFAULTS.theme === "system");
+  ok("theme: light and dark force one scheme", colorSchemeFor("light") === "light" && colorSchemeFor("dark") === "dark");
+  ok("theme: system or an unknown value follows the computer", ["system", undefined, null, "", "blue"].every((t) => colorSchemeFor(t) === "light dark"));
   ok("options: reading the policy shows only an error", policyMessage({ ok: true, hidden: true }, false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");

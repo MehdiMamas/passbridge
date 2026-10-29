@@ -3,7 +3,7 @@ import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { isBareCodeOtp } from "./otp-field.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
-import { SETTINGS_AREA, SETTINGS_DEFAULTS, hostBlocked } from "./settings.js";
+import { SETTINGS_AREA, SETTINGS_DEFAULTS, colorSchemeFor, hostBlocked } from "./settings.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
 import { createLifecycle } from "./reload-recovery.js";
 import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
@@ -447,7 +447,7 @@ onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
     }
     case "showTotpBar": {
       if (window !== window.top) return false;
-      showTotpBar(msg);
+      showTotpBar(msg, colorSchemeFor(pbSettings.theme));
       sendResponse({ ok: true });
       return true;
     }
@@ -494,13 +494,17 @@ function showSaveBar(msg) {
   const iframe = document.createElement("iframe");
   const token = Math.random().toString(36).slice(2);
   iframe.setAttribute("data-passbridge-frame", "save");
-  iframe.src = chrome.runtime.getURL(`overlay/save-bar.html?token=${token}&update=${msg.update ? "1" : "0"}&user=${encodeURIComponent(msg.username || "")}`);
+  const scheme = colorSchemeFor(pbSettings.theme);
+  iframe.src = chrome.runtime.getURL(
+    `overlay/save-bar.html?token=${token}&update=${msg.update ? "1" : "0"}&user=${encodeURIComponent(msg.username || "")}&scheme=${encodeURIComponent(scheme)}`,
+  );
   Object.assign(iframe.style, {
     width: "360px",
     height: "268px",
     border: "none",
     borderRadius: "14px",
     background: "transparent",
+    colorScheme: scheme,
   });
   shadow.appendChild(iframe);
   Object.assign(host.style, {
@@ -833,7 +837,7 @@ function glassify(el) {
   Object.assign(el.style, {
     background: "Canvas",
     color: "CanvasText",
-    colorScheme: "light dark",
+    colorScheme: colorSchemeFor(pbSettings.theme),
     border: "1px solid rgba(128,128,128,0.35)",
     borderRadius: "14px",
     boxShadow: "0 12px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.10)",

@@ -1,6 +1,6 @@
 // the real options page of a mock build: tabs, help lines, saving, and the helper notices with no native hosts
 import { OPTION_TABS } from "../../src/ui/options-model.js";
-import { build, launchExtension, main, ok } from "./lib.mjs";
+import { BASE, build, launchExtension, main, ok, pierced } from "./lib.mjs";
 
 const AUTOFILL_ROWS = [
   "Inline menu",
@@ -204,6 +204,71 @@ await main(async () => {
     }));
     ok(`options: narrow ${id} keeps the tabs on top with no sideways scroll`, narrow.isFlat && narrow.navDir === "row", JSON.stringify(narrow));
   }
+
+  const themed = await ctx.newPage();
+  const scheme = (p) => p.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+  await themed.goto(`${optionsUrl}#appearance`);
+  await themed.locator("main h1", { hasText: "Appearance" }).waitFor();
+  const themeRow = themed.locator('[data-row="Theme"]');
+  const appearanceRows = await themed.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
+  ok("options: Theme leads the Appearance tab", appearanceRows[0] === "Theme", appearanceRows.join("|"));
+  ok("options: the theme starts on System", (await themeRow.locator("select").inputValue()) === "system" && (await scheme(themed)) === "light dark");
+  await themeRow.locator("select").selectOption("dark");
+  await themed.waitForTimeout(900);
+  ok("options: picking Dark saves it and darkens the page", (await sw.evaluate(() => chrome.storage.sync.get("theme").then((o) => o.theme))) === "dark" && (await scheme(themed)) === "dark");
+  const popup = await ctx.newPage();
+  await popup.goto(new URL("popup.html", sw.url()).href);
+  await popup.locator("#root *").first().waitFor();
+  ok("options: the popup follows the theme", (await scheme(popup)) === "dark", await scheme(popup));
+  await sw.evaluate(() => chrome.storage.sync.set({ theme: "light" }));
+  await themed.waitForTimeout(300);
+  ok("options: open pages follow a theme change", (await scheme(themed)) === "light" && (await scheme(popup)) === "light", `${await scheme(themed)} / ${await scheme(popup)}`);
+  await popup.close();
+  await themed.close();
+
+  await sw.evaluate(() => chrome.storage.sync.set({ theme: "dark" }));
+  const site = await ctx.newPage();
+  site.on("dialog", (d) => d.dismiss().catch(() => {}));
+  const frameOf = async (path) => {
+    for (let i = 0; i < 40; i++) {
+      const f = site.frames().find((fr) => fr.url().includes(path));
+      if (f) {
+        await f.waitForLoadState("domcontentloaded");
+        return f;
+      }
+      await site.waitForTimeout(150);
+    }
+    return null;
+  };
+  const frameSchemes = async (f) => ({
+    page: await f.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
+    element: await (await f.frameElement()).evaluate((el) => getComputedStyle(el).colorScheme),
+  });
+  await site.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
+  await site.waitForTimeout(400);
+  await site.focus('input[name="username"]');
+  await site.waitForTimeout(600);
+  const menu = await pierced(site);
+  const menuRow = menu.menuElement("test@example.com");
+  const menuScheme = menuRow ? await menu.call(menuRow, "function () { return getComputedStyle(this).colorScheme; }") : "no menu";
+  ok("options: the inline menu follows the theme", menuScheme === "dark", menuScheme);
+
+  await site.fill("input[name=username]", "alice@example.org");
+  await site.fill("input[name=password]", "hunter2-pw");
+  await site.click("button[type=submit]");
+  const saveBar = await frameOf("overlay/save-bar.html");
+  const saveSchemes = saveBar ? await frameSchemes(saveBar) : null;
+  ok("options: the save bar follows the theme", saveSchemes?.page === "dark" && saveSchemes.element === "dark", JSON.stringify(saveSchemes));
+
+  await sw.evaluate(async () => {
+    const tab = (await chrome.tabs.query({})).find((t) => t.url?.includes("/login-standard.html"));
+    await chrome.tabs.sendMessage(tab.id, { type: "showTotpBar", mode: "error", error: "Theme check." }, { frameId: 0 });
+  });
+  const totpBar = await frameOf("overlay/totp-bar.html");
+  const totpSchemes = totpBar ? await frameSchemes(totpBar) : null;
+  ok("options: the verification-code bar follows the theme", totpSchemes?.page === "dark" && totpSchemes.element === "dark", JSON.stringify(totpSchemes));
+  await site.close();
+  await sw.evaluate(() => chrome.storage.sync.set({ theme: "system" }));
 
   const helped = await ctx.newPage();
   await helped.addInitScript(() => {

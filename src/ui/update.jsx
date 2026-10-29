@@ -9,6 +9,7 @@ import { BUSY_MESSAGE, withUpdateLock } from "../update/lock.js";
 import { HELPER_ZIP_URL, isWindows, updateRoute } from "../update/platform.js";
 import { updaterAvailable } from "../update/install.js";
 import { folderForUpdate, folderStore, pickFolder } from "../update/folder.js";
+import { followTheme } from "./page-theme.js";
 
 const ERRORS = {
   cancelled: "No folder was chosen.",
@@ -189,4 +190,5 @@ function UpdateApp() {
   );
 }
 
+followTheme();
 createRoot(document.getElementById("root")).render(<UpdateApp />);
