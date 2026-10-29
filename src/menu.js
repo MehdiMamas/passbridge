@@ -3,14 +3,17 @@
 const ON_PAGE = ["editable", "page"];
 
 /**
- * @param {{ ready: boolean, logins: { username?: string }[], hasCode: boolean }} state
+ * @param {{ ready: boolean, onSite?: boolean, logins: { username?: string }[], hasCode: boolean }} state
+ * ready: the vault is unlocked; onSite: the tab is a web page that can have logins
  * @returns {chrome.contextMenus.CreateProperties[]}
  */
-export function menuItems({ ready, logins, hasCode }) {
+export function menuItems({ ready, onSite = true, logins, hasCode }) {
   const items = [{ id: "pb-root", title: "PassBridge", contexts: ["editable", "page", "image"] }];
   const add = (props) => items.push({ parentId: "pb-root", contexts: ON_PAGE, ...props });
   if (!ready) {
     add({ id: "pb-unlock", title: "Unlock PassBridge…" });
+  } else if (!onSite) {
+    // settings and chrome:// pages have nothing to fill
   } else if (logins.length === 1) {
     const name = logins[0].username;
     add({ id: "pb-fill-0", title: name ? `Fill ${name}` : "Fill login" });
