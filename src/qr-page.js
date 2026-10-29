@@ -59,7 +59,12 @@ export function hideTotpBar() {
   totpHost = null;
 }
 
-export function showTotpBar(payload) {
+/**
+ * @param {object} payload
+ * @param {string} colorScheme
+ * @returns {void}
+ */
+export function showTotpBar(payload, colorScheme) {
   hideTotpBar();
   const host = document.createElement("div");
   host.setAttribute("data-passbridge-totp", "1");
@@ -73,6 +78,7 @@ export function showTotpBar(payload) {
     border: "none",
     background: "transparent",
     overflow: "hidden",
+    colorScheme,
   });
   shadow.appendChild(iframe);
   Object.assign(host.style, {
@@ -107,7 +113,7 @@ export function showTotpBar(payload) {
     }, "*");
   };
   iframe.addEventListener("load", paint);
-  iframe.src = chrome.runtime.getURL(`overlay/totp-bar.html?token=${token}`);
+  iframe.src = chrome.runtime.getURL(`overlay/totp-bar.html?token=${token}&scheme=${encodeURIComponent(colorScheme)}`);
   let pending = false;
   const onMsg = (e) => {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
@@ -129,7 +135,7 @@ export function showTotpBar(payload) {
         void chrome.runtime.lastError;
         showTotpBar(resp?.ok
           ? { mode: "handed", launched: !!resp.launched, hasKey: !!resp.hasKey, detail: resp.detail || "" }
-          : { mode: "error", error: resp?.error || "Couldn't add a verification code." });
+          : { mode: "error", error: resp?.error || "Couldn't add a verification code." }, colorScheme);
       });
       return;
     }
@@ -139,7 +145,7 @@ export function showTotpBar(payload) {
         void chrome.runtime.lastError;
         showTotpBar(resp?.ok
           ? { mode: "copied" }
-          : { mode: "error", error: resp?.error || "Couldn't copy the setup key." });
+          : { mode: "error", error: resp?.error || "Couldn't copy the setup key." }, colorScheme);
       });
       return;
     }

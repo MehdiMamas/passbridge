@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { reportFileName, reportIssueUrl, reportText } from "../report-scrub.js";
+import { followTheme } from "./page-theme.js";
 
 const muted = "text-[color-mix(in_srgb,CanvasText_60%,Canvas)]";
 const border = "border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
@@ -88,4 +89,5 @@ function ReportApp() {
   );
 }
 
+followTheme();
 createRoot(document.getElementById("root")).render(<ReportApp />);

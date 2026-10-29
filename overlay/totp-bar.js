@@ -1,5 +1,6 @@
 const params = new URLSearchParams(location.search);
 const token = params.get("token") || "";
+document.documentElement.style.colorScheme = params.get("scheme") || "";
 
 const root = document.createElement("div");
 root.style.cssText = [
@@ -9,7 +10,6 @@ root.style.cssText = [
   "border-radius:14px",
   "background:Canvas",
   "color:CanvasText",
-  "color-scheme:light dark",
   "border:1px solid rgba(128,128,128,0.35)",
   "box-shadow:0 12px 32px rgba(0,0,0,0.22)",
   "font:13px/1.4 system-ui,sans-serif",

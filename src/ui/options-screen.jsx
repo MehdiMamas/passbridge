@@ -17,6 +17,12 @@ const ACTIVITY_COLUMNS = [
 const activityCell = "truncate px-2.5 py-1.5";
 const SHORT_TIME = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
 
+const THEME_OPTIONS = [
+  ["system", "System"],
+  ["light", "Light"],
+  ["dark", "Dark"],
+];
+
 const CLEAR_OPTIONS = [
   ["10000", "10 seconds"],
   ["20000", "20 seconds"],
@@ -316,6 +322,11 @@ function AppearanceTab({ settings, onChange }) {
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
+      <Row label="Theme" help="Light or dark for the popup, these pages, and the menus PassBridge shows on sites. System follows your computer.">
+        {(ids, isDisabled) => (
+          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={THEME_OPTIONS} onChange={(v) => onChange({ theme: v })} />
+        )}
+      </Row>
       <SwitchRow label="Fill animation" help="Briefly highlights each field as it is filled." {...toggle("showAnimations")} />
       <SwitchRow label="Website icons" help="Shows site icons in the popup. Icons load from DuckDuckGo." {...toggle("showFavicons")} />
       <SwitchRow label="Login count on the toolbar icon" help="Shows how many saved logins match the current site." {...toggle("enableBadge")} />

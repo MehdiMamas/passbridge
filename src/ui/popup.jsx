@@ -11,6 +11,7 @@ async function helperReady(tries = 3) {
 }
 import { PopupScreen } from "./popup-screen.jsx";
 import { UPDATE_PAGE } from "../update/check.js";
+import { followTheme } from "./page-theme.js";
 
 function PopupApp() {
   const [state, setState] = useState("connecting");
@@ -261,4 +262,5 @@ function PopupApp() {
   );
 }
 
+followTheme();
 createRoot(document.getElementById("root")).render(<PopupApp />);

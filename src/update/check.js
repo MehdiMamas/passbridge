@@ -7,7 +7,7 @@ import { RELEASE_SOURCE } from "./source.js";
 // 48 unauthenticated requests a day, well under GitHub's 60 an hour per IP
 export const UPDATE_CHECK_MS = 30 * 60 * 1000;
 export const UPDATE_PAGE = "src/update.html";
-export const LATEST_RELEASE_URL =RELEASE_SOURCE?.latestUrl ?? `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
+export const LATEST_RELEASE_URL = RELEASE_SOURCE?.latestUrl ?? `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
 
 export function releasePageUrl(tag) {
   return `https://github.com/${REPORT_REPO}/releases/tag/${encodeURIComponent(tag)}`;

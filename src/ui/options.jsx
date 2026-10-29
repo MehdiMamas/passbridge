@@ -6,6 +6,7 @@ import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
 import { helperView, policyMessage, tabFromHash } from "./options-model.js";
 import { OptionsScreen } from "./options-screen.jsx";
+import { followTheme } from "./page-theme.js";
 
 const LIST_KEYS = ["blockedDomains", "excludedDomains", "agentAllowlist"];
 const BLUR_SAVED_LIST = "agentAllowlist";
@@ -81,6 +82,11 @@ function OptionsApp() {
     queueSettings(partial);
   }
 
+  function onChange(partial) {
+    persist(partial);
+    if ("theme" in partial) flushSettings();
+  }
+
   function onListChange(key, text) {
     setLists((l) => ({ ...l, [key]: text }));
     if (key === BLUR_SAVED_LIST) isBlurListDirty.current = true;
@@ -108,7 +114,7 @@ function OptionsApp() {
         tab={tab}
         isSettled={isLoaded && helpers.policy !== "checking" && helpers.updater !== "checking"}
         settings={settings}
-        onChange={persist}
+        onChange={onChange}
         lists={lists}
         onListChange={onListChange}
         onListBlur={onListBlur}
@@ -195,4 +201,5 @@ function setPrivacy(name, on, setRow, storageKey) {
   else pref.clear({}, done);
 }
 
+followTheme();
 createRoot(document.getElementById("root")).render(<OptionsApp />);

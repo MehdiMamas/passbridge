@@ -26,7 +26,16 @@ export const SETTINGS_DEFAULTS = {
   canCheckForUpdates: true,
   // installs a newer signed release on its own when the update helper is there
   autoInstallUpdates: true,
+  theme: "system",
 };
+
+/**
+ * @param {string | null | undefined} theme
+ * @returns {"light" | "dark" | "light dark"}
+ */
+export function colorSchemeFor(theme) {
+  return theme === "light" || theme === "dark" ? theme : "light dark";
+}
 
 // settings follow the Chrome profile to every signed-in machine; machine state stays in local
 export const SETTINGS_AREA = "sync";
