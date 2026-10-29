@@ -361,7 +361,7 @@ const NOW = Date.UTC(2026, 9, 25);
 {
   const env = fakeUpdateEnv({ latestRelease: "v1.4.0" }, { ok: false, status: 403, json: async () => ({ message: "rate limited" }) });
   await checkForUpdate(NOW);
-  ok("update: a refused request waits a day and keeps the last tag", env.data.updateCheckedAt === NOW && env.data.latestRelease === "v1.4.0");
+  ok("update: a refused request is retried on the next alarm and keeps the last tag", env.data.updateCheckedAt === undefined && env.data.latestRelease === "v1.4.0");
 }
 {
   const unsigned = fakeUpdateEnv({}, { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets.slice(0, 1) }) });

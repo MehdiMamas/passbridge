@@ -3,7 +3,7 @@
 import { LATEST_RELEASE_URL, isNewerVersion, releasePageUrl } from "./check.js";
 import { PUBLIC_KEY_B64, digestHex, verifyRelease } from "./verify.js";
 
-const ZIP_NAME = "passbridge.zip";
+export const ZIP_NAME = "passbridge.zip";
 export const MAX_ZIP = 64 * 1024 * 1024;
 
 /**
@@ -47,7 +47,7 @@ async function fetchLatest() {
   return { release, tag, version: tag.replace(/^v/, "") };
 }
 
-function signedAsset(release, name) {
+export function signedAsset(release, name) {
   const assets = Array.isArray(release.assets) ? release.assets : [];
   const zip = assets.find((a) => a?.name === name);
   const sig = assets.find((a) => a?.name === `${name}.sig`);

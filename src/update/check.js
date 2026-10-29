@@ -3,6 +3,7 @@
 import { getSettings } from "../settings.js";
 import { REPORT_REPO } from "../report-scrub.js";
 import { RELEASE_SOURCE } from "./source.js";
+import { ZIP_NAME, signedAsset } from "./release.js";
 
 // 48 unauthenticated requests a day, well under GitHub's 60 an hour per IP
 export const UPDATE_CHECK_MS = 30 * 60 * 1000;
@@ -29,7 +30,7 @@ export function isNewerVersion(latest, current) {
   return false;
 }
 
-// a failed request leaves updateCheckedAt alone so the next alarm retries, a refused one waits the full interval
+// a failed or refused request leaves updateCheckedAt alone so the next alarm retries
 async function runCheck(now, force) {
   if (!(await getSettings()).canCheckForUpdates) return false;
   const { updateCheckedAt } = await chrome.storage.local.get("updateCheckedAt");
@@ -37,14 +38,16 @@ async function runCheck(now, force) {
   if (!force && age >= 0 && age < UPDATE_CHECK_MS) return false;
   let res;
   try {
-    res = await fetch(LATEST_RELEASE_URL, { headers: { Accept: "application/vnd.github+json" } });
+    res = await fetch(LATEST_RELEASE_URL, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
   } catch {
     return false;
   }
   const body = res.ok ? await res.json().catch(() => null) : null;
   const tag = body?.tag_name;
-  await chrome.storage.local.set(parseVersion(tag) ? { updateCheckedAt: now, latestRelease: tag } : { updateCheckedAt: now });
-  return res.ok;
+  if (!res.ok) return false;
+  // a release is offered only once its signature is on it, the update page refuses it before that
+  await chrome.storage.local.set(parseVersion(tag) ? { updateCheckedAt: now, latestRelease: tag, latestUnsigned: signedAsset(body, ZIP_NAME) ? null : tag } : { updateCheckedAt: now });
+  return true;
 }
 
 let running = null;
@@ -62,8 +65,8 @@ export function checkForUpdate(now = Date.now(), { force = false } = {}) {
 /** @returns {Promise<{ version: string, url: string } | null>} */
 export async function availableUpdate(currentVersion = chrome.runtime.getManifest().version) {
   if (!(await getSettings()).canCheckForUpdates) return null;
-  const { latestRelease, dismissedRelease } = await chrome.storage.local.get(["latestRelease", "dismissedRelease"]);
-  if (latestRelease === dismissedRelease || !isNewerVersion(latestRelease, currentVersion)) return null;
+  const { latestRelease, dismissedRelease, latestUnsigned } = await chrome.storage.local.get(["latestRelease", "dismissedRelease", "latestUnsigned"]);
+  if (latestRelease === dismissedRelease || latestRelease === latestUnsigned || !isNewerVersion(latestRelease, currentVersion)) return null;
   return {
     version: parseVersion(latestRelease).join("."),
     url: releasePageUrl(latestRelease),
