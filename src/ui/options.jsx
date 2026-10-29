@@ -10,6 +10,7 @@ import { OptionsScreen } from "./options-screen.jsx";
 const LIST_KEYS = ["blockedDomains", "excludedDomains", "agentAllowlist"];
 const BLUR_SAVED_LIST = "agentAllowlist";
 const IS_WINDOWS = isWindows();
+const IS_EDGE = !!navigator.userAgentData?.brands?.some((b) => b.brand === "Microsoft Edge");
 
 function OptionsApp() {
   const [settings, setSettings] = useState(DEFAULTS);
@@ -119,6 +120,7 @@ function OptionsApp() {
         agentLog={agentLog}
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
         onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
+        onPasswordSettings={IS_EDGE ? null : () => chrome.tabs.create({ url: "chrome://password-manager/settings" })}
       />
     </div>
   );

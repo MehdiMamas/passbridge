@@ -152,6 +152,25 @@ function Row({ label, help, note, state = "ready", isWide = false, isLabel = tru
   );
 }
 
+function ButtonRow({ label, help, button, onClick }) {
+  return (
+    <Row label={label} help={help} isLabel={false}>
+      {(ids) => (
+        <button
+          id={ids.control}
+          type="button"
+          aria-labelledby={`${ids.label} ${ids.control}`}
+          aria-describedby={ids.describedBy}
+          className={secondaryButton}
+          onClick={onClick}
+        >
+          {button}
+        </button>
+      )}
+    </Row>
+  );
+}
+
 function SwitchRow({ label, help, note, state, isLabel, checked, onChange }) {
   return (
     <Row label={label} help={help} note={note} state={state} isLabel={isLabel}>
@@ -304,42 +323,17 @@ function AppearanceTab({ settings, onChange }) {
   );
 }
 
-function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts }) {
+function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings }) {
   const isShown = (p) => p.shown && !p.disabled;
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
       <SwitchRow label="Right-click menu" help="Adds PassBridge fill options to the page's right-click menu." {...toggle("enableContextMenu")} />
-      <Row label="Keyboard shortcuts" help="Set the keys that show your logins, fill a login, or lock PassBridge." isLabel={false}>
-        {(ids) => (
-          <button
-            id={ids.control}
-            type="button"
-            aria-labelledby={`${ids.label} ${ids.control}`}
-            aria-describedby={ids.describedBy}
-            className={secondaryButton}
-            onClick={onShortcuts}
-          >
-            Change
-          </button>
-        )}
-      </Row>
+      <ButtonRow label="Keyboard shortcuts" help="Set the keys that show your logins, fill a login, or lock PassBridge." button="Change" onClick={onShortcuts} />
       <SwitchRow
         label="Hide passkey suggestions"
         help="Hides the passkey option in a login field's menu. Passkey sign-in buttons still work."
         {...toggle("hidePasskeys")}
-      />
-      {isShown(privacy.bubble) && (
-        <SwitchRow label="Hide the browser's save-password prompt" help="Only PassBridge offers to save logins." checked={privacy.bubble.checked} onChange={(on) => onPrivacy("bubble", on)} />
-      )}
-      <SwitchRow
-        label="Hide the browser's password manager"
-        help="Turns off the browser's own password manager. Quit and reopen the browser to apply."
-        note={policy.message || undefined}
-        state={view.rows.policy}
-        isLabel={false}
-        checked={policy.hidden}
-        onChange={onPolicy}
       />
       {isShown(privacy.address) && (
         <SwitchRow
@@ -347,6 +341,26 @@ function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPri
           help="Turns off the browser's own address autofill on forms."
           checked={privacy.address.checked}
           onChange={(on) => onPrivacy("address", on)}
+        />
+      )}
+      {isShown(privacy.bubble) && (
+        <SwitchRow label="Hide the browser's save-password prompt" help="Only PassBridge offers to save logins." checked={privacy.bubble.checked} onChange={(on) => onPrivacy("bubble", on)} />
+      )}
+      <SwitchRow
+        label="Hide the browser's password manager"
+        help="Locks the browser's offer to save passwords off with a policy, so it can't be turned back on. Passwords the browser already saved still fill. Quit and reopen the browser to apply."
+        note={policy.message || undefined}
+        state={view.rows.policy}
+        isLabel={false}
+        checked={policy.hidden}
+        onChange={onPolicy}
+      />
+      {onPasswordSettings && (
+        <ButtonRow
+          label="The browser's saved passwords"
+          help={`The browser still suggests passwords it saved before. Turn off "Sign in automatically", then move those passwords to iCloud Passwords and delete them in the browser.`}
+          button="Open password settings"
+          onClick={onPasswordSettings}
         />
       )}
     </>

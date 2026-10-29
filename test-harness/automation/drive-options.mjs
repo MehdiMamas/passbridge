@@ -13,6 +13,15 @@ const AUTOFILL_ROWS = [
   "Copy codes after filling",
   "Clear clipboard after",
 ];
+const BROWSER_ROWS = [
+  "Right-click menu",
+  "Keyboard shortcuts",
+  "Hide passkey suggestions",
+  "Hide the browser's address suggestions",
+  "Hide the browser's save-password prompt",
+  "Hide the browser's password manager",
+  "The browser's saved passwords",
+];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el) {
@@ -112,8 +121,10 @@ await main(async () => {
   ok("options: no policy host shows one notice with the setup link", (await note.count()) === 1 && (await note.innerText()).includes(HELPER_NOTICE) && (await note.locator('a[href*="/SETUP.md#"]').count()) === 1);
   ok("options: no policy host greys the password manager", await row("Hide the browser's password manager").locator('[role="switch"]').isDisabled());
   const browserRows = await page.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
-  const savePromptAt = browserRows.indexOf("Hide the browser's save-password prompt");
-  ok("options: the save-password prompt sits above the password manager", savePromptAt !== -1 && savePromptAt < browserRows.indexOf("Hide the browser's password manager"), browserRows.join("|"));
+  ok("options: browser rows in order", browserRows.join("|") === BROWSER_ROWS.join("|"), browserRows.join("|"));
+  const [passwordSettings] = await Promise.all([ctx.waitForEvent("page"), row("The browser's saved passwords").getByRole("button", { name: /Open password settings/ }).click()]);
+  ok("options: Open password settings opens the browser's password settings", passwordSettings.url() === "chrome://password-manager/settings", passwordSettings.url());
+  await passwordSettings.close();
   ok("options: a locked row shows the not-allowed cursor", (await row("Hide the browser's password manager").evaluate((e) => getComputedStyle(e).cursor)) === "not-allowed");
   ok("options: the shortcuts button names what it changes", (await page.getByRole("button", { name: /Keyboard shortcuts/ }).count()) === 1);
 
