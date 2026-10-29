@@ -1035,6 +1035,9 @@ ok("update page: Windows is read from userAgentData or platform", isWindows({ us
   const ids = (state) => menuItems(state).map((i) => i.id);
   const locked = ids({ ready: false, logins: [{ username: "a" }], hasCode: true });
   ok("menu: locked shows Unlock and no login or code items", locked.includes("pb-unlock") && !locked.some((id) => /^pb-(fill|user|pass|otp)/.test(id)));
+  const offSite = ids({ ready: true, onSite: false, logins: [], hasCode: false });
+  ok("menu: unlocked on a non-web page (settings, chrome://) has no Unlock and no login lines", !offSite.includes("pb-unlock") && !offSite.includes("pb-none") && !offSite.some((id) => /^pb-(fill|user|pass|otp)/.test(id)));
+  ok("menu: locked on a non-web page still offers Unlock", ids({ ready: false, onSite: false, logins: [], hasCode: false }).includes("pb-unlock"));
   const none = menuItems({ ready: true, logins: [], hasCode: false });
   ok("menu: no logins shows a greyed note", none.find((i) => i.id === "pb-none")?.enabled === false && !none.some((i) => /^pb-(fill|user|pass)-/.test(i.id)));
   const one = menuItems({ ready: true, logins: [{ username: "me@x.com" }], hasCode: false });
