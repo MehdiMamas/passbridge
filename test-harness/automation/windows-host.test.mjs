@@ -15,7 +15,8 @@ const ok = (name, cond, detail = "") => {
 const SRC = new URL("../../src/apple/", import.meta.url);
 
 // verify: "check" grades M, or forces a reply: { ErrCode, HAMK: "valid" | "forged" }
-function makeWindowsHost({ pin, salt, verify = "check" }) {
+// noMsg: the verify reply carries no MSG key (#116)
+function makeWindowsHost({ pin, salt, verify = "check", noMsg = false }) {
   const state = { server: null, live: false, username: "" };
   const port = {
     onMessage: { addListener: (fn) => port._listeners.push(fn) },
@@ -31,7 +32,8 @@ function makeWindowsHost({ pin, salt, verify = "check" }) {
   const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
   const wire = (b) => "0x" + Buffer.from(b).toString("hex");
   const unwire = (s) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
-  const verdict = (pake, fields) => reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: "3", ...fields }) } });
+  const verdict = (pake, fields) =>
+    reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, ...(noMsg ? {} : { MSG: "3" }), ...fields }) } });
 
   // AES-128-GCM under the first half of K, sent as iv || ciphertext || tag
   function encryptReply(obj) {
@@ -147,6 +149,22 @@ async function verify(client, pin) {
     client.state !== "unlocked" && /incorrect/i.test(String(err?.message)),
     `state=${client.state} err=${err?.message}`,
   );
+}
+
+{
+  const client = await freshClient({ noMsg: true });
+  const err = await verify(client, "000000");
+  ok(
+    "wrong code with no MSG in the reply is an incorrect code, not a TypeError",
+    client.state !== "unlocked" && /incorrect/i.test(String(err?.message)),
+    `state=${client.state} err=${err?.message}`,
+  );
+}
+
+{
+  const client = await freshClient({ noMsg: true });
+  const err = await verify(client, "123456");
+  ok("right code with no MSG in the reply still unlocks", client.state === "unlocked" && !err, String(err?.message));
 }
 
 {
