@@ -35,7 +35,7 @@ Check it: open a site that has a saved login, click the username field, pick the
 
 ### Optional macOS helper
 
-This adds the "Hide Chrome's password manager" setting. Turning it on installs a configuration profile that you approve once in System Settings.
+This adds the "Hide the browser's password manager" setting. Turning it on installs a configuration profile that you approve once in System Settings.
 
 The helper runs on `/usr/bin/python3`, which is only a stub until the Xcode Command Line Tools are installed. Install them first if you haven't:
 
@@ -53,7 +53,7 @@ Quit Chrome with Cmd+Q and reopen it. Then open PassBridge settings.
 A local program can ask PassBridge to fill a saved login into a tab on sites you list. It gets a status back (site, username), never a password.
 
 1. Rerun `./native/install.sh` (it installs the agent host next to the policy helper), then quit Chrome with Cmd+Q and reopen it.
-2. In PassBridge settings, turn on Agent sign-in and check the allowed sites.
+2. In PassBridge settings, on the Agents tab, turn on Allow agent sign-in and check the allowed sites.
 3. Test it with the command-line client, using a tab id from `chrome.tabs`:
 
 ```bash
@@ -65,7 +65,7 @@ P="$HOME/Library/Application Support/PassBridge"
 
 Apple's Passwords asks for Touch ID every time a password is read (except within 15 s of the last read), so each agent sign-in needs one Touch ID approval; when no saved login exists the agent gets `no_login` and the person signs in themselves.
 
-Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged in the settings page.
+Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
 
 ### One-click update (macOS)
 
@@ -125,7 +125,7 @@ The installer points Chrome at the WindowsApps alias for `iCloudPasswordsExtensi
 
 `native/windows/uninstall.ps1` removes the PassBridge host keys and the older `com.openpasswords.*` keys, and clears the password-manager policy if PassBridge set it. It does not remove iCloud for Windows.
 
-Python is needed for automatic updates and the "Hide Chrome's password manager" setting. Filling passwords does not need Python. Without it, `install.ps1` installs only Apple's helper, and every update asks for the PassBridge folder and Chrome asks to save each file. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
+Python is needed for automatic updates and the "Hide the browser's password manager" setting. Filling passwords does not need Python. Without it, `install.ps1` installs only Apple's helper, and every update asks for the PassBridge folder and Chrome asks to save each file. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
 
 On some PCs `HKCU\Software\Policies` is locked. Then the setting asks for a UAC approval and imports the policy into your own user hive, even when a different administrator account approves it.
 
@@ -160,7 +160,7 @@ To take a newer Bitwarden autofill snapshot, see [UPSTREAMS.md](UPSTREAMS.md).
 
 **The code is incorrect.** A code belongs to one handshake. If two prompts are visible, use the newest. In the popup, choose Request a new code. Codes expire after about 3 minutes.
 
-**The menu never appears.** Another copy of this id (Apple's extension, or a second unpacked copy) is loaded. Disable the other one. In settings, Inline menu must not be Off, and the site must not be in Blocked domains.
+**The menu never appears.** Another copy of this id (Apple's extension, or a second unpacked copy) is loaded. Disable the other one. In settings, Inline menu must not be Off, and the site must not be listed under Sites without the inline menu.
 
 **Windows Hello every fill.** The vault asked for it. PassBridge cannot skip that.
 

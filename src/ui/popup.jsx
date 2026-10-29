@@ -10,6 +10,7 @@ async function helperReady(tries = 3) {
   return false;
 }
 import { PopupScreen } from "./popup-screen.jsx";
+import { UPDATE_PAGE } from "../update/check.js";
 
 function PopupApp() {
   const [state, setState] = useState("connecting");
@@ -226,7 +227,7 @@ function PopupApp() {
         // the helper can be slow when the popup opens: ask again before falling back to the update page,
         // which on Windows only offers the helper and elsewhere swaps the files through a folder the user picks
         if (!canInstallUpdate && !(await helperReady())) {
-          await chrome.tabs.create({ url: chrome.runtime.getURL("src/update.html") });
+          await chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) });
           window.close();
           return;
         }

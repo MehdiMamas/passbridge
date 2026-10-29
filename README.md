@@ -36,7 +36,7 @@ Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension 
 
 ## Updates
 
-PassBridge checks for a new release every 30 minutes, and Settings has a Check for updates button. Install the helper once and updates then install by themselves:
+PassBridge checks for a new release every 30 minutes, and the Updates tab in Settings has a Check now button. Install the helper once and updates then install by themselves:
 
 - **macOS:** `sh native/install.sh`, as in [SETUP.md](SETUP.md).
 - **Windows:** install [Python](https://www.python.org/downloads/), unzip `passbridge-windows-helper.zip` from the [latest release](https://github.com/MehdiMamas/passbridge/releases/latest) and run `powershell -ExecutionPolicy Bypass -File ./install.ps1`, then fully quit and reopen Chrome.

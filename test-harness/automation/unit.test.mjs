@@ -21,6 +21,7 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdat
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { migrateSettingsToSync } from "../../src/settings.js";
+import { OPTION_TABS, helperView, policyMessage, tabFromHash } from "../../src/ui/options-model.js";
 import { buildExtension } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -1057,5 +1058,29 @@ ok("a coupon code field is not a one-time code", !isBareCodeOtp(["coupon-code", 
 ok("a bare code field with no two-factor text is not a one-time code", !isBareCodeOtp(["code", "code", "Code"], "Redeem your code Code Redeem"));
 ok("a zip code field on a verification form is not a one-time code", !isBareCodeOtp(["zip-code", "zip", "Zip code"], backblazeForm));
 ok("a big page around a bare code field is not used as context", !isBareCodeOtp(["code"], backblazeForm + " x".repeat(400)));
+
+{
+  ok("options: tabs in order", OPTION_TABS.map((t) => t.id).join() === "autofill,appearance,browser,agents,updates");
+  ok("options: hash opens its tab", tabFromHash("#updates") === "updates");
+  ok("options: odd hashes open autofill", ["", "#", "#AGENTS", "#agents?x", "#%E2"].every((h) => tabFromHash(h) === "autofill"));
+  const view = (policy, updater, isWindows = false, canCheckForUpdates = true) => helperView({ helpers: { policy, updater }, isWindows, canCheckForUpdates });
+  const all = view("present", "present");
+  ok("options: helpers present, nothing locked or noticed", Object.values(all.rows).every((r) => r === "ready") && Object.values(all.notices).every((n) => n === null));
+  const checking = view("checking", "checking");
+  ok("options: checking locks nothing and shows no notice", checking.rows.policy === "checking" && checking.rows.autoInstall === "checking" && Object.values(checking.notices).every((n) => n === null));
+  const noPolicy = view("missing", "present");
+  ok("options: missing policy locks password manager and agents", noPolicy.rows.policy === "locked" && noPolicy.rows.agents === "locked" && noPolicy.rows.autoInstall === "ready");
+  ok("options: missing policy links the macOS helper setup", noPolicy.notices.browser?.text === "Greyed-out settings need the PassBridge helper." && noPolicy.notices.browser.href === "https://github.com/MehdiMamas/passbridge/blob/main/SETUP.md#optional-macos-helper" && !!noPolicy.notices.agents?.href?.endsWith("#agent-sign-in-macos"));
+  ok("options: missing updater on macOS links the one-click update", !!view("present", "missing").notices.updates?.href?.endsWith("#one-click-update-macos"));
+  const win = view("present", "missing", true);
+  ok("options: windows locks agents with the macOS-only notice", win.rows.agents === "locked" && win.notices.agents?.text === "Agent sign-in works on macOS only." && win.notices.agents.href === null);
+  ok("options: windows updater notice links the windows setup", win.rows.autoInstall === "locked" && !!win.notices.updates?.href?.endsWith("#automatic-updates-windows"));
+  ok("options: windows policy notice links the windows setup", !!view("missing", "present", true).notices.browser?.href?.endsWith("#windows"));
+  ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);
+  ok("options: a toggle with no helper note still says to restart", policyMessage({ ok: true, hidden: false, needsApproval: true }, true) === "Fully quit and reopen the browser to apply this.");
+  ok("options: a toggle shows the helper's own note", policyMessage({ ok: true, hidden: true, note: "Approve it in Windows." }, true) === "Approve it in Windows.");
+  ok("options: a failed toggle shows the error or a fallback", policyMessage({ ok: false, error: "denied" }, true) === "denied" && policyMessage({ ok: false }, true) === "Couldn't change the policy.");
+  ok("options: reading the policy shows only an error", policyMessage({ ok: true, hidden: true }, false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
+}
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

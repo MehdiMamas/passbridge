@@ -12,7 +12,7 @@ macOS only. The Windows helper does not install the agent host.
 
 1. Run the macOS helper's `install.sh` from 1.4.0 or later. It registers the native host `com.passbridge.agent`.
 2. Quit and reopen the browser.
-3. In PassBridge Settings, turn on agent sign-in. It is off by default.
+3. In PassBridge Settings, on the Agents tab, turn on Allow agent sign-in. It is off by default.
 
 While it is off, the extension doesn't start the host, so the socket below doesn't exist.
 

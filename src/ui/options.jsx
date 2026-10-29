@@ -1,64 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
+import { UPDATE_PAGE } from "../update/check.js";
+import { updaterAvailable } from "../update/install.js";
+import { isWindows } from "../update/platform.js";
+import { helperView, policyMessage, tabFromHash } from "./options-model.js";
+import { OptionsScreen } from "./options-screen.jsx";
 
-function Row({ label, note, children }) {
-  return (
-    <label className="flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,CanvasText_8%,Canvas)] py-2.5 text-[13px]">
-      <span>
-        {label}
-        {note && <span className="mt-0.5 block text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">{note}</span>}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function Switch({ checked, onChange }) {
-  return (
-    <input
-      type="checkbox"
-      checked={!!checked}
-      onChange={(e) => onChange(e.target.checked)}
-      className="h-4 w-4 shrink-0 accent-ok"
-    />
-  );
-}
-
-function Section({ title, children, className = "" }) {
-  return (
-    <section className={className}>
-      <h2 className="mb-1 text-xs font-semibold tracking-wide uppercase opacity-60">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function DomainList({ label, note, value, onChange, onBlur }) {
-  return (
-    <label className="block py-2.5 text-[13px]">
-      {label}
-      <span className="mb-1 block text-[11px] opacity-60">{note}</span>
-      <textarea
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        className="mt-1 min-h-16 w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] p-2"
-      />
-    </label>
-  );
-}
+const LIST_KEYS = ["blockedDomains", "excludedDomains", "agentAllowlist"];
+const BLUR_SAVED_LIST = "agentAllowlist";
+const IS_WINDOWS = isWindows();
+const IS_EDGE = !!navigator.userAgentData?.brands?.some((b) => b.brand === "Microsoft Edge");
 
 function OptionsApp() {
   const [settings, setSettings] = useState(DEFAULTS);
-  const [excludedText, setExcludedText] = useState("");
-  const [blockedText, setBlockedText] = useState("");
-  const [agentText, setAgentText] = useState("");
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [lists, setLists] = useState(() => Object.fromEntries(LIST_KEYS.map((k) => [k, ""])));
   const [agentLog, setAgentLog] = useState([]);
-  const [policy, setPolicy] = useState({ ready: false, available: false, hidden: false, message: "" });
+  const [tab, setTab] = useState(() => tabFromHash(location.hash));
+  const [helpers, setHelpers] = useState({ policy: "checking", updater: "checking" });
+  const [policy, setPolicy] = useState({ hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
-  const [updateMsg, setUpdateMsg] = useState("");
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
+  const listsRef = useRef(lists);
+  const isBlurListDirty = useRef(false);
+  listsRef.current = lists;
 
   useEffect(() => {
     settingsStore().get(DEFAULTS, (saved) => {
@@ -68,211 +34,94 @@ function OptionsApp() {
         settingsStore().set({ clipboardClearMs: next.clipboardClearMs });
       }
       setSettings(next);
-      setExcludedText((next.excludedDomains || []).join("\n"));
-      setBlockedText((next.blockedDomains || []).join("\n"));
-      setAgentText((next.agentAllowlist || []).join("\n"));
+      setIsLoaded(true);
+      setLists(Object.fromEntries(LIST_KEYS.map((k) => [k, (next[k] || []).join("\n")])));
     });
     chrome.storage.local.get({ agentLog: [] }, (o) => setAgentLog(Array.isArray(o.agentLog) ? o.agentLog : []));
     const onLog = (changes, area) => {
       if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
-    sendPolicy("get").then((r) => {
-      if (r.missing) setPolicy({ ready: true, available: false, hidden: false, message: "" });
-      else setPolicy({ ready: true, available: true, hidden: !!r.hidden, message: r.ok ? "" : r.error || "" });
-    });
+    sendPolicy("get").then((r) => applyPolicy(r, policyMessage(r, false)));
+    updaterAvailable().then((has) => setHelpers((h) => ({ ...h, updater: has ? "present" : "missing" })));
     readPrivacy("passwordSavingEnabled", setBubble);
     readPrivacy("autofillAddressEnabled", setAddress);
-    addEventListener("pagehide", flushSettings);
+    const onHash = () => {
+      saveBlurList();
+      setTab(tabFromHash(location.hash));
+    };
+    const onPageHide = () => {
+      saveBlurList();
+      flushSettings();
+    };
+    addEventListener("hashchange", onHash);
+    addEventListener("pagehide", onPageHide);
     return () => {
       chrome.storage.onChanged.removeListener(onLog);
-      removeEventListener("pagehide", flushSettings);
-      flushSettings();
+      removeEventListener("hashchange", onHash);
+      removeEventListener("pagehide", onPageHide);
+      onPageHide();
     };
   }, []);
 
+  function saveBlurList() {
+    if (!isBlurListDirty.current) return;
+    isBlurListDirty.current = false;
+    persist({ [BLUR_SAVED_LIST]: domainLines(listsRef.current[BLUR_SAVED_LIST]) });
+  }
+
+  function applyPolicy(r, message) {
+    setHelpers((h) => ({ ...h, policy: r.missing ? "missing" : "present" }));
+    if (r.missing) setPolicy({ hidden: false, message: "" });
+    else setPolicy((p) => ({ hidden: r.ok ? !!r.hidden : p.hidden, message }));
+  }
+
   function persist(partial) {
-    const next = { ...settings, ...partial };
-    setSettings(next);
+    setSettings((s) => ({ ...s, ...partial }));
     queueSettings(partial);
   }
 
-  async function checkNow() {
-    setUpdateMsg("Checking...");
-    try {
-      const r = await chrome.runtime.sendMessage({ type: "checkUpdateNow" });
-      if (!r?.ok || !r.reached) setUpdateMsg("Couldn't reach GitHub. Try again later.");
-      else if (r.available) setUpdateMsg(`Version ${r.available.version} is available`);
-      else setUpdateMsg(`Up to date (${r.current})`);
-    } catch {
-      setUpdateMsg("Couldn't check for updates.");
-    }
+  function onListChange(key, text) {
+    setLists((l) => ({ ...l, [key]: text }));
+    if (key === BLUR_SAVED_LIST) isBlurListDirty.current = true;
+    else persist({ [key]: domainLines(text) });
   }
 
-  function check(id, label, note) {
-    return (
-      <Row key={id} label={label} note={note}>
-        <Switch checked={settings[id]} onChange={(on) => persist({ [id]: on })} />
-      </Row>
-    );
+  function onListBlur(key) {
+    if (key === BLUR_SAVED_LIST) return saveBlurList();
+    setLists((l) => ({ ...l, [key]: domainLines(l[key]).join("\n") }));
+  }
+
+  async function onPolicy(isOn) {
+    const r = await sendPolicy(isOn ? "set" : "clear");
+    applyPolicy(r, policyMessage(r, true));
+  }
+
+  function onPrivacy(key, isOn) {
+    if (key === "bubble") setPrivacy("passwordSavingEnabled", isOn, setBubble, "suppressSaveBubble");
+    else setPrivacy("autofillAddressEnabled", isOn, setAddress, "suppressAddressAutofill");
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
-      <header className="mb-6 flex items-center gap-2">
-        <img src="../icons/icon48.png" alt="" width="28" height="28" />
-        <h1 className="text-lg font-semibold">PassBridge</h1>
-      </header>
-      <Section title="Autofill">
-        <Row label="Inline menu">
-          <select
-            value={settings.inlineMenuVisibility}
-            onChange={(e) => persist({ inlineMenuVisibility: e.target.value })}
-            className="rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] px-2 py-1"
-          >
-            <option value="on-focus">Show on field focus</option>
-            <option value="on-click">Show when the icon is clicked</option>
-            <option value="off">Off</option>
-          </select>
-        </Row>
-        {check("autofillOnPageLoad", "Autofill on page load", "Off by default. A single match can ask for Touch ID or Windows Hello as the page opens.")}
-        {check("canFillOnHttp", "Fill and save on HTTP pages", "Off by default. Opens fill and save on every HTTP page. HTTP traffic is unencrypted and the page could be a spoof.")}
-        {check("showAnimations", "Fill animation")}
-        {check("showFavicons", "Website icons")}
-        <DomainList
-          label="Blocked domains"
-          note="One hostname per line. No inline menu on these sites."
-          value={blockedText}
-          onChange={(e) => {
-            setBlockedText(e.target.value);
-            persist({ blockedDomains: domainLines(e.target.value) });
-          }}
-          onBlur={() => setBlockedText(domainLines(blockedText).join("\n"))}
-        />
-      </Section>
-      <Section title="Saving" className="mt-6">
-        {check("askToSave", "Ask to save a new login")}
-        {check("askToUpdate", "Ask to update an existing login")}
-        <DomainList
-          label="Excluded domains"
-          note="One hostname per line. PassBridge will not offer to save these."
-          value={excludedText}
-          onChange={(e) => {
-            setExcludedText(e.target.value);
-            persist({ excludedDomains: domainLines(e.target.value) });
-          }}
-          onBlur={() => setExcludedText(domainLines(excludedText).join("\n"))}
-        />
-        {check("copyTotpAfterFill", "Copy verification code after fill")}
-        <Row
-          label="Clear clipboard"
-          note="Windows clipboard history and clipboard apps keep their own copy until you turn history off."
-        >
-          <select
-            value={String(settings.clipboardClearMs)}
-            onChange={(e) => persist({ clipboardClearMs: Number(e.target.value) })}
-            className="rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] bg-[Canvas] px-2 py-1"
-          >
-            <option value="10000">10 seconds</option>
-            <option value="20000">20 seconds</option>
-            <option value="30000">30 seconds</option>
-            <option value="60000">1 minute</option>
-            <option value="300000">5 minutes</option>
-          </select>
-        </Row>
-      </Section>
-      <Section title="Agent sign-in" className="mt-6">
-        <p className="py-2 text-[12px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
-          A local program can ask PassBridge to sign in on these sites. It sees which site and username were filled, never a password or a code. Needs the helper from native/install.sh.
-        </p>
-        {check("agentSignIn", "Allow agent sign-in")}
-        <DomainList
-          label="Allowed sites"
-          note="One domain per line. Subdomains are included."
-          value={agentText}
-          onChange={(e) => setAgentText(e.target.value)}
-          onBlur={() => persist({ agentAllowlist: domainLines(agentText) })}
-        />
-        {agentLog.length > 0 && (
-          <table className="w-full text-left text-[11px]">
-            <thead className="opacity-60">
-              <tr>
-                <th className="py-1 pr-2 font-normal">Time</th>
-                <th className="pr-2 font-normal">Request</th>
-                <th className="pr-2 font-normal">Site</th>
-                <th className="pr-2 font-normal">Username</th>
-                <th className="font-normal">Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...agentLog].reverse().slice(0, 50).map((r, i) => (
-                <tr key={i} className="border-t border-[color-mix(in_srgb,CanvasText_8%,Canvas)]">
-                  <td className="py-1 pr-2">{new Date(r.t).toLocaleString()}</td>
-                  <td className="pr-2">{r.op}</td>
-                  <td className="pr-2">{r.host}</td>
-                  <td className="pr-2">{r.username}</td>
-                  <td>{r.result}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Section>
-      <Section title="Browser" className="mt-6">
-        {check("enableContextMenu", "Context menu")}
-        {check("enableBadge", "Badge count on the toolbar icon")}
-        {check("canCheckForUpdates", "Check for updates")}
-        {settings.canCheckForUpdates && check("autoInstallUpdates", "Install updates automatically")}
-        {settings.canCheckForUpdates && (
-          <Row label="Check for updates now" note={updateMsg || undefined}>
-            <button
-              type="button"
-              disabled={updateMsg === "Checking..."}
-              className="rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] px-3 py-1 text-[13px]"
-              onClick={checkNow}
-            >
-              Check now
-            </button>
-          </Row>
-        )}
-        <p className="py-2">
-          <button type="button" className="text-[13px] text-accent" onClick={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}>
-            Keyboard shortcuts
-          </button>
-        </p>
-        {bubble.shown && !bubble.disabled && (
-          <Row label="Hide Chrome's save-password bubble">
-            <Switch checked={bubble.checked} onChange={(on) => setPrivacy("passwordSavingEnabled", on, setBubble, "suppressSaveBubble")} />
-          </Row>
-        )}
-        {policy.ready && policy.available && (
-          <Row label="Hide Chrome's password manager">
-            <Switch
-              checked={policy.hidden}
-              onChange={async (on) => {
-                const r = await sendPolicy(on ? "set" : "clear");
-                if (r.missing) setPolicy({ ready: true, available: false, hidden: false, message: "" });
-                else if (!r.ok) setPolicy((p) => ({ ...p, message: r.error || "Couldn't change the policy." }));
-                else setPolicy({ ready: true, available: true, hidden: !!r.hidden, message: r.note || "Fully quit and reopen the browser to apply this." });
-              }}
-            />
-          </Row>
-        )}
-        {policy.ready && policy.available && policy.message && (
-          <p className="pb-2 text-[12px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">{policy.message}</p>
-        )}
-        {policy.ready && !policy.available && (
-          <p className="py-2 text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
-            Install the optional helper to hide Chrome's password manager.
-          </p>
-        )}
-        {address.shown && !address.disabled && (
-          <Row label="Hide Chrome's address suggestions">
-            <Switch checked={address.checked} onChange={(on) => setPrivacy("autofillAddressEnabled", on, setAddress, "suppressAddressAutofill")} />
-          </Row>
-        )}
-        {check("hidePasskeys", "Hide passkey autofill")}
-      </Section>
+    <div className="min-h-screen bg-[color-mix(in_srgb,CanvasText_3%,Canvas)]">
+      <OptionsScreen
+        tab={tab}
+        isSettled={isLoaded && helpers.policy !== "checking" && helpers.updater !== "checking"}
+        settings={settings}
+        onChange={persist}
+        lists={lists}
+        onListChange={onListChange}
+        onListBlur={onListBlur}
+        view={helperView({ helpers, isWindows: IS_WINDOWS, canCheckForUpdates: settings.canCheckForUpdates })}
+        policy={policy}
+        onPolicy={onPolicy}
+        privacy={{ bubble, address }}
+        onPrivacy={onPrivacy}
+        agentLog={agentLog}
+        onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
+        onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
+        onPasswordSettings={IS_EDGE ? null : () => chrome.tabs.create({ url: "chrome://password-manager/settings" })}
+      />
     </div>
   );
 }
