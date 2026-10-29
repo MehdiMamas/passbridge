@@ -12,4 +12,4 @@
    done
    ```
 
-An unsigned zip is never installed: the extension checks each one against the pinned key and the digest GitHub reports. With "Install updates automatically" on, running extensions install the extension zip and update the helper from its zip with no click.
+An unsigned zip is never installed: the extension checks each one against the pinned key and the digest GitHub reports. With "Install updates automatically with the helper" on, running extensions install the extension zip and update the helper from its zip with no click.
