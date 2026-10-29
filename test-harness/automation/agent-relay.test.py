@@ -26,23 +26,39 @@ def ok(name, cond, detail=""):
     print(("PASS " if cond else "FAIL ") + name + ("" if cond else " -> " + str(detail)))
 
 
-relay = subprocess.Popen([sys.executable, "-I", str(RELAY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=ENV)
+class Relay:
+    # one relay process plus its fake stdio "extension": answers each forwarded request, records events
+    def __init__(self, name):
+        self.name = name
+        self.events = []
+        self.proc = subprocess.Popen([sys.executable, "-I", str(RELAY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=ENV)
+        threading.Thread(target=self.pump, daemon=True).start()
+
+    def pump(self):
+        while True:
+            raw = self.proc.stdout.read(4)
+            if len(raw) < 4:
+                return
+            (n,) = struct.unpack("<I", raw)
+            req = json.loads(self.proc.stdout.read(n))
+            if "id" not in req:
+                self.events.append(req.get("event"))
+                continue
+            reply = {"id": req["id"], "ok": True, "op": req["op"], "tabId": req.get("tabId"), "by": self.name}
+            b = json.dumps(reply).encode()
+            self.proc.stdin.write(struct.pack("<I", len(b)) + b)
+            self.proc.stdin.flush()
+
+    def wait_event(self, event, seconds):
+        end = time.time() + seconds
+        while time.time() < end:
+            if event in self.events:
+                return True
+            time.sleep(0.1)
+        return False
 
 
-def fake_extension():
-    while True:
-        raw = relay.stdout.read(4)
-        if len(raw) < 4:
-            return
-        (n,) = struct.unpack("<I", raw)
-        req = json.loads(relay.stdout.read(n))
-        reply = {"id": req["id"], "ok": True, "op": req["op"], "tabId": req.get("tabId")}
-        b = json.dumps(reply).encode()
-        relay.stdin.write(struct.pack("<I", len(b)) + b)
-        relay.stdin.flush()
-
-
-threading.Thread(target=fake_extension, daemon=True).start()
+relay = Relay("A")
 
 
 def cli(*args):
@@ -60,6 +76,22 @@ for _ in range(50):  # the relay needs a moment to start listening
         break
     time.sleep(0.2)
 ok("status reaches the extension and the reply comes back", code == 0 and reply.get("ok") and reply.get("op") == "status", reply)
+ok("the first relay answers", reply.get("by") == "A", reply)
+relayB = Relay("B")
+ok("a second relay reports standby", relayB.wait_event("standby", 10), relayB.events)
+reply, code = cli("status")
+ok("with two relays the first one still answers", reply.get("by") == "A", reply)
+relay.proc.stdin.close()
+relay.proc.wait(timeout=10)
+ok("the second relay takes over within 10 s", relayB.wait_event("active", 10), relayB.events)
+reply = None
+for _ in range(50):
+    reply, code = cli("status")
+    if reply.get("ok"):
+        break
+    time.sleep(0.2)
+ok("after the first relay exits the second one answers", reply.get("by") == "B", reply)
+relay = relayB
 reply, code = cli("sign_in", "7", "octocat")
 ok("sign_in carries tabId through", code == 0 and reply.get("tabId") == 7 and reply.get("op") == "sign_in", reply)
 reply, code = cli("logins", "x")
@@ -83,11 +115,11 @@ else:
     print("SKIP wrong-key check (macOS uses a 0600 socket, no key)")
     ok("the socket is user-only", (os.stat(os.path.join(TMP, "agent.sock")).st_mode & 0o777) == 0o600)
 
-relay.stdin.close()
+relay.proc.stdin.close()
 try:
-    relay.wait(timeout=10)
+    relay.proc.wait(timeout=10)
 except subprocess.TimeoutExpired:
-    relay.kill()
+    relay.proc.kill()
     ok("relay exits when the extension goes away", False)
 else:
     ok("relay exits when the extension goes away", True)
