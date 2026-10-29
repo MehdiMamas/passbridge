@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const AUTO = join(dirname(fileURLToPath(import.meta.url)), "..", "test-harness", "automation");
-const PY_SUITES = ["native-hosts.test.py", "updater.test.py"];
+const PY_SUITES = ["native-hosts.test.py", "updater.test.py", "agent-relay.test.py"];
 const SUITES = ["unit.test.mjs", "pin-session.test.mjs", "windows-host.test.mjs"];
 
 // the Windows Store "python3" stub exits non-zero, so ask each candidate for its major version

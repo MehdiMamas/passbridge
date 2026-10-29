@@ -24,7 +24,7 @@ foreach ($root in $browsers) {
     Remove-Item -LiteralPath $appleKey -Force
     Write-Output "removed $appleKey"
   }
-  foreach ($name in @("com.passbridge.policy", "com.passbridge.updater", "com.passbridge.autopair", "com.passbridge.totpsetup", "com.openpasswords.policy", "com.openpasswords.autopair")) {
+  foreach ($name in @("com.passbridge.policy", "com.passbridge.updater", "com.passbridge.agent", "com.passbridge.autopair", "com.passbridge.totpsetup", "com.openpasswords.policy", "com.openpasswords.autopair")) {
     $key = Join-Path $root $name
     if (Test-Path -LiteralPath $key) {
       Remove-Item -LiteralPath $key -Force

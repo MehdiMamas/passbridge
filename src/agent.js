@@ -122,6 +122,23 @@ async function appendLog(entry) {
   } catch {}
 }
 
+/**
+ * A relay tells the extension whether it owns the endpoint ("active") or waits behind another browser ("standby").
+ * @param {any} m
+ * @returns {"active" | "standby" | null}
+ */
+export function relayEvent(m) {
+  if (!m || typeof m !== "object" || "id" in m) return null;
+  return m.event === "active" || m.event === "standby" ? m.event : null;
+}
+
+const setRelay = (state) => {
+  try {
+    if (state) chrome.storage.session.set({ agentRelay: state });
+    else chrome.storage.session.remove("agentRelay");
+  } catch {}
+};
+
 export function initAgent(deps) {
   const limiter = createLimiter();
   let port = null;
@@ -169,10 +186,17 @@ export function initAgent(deps) {
     try {
       const p = chrome.runtime.connectNative(HOST);
       port = p;
-      p.onMessage.addListener((m) => onRequest(p, m));
+      p.onMessage.addListener((m) => {
+        const ev = relayEvent(m);
+        if (ev) setRelay(ev);
+        else onRequest(p, m);
+      });
       p.onDisconnect.addListener(() => {
         void chrome.runtime.lastError;
-        if (port === p) port = null;
+        if (port === p) {
+          port = null;
+          setRelay(null);
+        }
         schedule();
       });
       // a connection that lasted resets the backoff
