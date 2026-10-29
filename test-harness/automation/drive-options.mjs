@@ -145,7 +145,10 @@ await main(async () => {
   const autoSwitch = row("Install updates automatically with the helper").locator('[role="switch"]');
   ok("options: no updater locks auto-install with its synced value", (await autoSwitch.isChecked()) && (await autoSwitch.isDisabled()));
   ok("options: no updater keeps Check now usable", await page.locator("button", { hasText: "Check now" }).isEnabled());
-  ok("options: the check status is there before the first check", (await page.locator('[role="status"]').count()) === 1);
+  const [updatePage] = await Promise.all([ctx.waitForEvent("page"), page.locator("button", { hasText: "Check now" }).click()]);
+  await updatePage.waitForLoadState("domcontentloaded");
+  ok("options: Check now opens the update page in a new tab", new URL(updatePage.url()).pathname === "/src/update.html" && page.url().includes("#updates"), updatePage.url());
+  await updatePage.close();
 
   const fresh = await ctx.newPage();
   await fresh.goto(`${optionsUrl}#updates`);

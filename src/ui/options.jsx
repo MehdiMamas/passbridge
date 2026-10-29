@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
+import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
 import { helperView, policyMessage, tabFromHash } from "./options-model.js";
@@ -20,7 +21,6 @@ function OptionsApp() {
   const [policy, setPolicy] = useState({ hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
-  const [updateMsg, setUpdateMsg] = useState("");
   const listsRef = useRef(lists);
   const isBlurListDirty = useRef(false);
   listsRef.current = lists;
@@ -101,18 +101,6 @@ function OptionsApp() {
     else setPrivacy("autofillAddressEnabled", isOn, setAddress, "suppressAddressAutofill");
   }
 
-  async function checkNow() {
-    setUpdateMsg("Checking...");
-    try {
-      const r = await chrome.runtime.sendMessage({ type: "checkUpdateNow" });
-      if (!r?.ok || !r.reached) setUpdateMsg("Couldn't reach GitHub. Try again later.");
-      else if (r.available) setUpdateMsg(`Version ${r.available.version} is available`);
-      else setUpdateMsg(`Up to date (${r.current})`);
-    } catch {
-      setUpdateMsg("Couldn't check for updates.");
-    }
-  }
-
   return (
     <div className="min-h-screen bg-[color-mix(in_srgb,CanvasText_3%,Canvas)]">
       <OptionsScreen
@@ -129,8 +117,7 @@ function OptionsApp() {
         privacy={{ bubble, address }}
         onPrivacy={onPrivacy}
         agentLog={agentLog}
-        updateMsg={updateMsg}
-        onCheckNow={checkNow}
+        onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
         onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
       />
     </div>

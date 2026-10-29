@@ -14,7 +14,7 @@ import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, pickAllowedFrames } from "./agent.js";
-import { availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
+import { UPDATE_PAGE, availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
 import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
@@ -351,7 +351,6 @@ chrome.runtime.onInstalled.addListener((d) => {
   }
 });
 
-const UPDATE_PAGE = "src/update.html";
 // an old helper can't update itself: say so in the popup once
 async function takeHelperNote() {
   const { helperOutdatedNote } = await chrome.storage.local.get("helperOutdatedNote");

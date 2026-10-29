@@ -378,8 +378,8 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
   );
 }
 
-function UpdatesTab({ settings, onChange, view, updateMsg, onCheckNow }) {
-  const isChecking = updateMsg === "Checking...";
+function UpdatesTab({ settings, onChange, view, onCheckNow }) {
+  const checkNoteId = useId();
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
@@ -393,11 +393,11 @@ function UpdatesTab({ settings, onChange, view, updateMsg, onCheckNow }) {
             {...toggle("autoInstallUpdates")}
           />
           <div data-row="Check now" className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4 ${hairline}`}>
-            <button type="button" disabled={isChecking} className={secondaryButton} onClick={onCheckNow}>
+            <button type="button" aria-describedby={checkNoteId} className={secondaryButton} onClick={onCheckNow}>
               Check now
             </button>
-            <p role="status" className={`text-[13px] ${muted}`}>
-              {updateMsg}
+            <p id={checkNoteId} className={`text-[13px] ${muted}`}>
+              Opens the update page in a new tab.
             </p>
           </div>
         </>
