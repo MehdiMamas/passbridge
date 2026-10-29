@@ -1073,7 +1073,9 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("options: missing policy links the macOS helper setup", noPolicy.notices.browser?.text === "Greyed-out settings need the PassBridge helper." && noPolicy.notices.browser.href === "https://github.com/MehdiMamas/passbridge/blob/main/SETUP.md#optional-macos-helper" && !!noPolicy.notices.agents?.href?.endsWith("#agent-sign-in-macos"));
   ok("options: missing updater on macOS links the one-click update", !!view("present", "missing").notices.updates?.href?.endsWith("#one-click-update-macos"));
   const win = view("present", "missing", true);
-  ok("options: windows locks agents with the macOS-only notice", win.rows.agents === "locked" && win.notices.agents?.text === "Agent sign-in works on macOS only." && win.notices.agents.href === null);
+  ok("options: windows agents row is open while the helper is present", win.rows.agents === "ready" && win.notices.agents === null);
+  const winNoPolicy = view("missing", "present", true);
+  ok("options: windows agents row is locked without the helper and links the windows setup", winNoPolicy.rows.agents === "locked" && !!winNoPolicy.notices.agents?.href?.endsWith("#agent-sign-in-windows"));
   ok("options: windows updater notice links the windows setup", win.rows.autoInstall === "locked" && !!win.notices.updates?.href?.endsWith("#automatic-updates-windows"));
   ok("options: windows policy notice links the windows setup", !!view("missing", "present", true).notices.browser?.href?.endsWith("#windows"));
   ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);

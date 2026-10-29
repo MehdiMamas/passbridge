@@ -67,6 +67,22 @@ Apple's Passwords asks for Touch ID every time a password is read (except within
 
 Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
 
+### Agent sign-in (Windows)
+
+The same feature on Windows. It needs Python, like the other helpers.
+
+1. Install [Python](https://www.python.org/downloads/) (tick "Add python.exe to PATH") and run the helper's `install.ps1` again (see "Automatic updates (Windows)"). It installs the agent host next to the policy and updater hosts, in your user account only (no admin prompt). Then fully quit Chrome and reopen it.
+2. In PassBridge settings, on the Agents tab, turn on Allow agent sign-in and check the allowed sites.
+3. Test it with the command-line client, using a tab id from `chrome.tabs`:
+
+```bat
+py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" status
+py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" logins <tabId>
+py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" sign_in <tabId> [username]
+```
+
+The client talks to a per-user named pipe protected by a key file (`%LOCALAPPDATA%\PassBridge\agent.key`) that only your Windows user can read. Windows Hello may ask when a password is read. The errors are the same as on macOS; `no_host` means Chrome is closed, the setting is off, or the helper is not installed.
+
 ### One-click update (macOS)
 
 The popup's update notice always shows Update now. When the updater host (`com.passbridge.updater`, installed by `install.sh`) answers, the update runs through it: the extension downloads `passbridge.zip` and `passbridge.zip.sig` from the latest release, checks the signature against the key pinned in `src/update/verify.js` and the SHA-256 GitHub lists for the asset, then the host swaps the unpacked folder and the extension reloads. After the restart the update page opens and checks that the new version is the one running. Without a `.sig` on the release the update is refused.
@@ -125,7 +141,7 @@ The installer points Chrome at the WindowsApps alias for `iCloudPasswordsExtensi
 
 `native/windows/uninstall.ps1` removes the PassBridge host keys and the older `com.openpasswords.*` keys, and clears the password-manager policy if PassBridge set it. It does not remove iCloud for Windows.
 
-Python is needed for automatic updates and the "Hide the browser's password manager" setting. Filling passwords does not need Python. Without it, `install.ps1` installs only Apple's helper, and every update asks for the PassBridge folder and Chrome asks to save each file. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
+Python is needed for automatic updates, agent sign-in and the "Hide the browser's password manager" setting. Filling passwords does not need Python. Without it, `install.ps1` installs only Apple's helper, and every update asks for the PassBridge folder and Chrome asks to save each file. `install.ps1` ignores the Microsoft Store `python.exe` stub and says so when it finds no real Python.
 
 On some PCs `HKCU\Software\Policies` is locked. Then the setting asks for a UAC approval and imports the policy into your own user hive, even when a different administrator account approves it.
 

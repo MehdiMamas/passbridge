@@ -24,7 +24,7 @@ jobs:
       - run: |
           mkdir -p helpers/passbridge-macos-helper helpers/passbridge-windows-helper
           cp native/install.sh native/uninstall.sh native/passbridge-policy.py native/passbridge-agent.py native/passbridge-agent-cli.py native/passbridge-updater.py helpers/passbridge-macos-helper/
-          cp native/windows/install.ps1 native/windows/uninstall.ps1 native/windows/passbridge-policy.py native/passbridge-updater.py helpers/passbridge-windows-helper/
+          cp native/windows/install.ps1 native/windows/uninstall.ps1 native/windows/passbridge-policy.py native/passbridge-updater.py native/passbridge-agent.py native/passbridge-agent-cli.py helpers/passbridge-windows-helper/
           # the helper reads this to know which release it came from
           VERSION="${GITHUB_REF_NAME#v}"
           echo "$VERSION" > helpers/passbridge-macos-helper/VERSION

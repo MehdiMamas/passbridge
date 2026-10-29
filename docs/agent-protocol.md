@@ -1,34 +1,41 @@
 # Agent sign-in protocol
 
-A program on the same Mac, such as Claude Code, can ask PassBridge to fill a saved login into a browser tab. This page is for whoever writes such a client. The reference client is `native/passbridge-agent-cli.py`.
+A program on the same computer, such as Claude Code, can ask PassBridge to fill a saved login into a browser tab. This page is for whoever writes such a client. The reference client is `native/passbridge-agent-cli.py`.
 
 No reply ever contains a password or a code. The extension drops any key named `password`, `pass`, `code`, `otp`, `secret` or `token` from every reply, at any depth.
 
 ## Platforms
 
-macOS only. The Windows helper does not install the agent host.
+macOS and Windows. The request and reply format is the same on both; only how a client connects differs (see Socket and named pipe).
 
 ## Turning it on
 
-1. Run the macOS helper's `install.sh` from 1.4.0 or later. It registers the native host `com.passbridge.agent`.
+1. Run the helper's installer: `install.sh` on macOS (1.4.0 or later), `install.ps1` on Windows (needs Python). It registers the native host `com.passbridge.agent`.
 2. Quit and reopen the browser.
 3. In PassBridge Settings, on the Agents tab, turn on Allow agent sign-in. It is off by default.
 
-While it is off, the extension doesn't start the host, so the socket below doesn't exist.
+While it is off, the extension doesn't start the host, so the socket or pipe below doesn't exist.
 
-## Socket
+## Socket (macOS)
 
 - Path: `~/Library/Application Support/PassBridge/agent.sock`. If `PASSBRIDGE_APPDIR` is set in the host's environment, the socket is `$PASSBRIDGE_APPDIR/agent.sock` instead.
 - Type: a Unix domain stream socket. The folder is mode 0700 and the socket is 0600, so only the same macOS user can connect.
 - The browser starts the host. It exists only while the browser is running and agent sign-in is on, and it is removed when the browser quits. If the connection fails, report `no_host`: the browser is closed, the setting is off, or the helper isn't installed.
 
+## Named pipe (Windows)
+
+- Pipe: `\\.\pipe\passbridge-agent-<username>`, opened with Python's `multiprocessing.connection` (`Client(pipe, family="AF_PIPE", authkey=key)`).
+- Key: 32 random bytes, made by the host on first start in `%LOCALAPPDATA%\PassBridge\agent.key` (or `%PASSBRIDGE_APPDIR%\agent.key`). A pipe's default access list is wider than a 0600 socket, so a client without the key is refused in the connection handshake. Read the key file from the same Windows user only.
+- Send and read with `send_bytes` and `recv_bytes` only, never `send()` or `recv()`, which use pickle. Each message is one JSON object, with no trailing newline: one request, one reply.
+- The app folder is `%LOCALAPPDATA%\PassBridge`. The reference client is `py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py"`. If the connection fails, report `no_host`.
+
 ## Framing
 
-The socket uses newline-delimited JSON. Send one JSON object per line and read one JSON line back per request. A connection can carry several requests in a row. Inside, the host talks to the extension over Chrome's native messaging, which is 4-byte length-prefixed. Clients never see that layer.
+The macOS socket uses newline-delimited JSON; the Windows pipe uses one message per request (see above). Send one JSON object per line and read one JSON line back per request. A connection can carry several requests in a row. Inside, the host talks to the extension over Chrome's native messaging, which is 4-byte length-prefixed. Clients never see that layer.
 
 ## Pairing
 
-There is no per-client pairing or key. Any process of the same user that can open the socket may send requests. What protects you:
+There is no per-client pairing. On macOS any process of the same user that can open the socket may send requests; on Windows any process of the same user that can read `agent.key`. What protects you:
 - the setting is off by default;
 - only allowlisted sites can be filled;
 - `sign_in` is rate limited;

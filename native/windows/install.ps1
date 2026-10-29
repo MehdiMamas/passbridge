@@ -98,7 +98,7 @@ foreach ($name in @("py", "python")) {
 }
 if (-not $py) {
   Write-Output ""
-  Write-Output "Python was not found, so the update and policy helpers were NOT installed."
+  Write-Output "Python was not found, so the update, policy and agent sign-in helpers were NOT installed."
   Write-Output "Without them every update asks for the PassBridge folder and Chrome asks to save each file."
   Write-Output "Install Python from https://www.python.org/downloads/ (tick 'Add python.exe to PATH'), then run this script again."
   Write-Output "Password fill does not need Python."
@@ -111,6 +111,12 @@ Copy-Item -Force (Join-Path $Here "passbridge-policy.py") (Join-Path $Dest "pass
 $updaterSrc = Join-Path $Here "passbridge-updater.py"
 if (-not (Test-Path -LiteralPath $updaterSrc)) { $updaterSrc = Join-Path (Split-Path -Parent $Here) "passbridge-updater.py" }
 Copy-Item -Force $updaterSrc (Join-Path $Dest "passbridge-updater.py")
+# agent sign-in: the relay host and its command-line client; the release zip has them beside this script
+foreach ($agentFile in @("passbridge-agent.py", "passbridge-agent-cli.py")) {
+  $agentSrc = Join-Path $Here $agentFile
+  if (-not (Test-Path -LiteralPath $agentSrc)) { $agentSrc = Join-Path (Split-Path -Parent $Here) $agentFile }
+  Copy-Item -Force $agentSrc (Join-Path $Dest $agentFile)
+}
 # the release zip says which version this is, so the extension knows when the helper is behind
 $versionSrc = Join-Path $Here "VERSION"
 if (Test-Path -LiteralPath $versionSrc) { Copy-Item -Force $versionSrc (Join-Path $Dest "helper-version") }
@@ -156,10 +162,13 @@ function Write-NmManifest([string]$Name, [string]$Description, [string]$ExePath)
 $policyManifest = Write-NmManifest "com.passbridge.policy" "PassBridge policy helper" $policyCmd
 $updaterCmd = Write-HostCmd "passbridge-updater.py" "passbridge-updater.cmd"
 $updaterManifest = Write-NmManifest "com.passbridge.updater" "PassBridge updater" $updaterCmd
+$agentCmd = Write-HostCmd "passbridge-agent.py" "passbridge-agent.cmd"
+$agentManifest = Write-NmManifest "com.passbridge.agent" "PassBridge agent sign-in" $agentCmd
 
 foreach ($root in $browsers) {
   Set-Default (Join-Path $root "com.passbridge.policy") $policyManifest
   Set-Default (Join-Path $root "com.passbridge.updater") $updaterManifest
+  Set-Default (Join-Path $root "com.passbridge.agent") $agentManifest
   foreach ($old in $retired) {
     $oldKey = Join-Path $root $old
     if (Test-Path -LiteralPath $oldKey) { Remove-Item -LiteralPath $oldKey -Force }

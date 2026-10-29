@@ -1,14 +1,50 @@
 #!/usr/bin/python3
 # usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username]
+import getpass
 import json
 import os
 import socket
 import sys
 import uuid
 
-SOCK = os.path.join(
-    os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", "~/Library/Application Support/PassBridge")), "agent.sock"
-)
+WINDOWS = os.name == "nt"
+if WINDOWS:
+    _default = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "PassBridge")
+else:
+    _default = "~/Library/Application Support/PassBridge"
+APPDIR = os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", _default))
+SOCK = os.path.join(APPDIR, "agent.sock")
+KEYFILE = os.path.join(APPDIR, "agent.key")
+PIPE = r"\\.\pipe\passbridge-agent-" + getpass.getuser()
+
+
+def ask_pipe(req):
+    # send_bytes/recv_bytes only, never send()/recv() (pickle)
+    from multiprocessing.connection import Client
+
+    try:
+        with open(KEYFILE, "rb") as f:
+            key = f.read()
+        conn = Client(PIPE, family="AF_PIPE", authkey=key)
+    except Exception:
+        return None
+    with conn:
+        conn.send_bytes(json.dumps(req).encode())
+        try:
+            return conn.recv_bytes()
+        except (EOFError, OSError):
+            return b""
+
+
+def ask_socket(req):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(100)
+    try:
+        s.connect(SOCK)
+    except OSError:
+        return None
+    s.sendall(json.dumps(req).encode() + b"\n")
+    return s.makefile("rb").readline()
 
 
 def main(argv):
@@ -23,15 +59,10 @@ def main(argv):
         req["tabId"] = int(argv[1])
     if argv[0] == "sign_in" and len(argv) > 2:
         req["username"] = argv[2]
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(100)
-    try:
-        s.connect(SOCK)
-    except OSError:
+    line = (ask_pipe if WINDOWS else ask_socket)(req)
+    if line is None:
         print(json.dumps({"ok": False, "error": "no_host"}))
         return 1
-    s.sendall(json.dumps(req).encode() + b"\n")
-    line = s.makefile("rb").readline()
     if not line:
         print(json.dumps({"ok": False, "error": "no_reply"}))
         return 1

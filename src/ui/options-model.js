@@ -14,10 +14,9 @@ export const OPTION_TABS = [
 
 const SETUP_URL = `https://github.com/${REPORT_REPO}/blob/main/SETUP.md`;
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
-const MAC_ONLY_NOTICE = "Agent sign-in works on macOS only.";
 const SETUP_ANCHORS = {
   mac: { browser: "optional-macos-helper", agents: "agent-sign-in-macos", updates: "one-click-update-macos" },
-  windows: { browser: "windows", updates: "automatic-updates-windows" },
+  windows: { browser: "windows", agents: "agent-sign-in-windows", updates: "automatic-updates-windows" },
 };
 const ROW_STATE = { checking: "checking", present: "ready", missing: "locked" };
 
@@ -50,12 +49,12 @@ export function helperView({ helpers, isWindows, canCheckForUpdates }) {
   return {
     rows: {
       policy: ROW_STATE[helpers.policy],
-      agents: isWindows ? "locked" : ROW_STATE[helpers.policy],
+      agents: ROW_STATE[helpers.policy],
       autoInstall: ROW_STATE[helpers.updater],
     },
     notices: {
       browser: notice(helpers.policy, "browser"),
-      agents: isWindows ? { text: MAC_ONLY_NOTICE, href: null } : notice(helpers.policy, "agents"),
+      agents: notice(helpers.policy, "agents"),
       updates: canCheckForUpdates ? notice(helpers.updater, "updates") : null,
     },
   };
