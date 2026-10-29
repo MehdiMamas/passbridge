@@ -365,7 +365,7 @@ export class ApplePasswords {
     const pake = JSON.parse(bytesToUtf8(base64ToBytes(reply.payload.PAKE)));
     if (pake.TID !== session.username) throw new Error("challenge for another session");
     if (pake.ErrCode !== undefined) throw new Error(`server hello error ${pake.ErrCode}`);
-    if (pake.MSG.toString() !== MSGType.ServerKeyExchange.toString()) throw new Error("unexpected server message");
+    if (String(pake.MSG) !== String(MSGType.ServerKeyExchange)) throw new Error("unexpected server message");
     if (asInt(pake.PROTO) !== SecretSessionVersion.SRPWithRFCVerification) throw new Error("unsupported protocol");
 
     const B = bytesToBigInt(session.deserialize(pake.B));
@@ -405,10 +405,12 @@ export class ApplePasswords {
 
         const pake = JSON.parse(bytesToUtf8(base64ToBytes(reply.payload.PAKE)));
         if (pake.TID !== session.username) throw new Error("verification for another session");
-        if (pake.MSG.toString() !== MSGType.ServerVerification.toString()) throw new Error("unexpected server message");
+        // Windows answers a failed verify with TID and ErrCode only, no MSG: read the error first
         const errCode = asInt(pake.ErrCode);
         if (errCode === 1) throw new Error("Incorrect code");
         if (errCode !== 0 && errCode !== undefined) throw new Error(`verification error ${pake.ErrCode}`);
+        // a missing MSG is fine here, the HAMK check below is what proves the server
+        if (pake.MSG !== undefined && String(pake.MSG) !== String(MSGType.ServerVerification)) throw new Error("unexpected server message");
 
         const hamk = await session.computeHMAC(m);
         if (!constantTimeEqual(session.deserialize(pake.HAMK), hamk))
