@@ -15,6 +15,20 @@ const AUTOFILL_ROWS = [
 ];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
+function hasHoverRule(el) {
+  const matches = (rule) => {
+    const isOwnMatch = !!rule.selectorText?.includes(":hover") && rule.selectorText.split(/(?<!\\),/).some((sel) => {
+      try {
+        return el.matches(sel.replace(/(?<!\\):hover/g, ""));
+      } catch {
+        return false;
+      }
+    });
+    return isOwnMatch || [...(rule.cssRules || [])].some(matches);
+  };
+  return [...document.styleSheets].some((sheet) => [...sheet.cssRules].some(matches));
+}
+
 function contrastWithBackground(el) {
   const rgb = (c) => {
     const n = c.match(/[\d.]+/g).map(Number);
@@ -70,12 +84,15 @@ await main(async () => {
   const contrast = await offSwitch.evaluate(contrastWithBackground);
   ok("options: an off switch stands out from its row (3:1)", contrast >= 3, contrast.toFixed(2));
   ok("options: switches animate once the page has settled", (await row("Autofill on page load").locator('[role="switch"] + span').evaluate((k) => getComputedStyle(k).transitionDuration)) !== "0s");
-  const idle = await offSwitch.evaluate((s) => getComputedStyle(s).backgroundColor);
-  await offSwitch.hover();
-  await page.waitForTimeout(250);
-  const hovered = await offSwitch.evaluate((s) => getComputedStyle(s).backgroundColor);
-  ok("options: a switch reacts to hover", idle !== hovered, `${idle} -> ${hovered}`);
-  await page.mouse.move(0, 0);
+  ok("options: a switch has a hover style", await offSwitch.evaluate(hasHoverRule));
+  if (await page.evaluate(() => matchMedia("(hover: hover)").matches)) {
+    const idle = await offSwitch.evaluate((s) => getComputedStyle(s).backgroundColor);
+    await offSwitch.hover();
+    await page.waitForTimeout(250);
+    const hovered = await offSwitch.evaluate((s) => getComputedStyle(s).backgroundColor);
+    ok("options: a switch reacts to hover", idle !== hovered, `${idle} -> ${hovered}`);
+    await page.mouse.move(0, 0);
+  }
 
   await row("Never-save sites").locator("textarea").fill("Bank.example");
   await page.locator("nav a", { hasText: "Appearance" }).click();
