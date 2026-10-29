@@ -29,6 +29,10 @@ While it is off, the extension doesn't start the host, so the socket or pipe bel
 - Send and read with `send_bytes` and `recv_bytes` only, never `send()` or `recv()`, which use pickle. Each message is one JSON object, with no trailing newline: one request, one reply.
 - The app folder is `%LOCALAPPDATA%\PassBridge`. The reference client is `py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py"`. If the connection fails, report `no_host`.
 
+## One relay per user
+
+Every browser profile with agent sign-in on starts its own host, but only one relay per OS user owns the socket or pipe: the first one takes a lock on `agent.lock` in the app folder, and the others wait and take over when the owner closes. A waiting relay tells its extension `{"event":"standby"}` (and `{"event":"active"}` once it owns the endpoint); the Agents tab then says another browser or profile is answering. Requests go to the owning browser's extension, so use its tab ids.
+
 ## Framing
 
 The macOS socket uses newline-delimited JSON; the Windows pipe uses one message per request (see above). Send one JSON object per line and read one JSON line back per request. A connection can carry several requests in a row. Inside, the host talks to the extension over Chrome's native messaging, which is 4-byte length-prefixed. Clients never see that layer.

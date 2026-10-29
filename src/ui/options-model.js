@@ -14,6 +14,7 @@ export const OPTION_TABS = [
 
 const SETUP_URL = `https://github.com/${REPORT_REPO}/blob/main/SETUP.md`;
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
+const STANDBY_NOTICE = "Agent sign-in is answered by another browser or profile right now. Close it there or turn it off there to use this one.";
 const SETUP_ANCHORS = {
   mac: { browser: "optional-macos-helper", agents: "agent-sign-in-macos", updates: "one-click-update-macos" },
   windows: { browser: "windows", agents: "agent-sign-in-windows", updates: "automatic-updates-windows" },
@@ -40,10 +41,10 @@ export function tabFromHash(hash) {
 }
 
 /**
- * @param {{ helpers: { policy: HelperState, updater: HelperState }, isWindows: boolean, canCheckForUpdates: boolean }} input
+ * @param {{ helpers: { policy: HelperState, updater: HelperState }, isWindows: boolean, canCheckForUpdates: boolean, relay?: string }} input
  * @returns {{ rows: { policy: RowState, agents: RowState, autoInstall: RowState }, notices: { browser: Notice, agents: Notice, updates: Notice } }}
  */
-export function helperView({ helpers, isWindows, canCheckForUpdates }) {
+export function helperView({ helpers, isWindows, canCheckForUpdates, relay }) {
   const anchors = isWindows ? SETUP_ANCHORS.windows : SETUP_ANCHORS.mac;
   const notice = (state, tab) => (state === "missing" ? { text: HELPER_NOTICE, href: `${SETUP_URL}#${anchors[tab]}` } : null);
   return {
@@ -54,7 +55,7 @@ export function helperView({ helpers, isWindows, canCheckForUpdates }) {
     },
     notices: {
       browser: notice(helpers.policy, "browser"),
-      agents: notice(helpers.policy, "agents"),
+      agents: relay === "standby" ? { text: STANDBY_NOTICE, href: null } : notice(helpers.policy, "agents"),
       updates: canCheckForUpdates ? notice(helpers.updater, "updates") : null,
     },
   };

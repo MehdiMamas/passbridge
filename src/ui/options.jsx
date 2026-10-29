@@ -18,6 +18,7 @@ function OptionsApp() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [lists, setLists] = useState(() => Object.fromEntries(LIST_KEYS.map((k) => [k, ""])));
   const [agentLog, setAgentLog] = useState([]);
+  const [relay, setRelay] = useState("");
   const [tab, setTab] = useState(() => tabFromHash(location.hash));
   const [helpers, setHelpers] = useState({ policy: "checking", updater: "checking" });
   const [policy, setPolicy] = useState({ hidden: false, message: "" });
@@ -43,6 +44,13 @@ function OptionsApp() {
       if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
+    try {
+      chrome.storage.session.get({ agentRelay: "" }, (o) => setRelay(o.agentRelay || ""));
+    } catch {}
+    const onRelay = (changes, area) => {
+      if (area === "session" && changes.agentRelay) setRelay(changes.agentRelay.newValue || "");
+    };
+    chrome.storage.onChanged.addListener(onRelay);
     sendPolicy("get").then((r) => applyPolicy(r, policyMessage(r, false)));
     updaterAvailable().then((has) => setHelpers((h) => ({ ...h, updater: has ? "present" : "missing" })));
     readPrivacy("passwordSavingEnabled", setBubble);
@@ -59,6 +67,7 @@ function OptionsApp() {
     addEventListener("pagehide", onPageHide);
     return () => {
       chrome.storage.onChanged.removeListener(onLog);
+      chrome.storage.onChanged.removeListener(onRelay);
       removeEventListener("hashchange", onHash);
       removeEventListener("pagehide", onPageHide);
       onPageHide();
@@ -118,7 +127,7 @@ function OptionsApp() {
         lists={lists}
         onListChange={onListChange}
         onListBlur={onListBlur}
-        view={helperView({ helpers, isWindows: IS_WINDOWS, canCheckForUpdates: settings.canCheckForUpdates })}
+        view={helperView({ helpers, isWindows: IS_WINDOWS, canCheckForUpdates: settings.canCheckForUpdates, relay })}
         policy={policy}
         onPolicy={onPolicy}
         privacy={{ bubble, address }}

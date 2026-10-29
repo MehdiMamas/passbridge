@@ -8,7 +8,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, sanitizeReply } from "../../src/agent.js";
+import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -208,6 +208,9 @@ ok(
     .join() === "me@gmail.com,a@x.com,b@x.com",
 );
 ok("no match keeps the order", orderByPageUsername([{ username: "a" }, { username: "b" }], "zzz")[0].username === "a");
+
+ok("agent: relay events set the state", relayEvent({ event: "standby" }) === "standby" && relayEvent({ event: "active" }) === "active");
+ok("agent: requests and odd messages are not relay events", relayEvent({ id: "1", event: "standby" }) === null && relayEvent({ id: "1", op: "status" }) === null && relayEvent({ event: "x" }) === null && relayEvent(null) === null);
 
 const agentList = ["github.com", "google.com"];
 ok("agent: the exact host is allowed", hostAllowed("github.com", agentList));
@@ -1076,6 +1079,8 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("options: windows agents row is open while the helper is present", win.rows.agents === "ready" && win.notices.agents === null);
   const winNoPolicy = view("missing", "present", true);
   ok("options: windows agents row is locked without the helper and links the windows setup", winNoPolicy.rows.agents === "locked" && !!winNoPolicy.notices.agents?.href?.endsWith("#agent-sign-in-windows"));
+  ok("options: standby relay shows the other-browser line", /another browser or profile/.test(helperView({ helpers: { policy: "present", updater: "present" }, isWindows: false, canCheckForUpdates: true, relay: "standby" }).notices.agents?.text || ""));
+  ok("options: active relay shows no agents notice", helperView({ helpers: { policy: "present", updater: "present" }, isWindows: false, canCheckForUpdates: true, relay: "active" }).notices.agents === null);
   ok("options: windows updater notice links the windows setup", win.rows.autoInstall === "locked" && !!win.notices.updates?.href?.endsWith("#automatic-updates-windows"));
   ok("options: windows policy notice links the windows setup", !!view("missing", "present", true).notices.browser?.href?.endsWith("#windows"));
   ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);

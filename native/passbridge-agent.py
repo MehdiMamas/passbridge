@@ -9,6 +9,7 @@ import socket
 import struct
 import sys
 import threading
+import time
 import uuid
 
 WINDOWS = os.name == "nt"
@@ -19,12 +20,14 @@ else:
 APPDIR = os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", _default))
 SOCK = os.path.join(APPDIR, "agent.sock")
 KEYFILE = os.path.join(APPDIR, "agent.key")
+LOCKFILE = os.path.join(APPDIR, "agent.lock")
 PIPE = r"\\.\pipe\passbridge-agent-" + getpass.getuser()
 TIMEOUT = 90
 
 out_lock = threading.Lock()
 pending = {}  # id -> [event, reply]
 pending_lock = threading.Lock()
+lock_fd = None  # set once this process owns the endpoint
 
 
 def send_ext(obj):
@@ -131,7 +134,35 @@ def listen_pipe():
         threading.Thread(target=serve_pipe_client, args=(conn,), daemon=True).start()
 
 
+def own_lock():
+    # one relay per user owns the endpoint; the OS drops the lock when the process exits, so a crash leaves no stale owner
+    global lock_fd
+    os.makedirs(APPDIR, exist_ok=True)
+    fd = os.open(LOCKFILE, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if WINDOWS:
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return False
+    lock_fd = fd
+    return True
+
+
 def listen():
+    standby = False
+    while not own_lock():
+        if not standby:
+            standby = True
+            send_ext({"event": "standby"})
+        time.sleep(5)
+    send_ext({"event": "active"})
     if WINDOWS:
         listen_pipe()
         return
@@ -154,10 +185,11 @@ def gone():
         for rid, slot in pending.items():
             slot[1] = {"id": rid, "ok": False, "error": "extension_gone"}
             slot[0].set()
-    try:
-        os.unlink(SOCK)
-    except OSError:
-        pass
+    if lock_fd is not None:
+        try:
+            os.unlink(SOCK)
+        except OSError:
+            pass
 
 
 def main():
