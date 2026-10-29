@@ -831,8 +831,7 @@ async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
   menuFor = { tabId: null, host: "", logins: [] };
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve(void chrome.runtime.lastError)));
   if (!settings.enableContextMenu) return;
-  const ready = !!url && client.ready;
-  for (const props of menuItems({ ready, logins, hasCode })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+  for (const props of menuItems({ ready: client.ready, onSite: !!url, logins, hasCode })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
   menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
 }
 
