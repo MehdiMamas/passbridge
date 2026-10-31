@@ -1,6 +1,6 @@
 {
   "name": "passbridge",
-  "version": "1.4.14",
+  "version": "1.4.15",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-only",
