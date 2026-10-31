@@ -146,20 +146,23 @@ await main(async () => {
   );
   await multiCtx.close();
 
+  const BARE = ".m-input__inner";
+  const DECOY_PW = "input[type=password][style]";
+  const REAL_PW = "input[type=password]:not([style])";
   // unlabelled email box right before a password, with a hidden decoy password (issue #134)
   const bareCtx = await launchExtension(build("unlocked"));
   const bare = await bareCtx.newPage();
   const hasMenu = async () => (await bare.locator('[data-passbridge-host="menu"]').count()) > 0;
   await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
   await bare.waitForTimeout(300);
-  await bare.focus("#bare");
+  await bare.focus(BARE);
   await bare.waitForTimeout(500);
   ok("unlabelled box before a password gets the menu", await hasMenu(), "no host");
   await clickMenu(bare, "test@example.com");
   await bare.waitForTimeout(600);
-  const bareUser = await bare.inputValue("#bare");
-  const realPw = await bare.inputValue("#realPw");
-  const decoyPw = await bare.inputValue("#decoy");
+  const bareUser = await bare.inputValue(BARE);
+  const realPw = await bare.inputValue(REAL_PW);
+  const decoyPw = await bare.inputValue(DECOY_PW);
   ok(
     "fill sets email and visible password, hidden stays empty",
     bareUser === "test@example.com" && realPw === "TestPass123" && decoyPw === "",
@@ -168,15 +171,15 @@ await main(async () => {
 
   await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
   await bare.waitForTimeout(300);
-  await bare.evaluate(() => (document.getElementById("bare").placeholder = "Promo code"));
-  await bare.focus("#bare");
+  await bare.evaluate(() => (document.querySelector(".m-input__inner").placeholder = "Promo code"));
+  await bare.focus(BARE);
   await bare.waitForTimeout(500);
   ok("labelled promo box before a password gets no menu", !(await hasMenu()), "menu host found");
 
   await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
   await bare.waitForTimeout(300);
   await bare.evaluate(() => document.querySelectorAll('input[type="password"]').forEach((p) => p.remove()));
-  await bare.focus("#bare");
+  await bare.focus(BARE);
   await bare.waitForTimeout(500);
   ok("unlabelled box on a page with no password gets no menu", !(await hasMenu()), "menu host found");
   await bareCtx.close();
