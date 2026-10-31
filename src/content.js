@@ -184,8 +184,17 @@ function isNumericIdField(el) {
   if (NONLOGIN_HINT.test(blob)) return false;
   if (NUMERIC_ID_HINT.test(blob)) return true;
   // otherwise only the visible input right before the password field counts
+  return isRightBeforePassword(el);
+}
+
+// the visible input right before the first visible password in the same form
+function isRightBeforePassword(el) {
+  const form = el.form;
+  if (!form) return false;
   const inputs = Array.from(form.querySelectorAll("input")).filter((i) => i.type !== "hidden" && isVisible(i));
-  const at = inputs.indexOf(pass[0]);
+  const pass = inputs.find(isPasswordField);
+  if (!pass) return false;
+  const at = inputs.indexOf(pass);
   return at > 0 && inputs[at - 1] === el;
 }
 
@@ -202,7 +211,9 @@ function isUsernameField(el) {
 
   const blob = attrBlob(el);
   if (NONLOGIN_HINT.test(blob)) return false;
-  return /\b(user|login|signin|sign[\s-]?in|loginid)\b/i.test(blob);
+  if (/\b(user|login|signin|sign[\s-]?in|loginid)\b/i.test(blob)) return true;
+  // a box with no attributes at all right before the password (bestproxy.com/login)
+  return !blob.trim() && isRightBeforePassword(el);
 }
 
 let fillStyleInjected = false;
@@ -307,6 +318,9 @@ async function fillCredentialsNow(username, password, anchor) {
     if (pwInForm.length) passwords = pwInForm;
     if (userInForm.length) usernames = userInForm;
   }
+  // a hidden decoy password beside a visible one never takes the fill
+  const visiblePw = passwords.filter(isVisible);
+  if (visiblePw.length) passwords = visiblePw;
 
   let firstPw = passwords[0];
   if (anchor && passwords.length > 1) {

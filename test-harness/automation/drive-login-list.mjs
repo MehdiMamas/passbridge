@@ -1,4 +1,4 @@
-import { BASE, build, launchExtension, main, ok, pierced } from "./lib.mjs";
+import { BASE, build, clickMenu, launchExtension, main, ok, pierced } from "./lib.mjs";
 
 const attrs = (node) => {
   const a = {};
@@ -145,4 +145,39 @@ await main(async () => {
     multiText + " " + JSON.stringify(multiMetrics),
   );
   await multiCtx.close();
+
+  // unlabelled email box right before a password, with a hidden decoy password (issue #134)
+  const bareCtx = await launchExtension(build("unlocked"));
+  const bare = await bareCtx.newPage();
+  const hasMenu = async () => (await bare.locator('[data-passbridge-host="menu"]').count()) > 0;
+  await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
+  await bare.waitForTimeout(300);
+  await bare.focus("#bare");
+  await bare.waitForTimeout(500);
+  ok("unlabelled box before a password gets the menu", await hasMenu(), "no host");
+  await clickMenu(bare, "test@example.com");
+  await bare.waitForTimeout(600);
+  const bareUser = await bare.inputValue("#bare");
+  const realPw = await bare.inputValue("#realPw");
+  const decoyPw = await bare.inputValue("#decoy");
+  ok(
+    "fill sets email and visible password, hidden stays empty",
+    bareUser === "test@example.com" && realPw === "TestPass123" && decoyPw === "",
+    `user="${bareUser}" real="${realPw ? "set" : "empty"}" decoy="${decoyPw ? "set" : "empty"}"`,
+  );
+
+  await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
+  await bare.waitForTimeout(300);
+  await bare.evaluate(() => (document.getElementById("bare").placeholder = "Promo code"));
+  await bare.focus("#bare");
+  await bare.waitForTimeout(500);
+  ok("labelled promo box before a password gets no menu", !(await hasMenu()), "menu host found");
+
+  await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
+  await bare.waitForTimeout(300);
+  await bare.evaluate(() => document.querySelectorAll('input[type="password"]').forEach((p) => p.remove()));
+  await bare.focus("#bare");
+  await bare.waitForTimeout(500);
+  ok("unlabelled box on a page with no password gets no menu", !(await hasMenu()), "menu host found");
+  await bareCtx.close();
 });

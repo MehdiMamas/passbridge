@@ -12,6 +12,7 @@ These are the PassBridge rules that stay on top of the vendored Bitwarden qualif
 | Nintendo | "E-mail address" is not a street address | `hasStrongIdentitySignal` before `NONLOGIN_HINT` |
 | Banks and IdP iframes | Offer inside an iframe only for the allowlist or the same origin | `IFRAME_LOGIN_ALLOWLIST`, `frameIsSafe` |
 | Okta (Labcorp) | A `type=password` field labelled "Password" is a password even when named `credentials.passcode` | `isOtpField` |
+| bestproxy.com | An input with no name, id, placeholder or label right before the visible password is the username; a hidden password beside a visible one is skipped on fill | `isUsernameField`, `isRightBeforePassword`, `fillCredentialsNow` |
 | Reset forms | The repeated new password wins over "last password field" | `collectSubmittedCredentials` |
 
 Bitwarden behaviors we adopted around those rules: closed-shadow menu host, top-layer popover, in-field icon, 20ms fill pacing, native value setter plus key/input/change events, sandboxed-iframe refusal, save bar, context menu, badge, Ctrl/Cmd+Shift+L cycling.
