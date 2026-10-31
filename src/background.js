@@ -13,7 +13,7 @@ import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
-import { initAgent, pickAllowedFrames } from "./agent.js";
+import { initAgent, loginSavedFor, pickAllowedFrames } from "./agent.js";
 import { UPDATE_PAGE, availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
 import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
@@ -21,8 +21,8 @@ import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
 
 const client = createClient();
-/** @typedef {{ username: string, sites: string[], via: string }} SiteLogin */
-/** @typedef {{ username: string, password: string }} Cred */
+/** @typedef {{ username: string, sites: string[], saved: string[], via: string }} SiteLogin */
+/** @typedef {{ username: string, password: string, sites?: string[] }} Cred */
 
 // the right-click login list, with the tab and site it was built for
 /** @type {{ tabId: number | null, host: string, logins: SiteLogin[] }} */
@@ -236,9 +236,11 @@ async function siteLogins(tabId, url) {
       if (seen) {
         // a parent that lists it too becomes one more website to search
         for (const site of [...sites, h]) if (!seen.sites.includes(site)) seen.sites.push(site);
+        for (const site of sites) if (!seen.saved.includes(site)) seen.saved.push(site);
         continue;
       }
-      const row = { username: login.username, sites: [...sites], via: h };
+      // saved is only what Apple reported, never the host we asked about
+      const row = { username: login.username, sites: [...sites], saved: [...sites], via: h };
       byName.set(normUsername(login.username), row);
       out.push(row);
     }
@@ -546,18 +548,21 @@ async function fillLoginOnTab(tab, username, opts) {
     const at = last == null ? -1 : logins.findIndex((l) => (l.username || "") === last);
     username = at < 0 ? orderByMru(host, logins)[0].username : logins[(at + 1) % logins.length].username;
   }
-  let cred = pwCacheGet(host, username);
+  // every-site agent fill: no cache, and the record read must itself be saved for this host
+  let cred = opts?.savedOnly ? null : pwCacheGet(host, username);
   if (!cred) {
     cred = (await readPasswordForFrame(tab.id, tab.url, username)).cred;
-    if (cred) pwCacheSet(host, cred);
+    if (cred && !opts?.savedOnly) pwCacheSet(host, cred);
   }
   if (!cred) return { filled: false, reason: "needs_user" };
+  if (opts?.savedOnly && !loginSavedFor(host, cred.sites)) return { filled: false, reason: "not_allowed" };
   cycleByTab.set(tab.id, cred.username || "");
   const resp = await sendFill(tab.id, {
     type: "fill",
     username: cred.username,
     password: cred.password,
     expectedHost: host,
+    ...(opts?.savedOnly ? { expectedOrigin: new URL(tab.url).origin } : {}),
   });
   if (resp?.filled) {
     recordMru(host, cred.username);
@@ -1654,6 +1659,7 @@ initAgent({
   getTab: (id) => chrome.tabs.get(id),
   hostnameOf,
   isFillUrlAllowed,
+  isLocalDevHost,
   siteLogins,
   uniqueByUsername,
   fillLoginOnTab,
