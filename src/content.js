@@ -363,6 +363,8 @@ onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
   // the first reply wins, so a frame on another host or with no login fields stays silent
   // and the frame that fills answers. the background treats no answer as no form
   if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
+  // every-site agent fill: only frames on the top page's exact origin answer
+  if (msg.expectedOrigin && location.origin !== msg.expectedOrigin) return false;
   if (!hasFillTarget(liveField(fillAnchor))) return false;
   fillCredentials(msg.username, msg.password, liveField(fillAnchor)).then(async (filled) => {
     // a submit right after must not re-offer to save this existing login

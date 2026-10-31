@@ -22,6 +22,7 @@ const BROWSER_ROWS = [
   "Hide the browser's password manager",
   "The browser's saved passwords",
 ];
+const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allowed sites", "Activity"];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el) {
@@ -297,6 +298,29 @@ await main(async () => {
   ok("options: allowed sites save when the tab changes without a blur", (await savedAllowlist()).includes("example.org"), await savedAllowlist());
 
   await helped.evaluate(() => (location.hash = "agents"));
+  const agentRows = await helped.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
+  ok("options: agent rows in order", agentRows.join("|") === AGENT_ROWS.join("|"), agentRows.join("|"));
+  const allSites = helpedRow("Allow every site (*)");
+  const allSwitch = allSites.locator('[role="switch"]');
+  const savedAllowAll = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowAll").then((o) => o.agentAllowAll));
+  const warning = await allSites.locator("[data-help]").innerText();
+  ok("options: every-site shows the warning", warning.includes("banks and email included") && warning.includes("each password read still needs your approval"), warning);
+  ok("options: every-site is off by default", !(await allSwitch.isChecked()) && (await savedAllowAll()) !== true);
+  await allSwitch.click();
+  await helped.waitForTimeout(600);
+  ok("options: every-site saves on click", (await savedAllowAll()) === true, String(await savedAllowAll()));
+  await helped.reload();
+  await allSwitch.waitFor();
+  ok("options: every-site survives a reload", await allSwitch.isChecked());
+  await allSwitch.click();
+  await helped.waitForTimeout(600);
+  await sw.evaluate(() => chrome.storage.sync.set({ agentSignIn: false }));
+  await helped.reload();
+  await allSwitch.waitFor();
+  ok("options: every-site is disabled while agent sign-in is off", await allSwitch.isDisabled());
+  ok("options: its help line stays readable while disabled", (await allSites.locator("[data-help]").innerText()).includes("Off by default"));
+  await sw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));
+  await helped.reload();
   await allowedSites().fill("github.com\nexample.net");
   await helped.close({ runBeforeUnload: true });
   await new Promise((r) => setTimeout(r, 500));

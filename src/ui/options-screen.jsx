@@ -388,9 +388,15 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
         state={state}
         {...toggleProps(settings, onChange, "agentSignIn")}
       />
+      <SwitchRow
+        label="Allow every site (*)"
+        help="Off by default. When on, an agent can sign in on any https site you have a saved login for, not only the list below, banks and email included. A page that tricks the agent could steer it into any of those accounts. A login only fills on the site it was saved for, and each password read still needs your approval. This setting follows your Chrome profile to every computer signed in to it."
+        state={settings.agentSignIn === true ? state : "locked"}
+        {...toggleProps(settings, onChange, "agentAllowAll")}
+      />
       <ListRow
         label="Allowed sites"
-        help="One site per line. Subdomains are included."
+        help="One site per line. Subdomains are included. A typed * does nothing here: use Allow every site above."
         state={state}
         value={lists.agentAllowlist}
         onChange={(text) => onListChange("agentAllowlist", text)}

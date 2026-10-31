@@ -41,7 +41,7 @@ The macOS socket uses newline-delimited JSON; the Windows pipe uses one message 
 
 There is no per-client pairing. On macOS any process of the same user that can open the socket may send requests; on Windows any process of the same user that can read `agent.key`. What protects you:
 - the setting is off by default;
-- only allowlisted sites can be filled;
+- only allowlisted sites can be filled, unless the user also turns on Allow every site (*) (see below);
 - `sign_in` is rate limited;
 - each password read still needs your approval in Apple's Passwords (Touch ID);
 - every request except `status` is logged in the extension.
@@ -55,8 +55,21 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 | op | fields | what it does |
 |---|---|---|
 | `status` | none | reports the state, touches no tab |
-| `logins` | `tabId` (number) | lists the saved usernames for that tab's site |
-| `sign_in` | `tabId` (number), `username` (optional string) | fills that login into the tab's sign-in form |
+| `logins` | `tabId` (number), `site` (optional string) | lists the saved usernames for that tab's site |
+| `sign_in` | `tabId` (number), `username` (optional string), `site` (optional string) | fills that login into the tab's sign-in form |
+
+`site` is the site the client believes the tab is on, a host or a URL. If the tab's host is not that site or a subdomain of it, the reply is `not_allowed` with `reason: "site_mismatch"`. A client that leaves `site` out still works. Send it, so a tab that navigated away between your steps is refused.
+
+## Allow every site (*)
+
+Off by default. In Settings, on the Agents tab, the user can turn on Allow every site (*). The switch only does anything while Allow agent sign-in is on. Listed sites behave as before. For any other site:
+
+- the tab must be `https:`; plain HTTP is refused even if Fill and save on HTTP pages is on, and so are `localhost`, `127.0.0.1`, `[::1]`, `.localhost` and `.test` hosts;
+- a site in the user's blocked domains is refused (on listed sites too);
+- `logins` and `sign_in` only see logins saved for the tab's own site, a subdomain of it, or its `www.` form. A login saved only for another domain, such as a college's SSO domain, is not offered;
+- the password is read fresh each time and refused (`not_allowed`) unless the record read is itself saved for the site;
+- only the page's own frames on the same origin are filled, never an allowlisted frame from another site;
+- each password read still needs the user's approval in Apple's Passwords.
 
 `tabId` is Chrome's tab id, the same id Claude in Chrome's tab tools use. `sign_in` only fills the fields; it doesn't submit the form. The client clicks the page's own sign-in button afterwards. It also fills allowlisted sign-in frames inside the page, such as idmsa.apple.com under apple.com.
 
@@ -67,14 +80,14 @@ If `username` is left out and the site has exactly one login, that login is used
 Success:
 
 ```json
-{"id":"…","ok":true,"paired":true,"enabled":true,"allowlist":["github.com","google.com","vercel.com","apple.com"]}
+{"id":"…","ok":true,"paired":true,"enabled":true,"allowlist":["github.com","google.com","vercel.com","apple.com"],"allowAll":false}
 {"id":"…","ok":true,"domain":"github.com","usernames":["octocat"]}
 {"id":"…","ok":true,"domain":"github.com","username":"octocat"}
 ```
 
 The three lines are `status`, `logins` and `sign_in`.
 
-Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries `usernames`.
+Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries `usernames`. `not_allowed` may carry `reason`; today the only value is `site_mismatch`, and the Agents > Activity list shows it.
 
 | error | meaning |
 |---|---|
@@ -82,7 +95,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `unknown_op` | the op isn't `status`, `logins` or `sign_in` |
 | `bad_request` | the line isn't a JSON object, or `id` or `op` is missing |
 | `no_tab` | no tab with that id, or it has no URL |
-| `not_allowed` | the tab's site isn't on the allowlist, or PassBridge refuses to fill there (for example plain HTTP or a blocked domain) |
+| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`) |
 | `rate_limited` | more than 10 `sign_in` requests in 10 minutes |
 | `needs_user` | the user has to act: the extension isn't paired, or the Passwords approval (Touch ID) was refused or not given in time |
 | `no_login` | no saved login for the site, or none matching `username` |

@@ -8,7 +8,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { createLimiter, handleAgentRequest, hostAllowed, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { createLimiter, handleAgentRequest, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -267,6 +267,56 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   );
   ok("agent: frame choice keeps allowlisted subdomain frames only", fr.length === 1 && fr[0].frameId === 3 && fr[0].host === "idmsa.apple.com");
   ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
+
+  // every-site: the host is off the list and the setting decides
+  const isDev = (h) => h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost") || h.endsWith(".test");
+  const saved = (...sites) => ({ username: "u@x.com", sites, saved: sites });
+  const all = (over = {}, settings = {}) =>
+    deps({
+      getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true, ...settings }),
+      getTab: async () => ({ id: 1, url: "https://shop.example.org/login" }),
+      isLocalDevHost: isDev,
+      siteLogins: async () => [saved("example.org")],
+      ...over,
+    });
+  const tabAt = (url) => ({ getTab: async () => ({ id: 1, url }) });
+  const logins = (d, msg = {}) => run({ op: "logins", tabId: 1, ...msg }, d);
+  ok("every-site: default off refuses an unlisted host", (await logins(all({}, { agentAllowAll: false }))).reply.error === "not_allowed");
+  ok("every-site: a missing setting refuses", (await logins(all({}, { agentAllowAll: undefined }))).reply.error === "not_allowed");
+  ok("every-site: on allows an unlisted https host", (await logins(all())).reply.usernames?.join() === "u@x.com");
+  ok("every-site: http with canFillOnHttp is refused", (await logins(all(tabAt("http://shop.example.org/"), { canFillOnHttp: true }))).reply.error === "not_allowed");
+  ok("every-site: https://localhost is refused", (await logins(all(tabAt("https://localhost/")))).reply.error === "not_allowed");
+  ok("every-site: a .test host is refused", (await logins(all(tabAt("https://shop.example.test/")))).reply.error === "not_allowed");
+  ok("every-site: a lookalike saved site is refused", (await logins(all({ siteLogins: async () => [saved("evilexample.org")] }))).reply.usernames?.length === 0);
+  ok("every-site: a login saved for another domain is filtered out", (await logins(all({ siteLogins: async () => [saved("college.edu"), saved("example.org")] }))).reply.usernames?.length === 1);
+  ok("every-site: a login with no sites is filtered out", (await logins(all({ siteLogins: async () => [{ username: "n@x.com", sites: [], saved: [] }, { username: "m@x.com", sites: ["shop.example.org"] }] }))).reply.usernames?.length === 0);
+  ok("every-site: sign_in with nothing saved is no_login", (await run({ op: "sign_in", tabId: 1 }, all({ siteLogins: async () => [saved("college.edu")] }))).reply.error === "no_login");
+  let seen = null;
+  const fillSeen = async (tab, username, opts) => ((seen = opts), { filled: true, username });
+  const filled = await run({ op: "sign_in", tabId: 1 }, all({ fillLoginOnTab: fillSeen }));
+  ok("every-site: sign_in fills with savedOnly and no frame allowlist", filled.reply.ok && seen?.savedOnly === true && !("frameAllowlist" in seen));
+  ok("every-site: a request carrying agentAllowAll changes nothing", (await logins(all({}, { agentAllowAll: false }), { agentAllowAll: true, settings: { agentAllowAll: true } })).reply.error === "not_allowed");
+  ok("every-site: a listed site is unchanged with the setting on", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true }), fillLoginOnTab: fillSeen }))).reply.ok && Array.isArray(seen?.frameAllowlist) && !seen.savedOnly);
+  ok("every-site: a blocked domain is refused", (await logins(all({}, { blockedDomains: ["example.org"] }))).reply.error === "not_allowed");
+  ok("every-site: a blocked domain is refused on a listed site too", (await logins(deps({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], blockedDomains: ["github.com"] }) }))).reply.error === "not_allowed");
+  ok("every-site: status reports allowAll", (await run({ op: "status" }, all())).allowAll === true && (await run({ op: "status" })).allowAll === false);
+  ok("every-site: no password in any reply", !/leak|password/i.test(JSON.stringify([filled.reply, await logins(all()), await run({ op: "status" }, all())])));
+
+  // the site field
+  const withSite = (site, d = deps()) => logins(d, { site });
+  ok("site: the exact host matches", (await withSite("github.com")).reply.ok === true);
+  ok("site: a URL matches", (await withSite("https://github.com/login")).reply.ok === true);
+  ok("site: a subdomain of the site matches", (await withSite("github.com", deps(tabAt("https://gist.github.com/")))).reply.ok === true);
+  const mismatch = await withSite("example.org");
+  ok("site: a different site is site_mismatch", mismatch.reply.error === "not_allowed" && mismatch.reply.reason === "site_mismatch");
+  ok("site: the parent of the tab host does not match a deeper site", (await withSite("gist.github.com")).reply.reason === "site_mismatch");
+  ok("site: a lookalike is site_mismatch", (await withSite("hub.com")).reply.reason === "site_mismatch");
+  ok("site: absent still works", (await logins(deps())).reply.ok === true);
+  ok("site: a bad value is site_mismatch", (await withSite("")).reply.reason === "site_mismatch" && (await withSite("http://")).reply.reason === "site_mismatch" && (await withSite(42)).reply.reason === "site_mismatch");
+  ok("site: the guard applies to every-site too", (await logins(all(), { site: "github.com" })).reply.reason === "site_mismatch");
+
+  ok("site helpers: onSiteOrSubdomain", onSiteOrSubdomain("a.b.com", "b.com") && onSiteOrSubdomain("b.com", "b.com") && !onSiteOrSubdomain("ab.com", "b.com") && !onSiteOrSubdomain("a.com", "com") && onSiteOrSubdomain("localhost", "localhost"));
+  ok("site helpers: loginSavedFor", loginSavedFor("x.org", ["https://www.x.org/"]) && loginSavedFor("sub.x.org", ["x.org"]) && !loginSavedFor("x.org", ["evilx.org"]) && !loginSavedFor("x.org", []) && !loginSavedFor("x.org", undefined) && !loginSavedFor("www.x.org", ["y.org"]));
 }
 ok("update: a higher release tag is newer", isNewerVersion("v1.4.0", "1.3.1") && isNewerVersion("1.3.10", "1.3.9"));
 ok("update: the same or an older release is not newer", !isNewerVersion("v1.3.1", "1.3.1") && !isNewerVersion("1.3", "1.3.0") && !isNewerVersion("v1.2.9", "1.3.0"));

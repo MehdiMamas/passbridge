@@ -1,6 +1,7 @@
 // agent sign-in: a local program asks over a native host to fill a login into a tab.
 // replies carry status and usernames only, never a password or a code.
 import { SETTINGS_AREA, getSettings, hostBlocked } from "./settings.js";
+import { hostOfSite, siteHosts } from "./session/password-search.js";
 
 const HOST = "com.passbridge.agent";
 const LOG_KEY = "agentLog";
@@ -10,6 +11,17 @@ export const RATE_WINDOW_MS = 10 * 60 * 1000;
 
 // exact host or a subdomain of an entry, so github.com.evil.io and evilgithub.com stay out
 export const hostAllowed = hostBlocked;
+
+// the host is the site or one of its subdomains. a site with no dot (com, localhost) matches itself only
+export function onSiteOrSubdomain(host, site) {
+  return host === site || (site.includes(".") && host.endsWith("." + site));
+}
+
+// a login is saved for this host: a saved site, a subdomain of it, or the saved www. host without its www.
+export function loginSavedFor(host, sites) {
+  if (!host) return false;
+  return siteHosts(sites).some((s) => onSiteOrSubdomain(host, s) || host === s.replace(/^www\./, ""));
+}
 
 // child frames the agent may fill: a real child (not the top frame) whose own host is on the allowlist,
 // e.g. idmsa.apple.com under apple.com. frames are {frameId, url} from webNavigation.getAllFrames
@@ -66,7 +78,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   const op = msg?.op;
   const settings = await deps.getSettings();
   if (op === "status") {
-    return { ok: true, paired: !!deps.client.ready, enabled: !!settings.agentSignIn, allowlist: settings.agentAllowlist || [] };
+    return { ok: true, paired: !!deps.client.ready, enabled: !!settings.agentSignIn, allowlist: settings.agentAllowlist || [], allowAll: settings.agentAllowAll === true };
   }
   const base = { host: "", username: "" };
   const done = (reply, extra) => Object.assign(base, extra, { reply });
@@ -80,14 +92,28 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   if (!tab || tab.id == null || !tab.url) return done(fail("no_tab"));
   const host = deps.hostnameOf(tab.url);
   base.host = host;
-  if (!(await deps.isFillUrlAllowed(tab.url)) || !host || !hostAllowed(host, settings.agentAllowlist)) {
+  // an agent that names its site must be on it
+  if (msg.site != null) {
+    const want = hostOfSite(msg.site);
+    if (!host || !want || !onSiteOrSubdomain(host, want)) return done(fail("not_allowed", { reason: "site_mismatch" }));
+  }
+  if (!host || hostBlocked(host, settings.blockedDomains)) return done(fail("not_allowed"));
+  // every-site: the setting is on, https only, never a dev host. what it fills is limited to logins saved for this host
+  let everySite = false;
+  if (hostAllowed(host, settings.agentAllowlist)) {
+    if (!(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
+  } else if (settings.agentAllowAll === true && /^https:\/\//i.test(tab.url) && !deps.isLocalDevHost(host)) {
+    everySite = true;
+  } else {
     return done(fail("not_allowed"));
   }
   if (op !== "logins" && !limiter.take(now)) return done(fail("rate_limited"));
   if (!deps.client.ready) return done(fail("needs_user"));
 
   try {
-    const logins = deps.uniqueByUsername(await deps.siteLogins(tab.id, tab.url));
+    let found = await deps.siteLogins(tab.id, tab.url);
+    if (everySite) found = found.filter((l) => loginSavedFor(host, l.saved));
+    const logins = deps.uniqueByUsername(found);
     const names = logins.map((l) => l.username);
     if (op === "logins") return done({ ok: true, domain: host, usernames: names });
 
@@ -103,7 +129,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
         username = hit;
       }
       base.username = username;
-      const r = await deps.fillLoginOnTab(tab, username, { frameAllowlist: settings.agentAllowlist });
+      const r = await deps.fillLoginOnTab(tab, username, everySite ? { savedOnly: true } : { frameAllowlist: settings.agentAllowlist });
       if (!r?.filled) return done(fail(r?.reason || "fill_failed"));
       return done({ ok: true, domain: host, username: r.username || username }, { username: r.username || username });
     }
@@ -177,7 +203,7 @@ export function initAgent(deps) {
       p.postMessage(safe);
     } catch {}
     if (msg?.op !== "status") {
-      appendLog({ t: Date.now(), op: String(msg?.op || ""), host: out.host || "", username: out.username || "", result: safe.ok ? "ok" : safe.error });
+      appendLog({ t: Date.now(), op: String(msg?.op || ""), host: out.host || "", username: out.username || "", result: safe.ok ? "ok" : safe.reason || safe.error });
     }
   }
 

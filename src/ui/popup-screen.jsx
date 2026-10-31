@@ -150,6 +150,7 @@ export function PopupScreen({
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
   const [agentOn, setAgentOn] = useState(false);
+  const [agentAll, setAgentAll] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [pasted, setPasted] = useState("");
   const [held, setHeld] = useState(null);
@@ -161,7 +162,10 @@ export function PopupScreen({
 
   useEffect(() => {
     try {
-      chrome.storage.sync.get({ agentSignIn: false }, (o) => setAgentOn(o?.agentSignIn === true));
+      chrome.storage.sync.get({ agentSignIn: false, agentAllowAll: false }, (o) => {
+        setAgentOn(o?.agentSignIn === true);
+        setAgentAll(o?.agentAllowAll === true);
+      });
     } catch {}
   }, []);
 
@@ -205,7 +209,7 @@ export function PopupScreen({
         <StatusDot state={state} />
       </header>
       {agentOn && (
-        <p className="shrink-0 px-3 pt-1.5 text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">Agent sign-in on</p>
+        <p className="shrink-0 px-3 pt-1.5 text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">{agentAll ? "Agent sign-in on, every site" : "Agent sign-in on"}</p>
       )}
       {update && (
         <div
