@@ -12,6 +12,7 @@ These are the PassBridge rules that stay on top of the vendored Bitwarden qualif
 | Nintendo | "E-mail address" is not a street address | `hasStrongIdentitySignal` before `NONLOGIN_HINT` |
 | Banks and IdP iframes | Offer inside an iframe only for the allowlist or the same origin | `IFRAME_LOGIN_ALLOWLIST`, `frameIsSafe` |
 | Okta (Labcorp) | A `type=password` field labelled "Password" is a password even when named `credentials.passcode` | `isOtpField` |
+| Google 2-step | The code box named `totpPin` is a code field | `OTP_HINT` |
 | bestproxy.com | An input with no name, id, placeholder or label right before the visible password is the username; a hidden password beside a visible one is skipped on fill | `isUsernameField`, `isRightBeforePassword`, `fillCredentialsNow` |
 | Reset forms | The repeated new password wins over "last password field" | `collectSubmittedCredentials` |
 

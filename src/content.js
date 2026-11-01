@@ -63,7 +63,7 @@ try {
 }
 
 const OTP_AUTOCOMPLETE = /one-time-code/i;
-const OTP_HINT = /\b(otp|one[\s-]?time|verification|2fa|mfa|sms[\s-]?code|auth[\s-]?code|security[\s-]?code|passcode)\b/i;
+const OTP_HINT = /\btotp|\b(otp|one[\s-]?time|verification|2fa|mfa|sms[\s-]?code|auth[\s-]?code|security[\s-]?code|passcode)\b/i;
 // Okta names its password input credentials.passcode; a type=password field that says "password" is the password
 const PASSWORD_LABEL = /passw|pwd/i;
 const ONE_TIME_PASSWORD = /one[\s-]?time[\s-]?pass(?:word|code)?|\botp\b/gi;
