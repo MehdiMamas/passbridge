@@ -37,6 +37,34 @@ await main(async () => {
 
   {
     const page = await ctx.newPage();
+    await page.goto(`${BASE}/otp-totp-pin.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(300);
+    await page.focus('input[name="totpPin"]');
+    await page.waitForTimeout(600);
+    const t = await menuText(page);
+    ok("totpPin: code row offered on focus", /Verification code/.test(t), `got "${t}"`);
+    ok("totpPin: not treated as a username", !/Fill login|Passwords for/i.test(t), `got "${t}"`);
+    await page.close();
+  }
+
+  for (const name of ["pivot", "autopilot"]) {
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/otp-totp-pin.html`, { waitUntil: "domcontentloaded" });
+    await page.evaluate((n) => {
+      const el = document.querySelector("input");
+      el.name = n;
+      el.id = n;
+    }, name);
+    await page.waitForTimeout(300);
+    await page.focus(`input[name="${name}"]`);
+    await page.waitForTimeout(600);
+    const t = await menuText(page);
+    ok(`${name}: no code row`, !/Verification code/.test(t), `got "${t}"`);
+    await page.close();
+  }
+
+  {
+    const page = await ctx.newPage();
     await page.goto(`${BASE}/login-okta-passcode.html`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => {
       document.querySelector('label[for="input28"]').textContent = "Enter code";
