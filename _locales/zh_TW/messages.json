@@ -346,5 +346,8 @@
   "totpScanAgain": { "message": "請再次掃描或貼上代碼。" },
   "totpKeyGoneAdd": { "message": "設定金鑰已不再保留。請再次新增。" },
   "totpKeyGoneScan": { "message": "設定金鑰已不再保留。請再次掃描代碼。" },
-  "screenshotReadFailed": { "message": "無法讀取螢幕截圖。" }
+  "screenshotReadFailed": { "message": "無法讀取螢幕截圖。" },
+  "website": { "message": "網站" },
+  "saveAsNewLogin": { "message": "另存為新登入資訊" },
+  "errSiteInvalid": { "message": "該網站位址無效。" }
 }

@@ -1229,7 +1229,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!secretFresh(offer) || !(sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
             return sendResponse({ ok: false, error: "nothing to edit" });
           }
-          sendResponse({ ok: true, username: offer.target || "", password: offer.password });
+          sendResponse({ ok: true, username: offer.target || "", password: offer.password, site: offer.host || hostnameOf(offer.frameUrl) || "" });
           break;
         }
 
@@ -1245,7 +1245,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // the bar lets the user fix a missing username or a wrong password before saving
           const username = typeof msg.username === "string" ? msg.username.trim() : offer.target;
           const password = typeof msg.password === "string" && msg.password ? msg.password : offer.password;
-          await client.saveLogin(offer.tabId, offer.frameUrl, username, password);
+          // the bar shows the website too; a changed one is checked by the same gate as every save
+          let url = offer.frameUrl;
+          const site = typeof msg.site === "string" ? msg.site.trim() : "";
+          if (site && site.toLowerCase() !== String(offer.host || hostnameOf(offer.frameUrl)).toLowerCase()) {
+            const full = /^[a-z][a-z0-9+.-]*:\/\//i.test(site) ? site : `https://${site}`;
+            let ok = false;
+            try { ok = !!new URL(full).hostname && (await isFillUrlAllowed(full)); } catch {}
+            if (!ok) return sendResponse({ ok: false, error: t("errSiteInvalid") });
+            url = full;
+          }
+          await client.saveLogin(offer.tabId, url, username, password, { asNew: msg.asNew === true });
           sendResponse({ ok: true, saved: true });
           break;
         }
