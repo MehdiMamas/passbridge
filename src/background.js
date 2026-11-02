@@ -3,7 +3,7 @@
 
 import { State, setDeviceLabel } from "./apple/protocol.js";
 import { createClient } from "./session/create-client.js";
-import { labelForOs } from "./apple/os-label.js";
+import { labelForOs, uiDeviceLabel } from "./apple/os-label.js";
 import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
 import { generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
@@ -19,6 +19,16 @@ import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable }
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
+import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
+
+// menu titles and the errors sent back to the pages follow the UI language
+void resolveLocale();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === SETTINGS_AREA && changes.uiLanguage) {
+    invalidateLocale();
+    void resolveLocale();
+  }
+});
 
 const client = createClient();
 /** @typedef {{ username: string, sites: string[], saved: string[], via: string }} SiteLogin */
@@ -366,7 +376,7 @@ chrome.runtime.onInstalled.addListener(async (d) => {
   const updatedTo = await takeUpdatedTo();
   const auto = await takeAutoUpdatedTo();
   if (updatedTo && auto === updatedTo) {
-    chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: "PassBridge", message: `PassBridge updated to ${auto}` });
+    chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("notificationUpdated", [auto]) });
   } else if (updatedTo) chrome.tabs.create({ url: chrome.runtime.getURL(`${UPDATE_PAGE}?updated=${encodeURIComponent(updatedTo)}`) });
 });
 // a folder update cut off halfway leaves its journal in the folder, the page puts the old files back
@@ -618,7 +628,7 @@ async function copyText(text) {
   const resp = await chrome.runtime
     .sendMessage({ type: "offscreenCopy", text: text || "", clearMs })
     .catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
-  if (!resp?.ok) throw new Error(resp?.error || "Couldn't write to the clipboard.");
+  if (!resp?.ok) throw new Error(resp?.error || t("couldntWriteClipboard"));
 }
 
 async function clearClipboard() {
@@ -698,24 +708,24 @@ async function scanQrFromMenu(info, tab) {
     rect = null;
   }
   if (!rect) {
-    await showTotpBar(tab.id, { mode: "error", error: "Right-click the image again, then scan it." });
+    await showTotpBar(tab.id, { mode: "error", error: t("qrRightClick") });
     return;
   }
   if (rect.w < 8 || rect.h < 8) {
-    await showTotpBar(tab.id, { mode: "error", error: "No QR code in that area." });
+    await showTotpBar(tab.id, { mode: "error", error: t("qrNoCode") });
     return;
   }
   let dataUrl;
   try {
     dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
   } catch {
-    await showTotpBar(tab.id, { mode: "error", error: "Couldn't capture the page." });
+    await showTotpBar(tab.id, { mode: "error", error: t("couldntCapture") });
     return;
   }
   await ensureOffscreen();
   const decoded = await chrome.runtime.sendMessage({ type: "offscreenDecodeQr", dataUrl, rect });
   if (!decoded?.ok) {
-    await showTotpBar(tab.id, { mode: "error", error: decoded?.error || "Couldn't read that QR code." });
+    await showTotpBar(tab.id, { mode: "error", error: decoded?.error || t("qrUnreadableBg") });
     return;
   }
   const parsed = (decoded.values || []).map(parseOtpAuth).find(Boolean);
@@ -723,7 +733,7 @@ async function scanQrFromMenu(info, tab) {
     const sawQr = (decoded.values || []).length > 0;
     await showTotpBar(tab.id, {
       mode: "error",
-      error: sawQr ? "This QR is not a verification-code setup link." : "No QR code in that area.",
+      error: sawQr ? t("qrNotSetup") : t("qrNoCode"),
     });
     return;
   }
@@ -733,11 +743,11 @@ async function scanQrFromMenu(info, tab) {
 async function presentTotpOffer(tab, parsed) {
   await ensureConnected();
   if (!client.ready) {
-    await showTotpBar(tab.id, { mode: "error", error: "Unlock PassBridge, then scan the code again." });
+    await showTotpBar(tab.id, { mode: "error", error: t("qrUnlockFirst") });
     return;
   }
   if (!client.canSetUpTotp) {
-    await showTotpBar(tab.id, { mode: "error", error: "This Passwords helper can't set up verification codes." });
+    await showTotpBar(tab.id, { mode: "error", error: t("totpUnsupported") });
     return;
   }
   let logins = [];
@@ -826,9 +836,9 @@ async function syncUpdateBadge() {
     return;
   }
   const { name } = chrome.runtime.getManifest();
-  chrome.action.setBadgeText({ text: update ? "NEW" : "" }).catch(() => {});
+  chrome.action.setBadgeText({ text: update ? t("badgeNew") : "" }).catch(() => {});
   chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR }).catch(() => {});
-  chrome.action.setTitle({ title: update ? `${name} ${update.version} is available!` : name }).catch(() => {});
+  chrome.action.setTitle({ title: update ? `${name} ${t("updateAvailable", [update.version])}` : name }).catch(() => {});
 }
 
 async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
@@ -836,6 +846,7 @@ async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
   menuFor = { tabId: null, host: "", logins: [] };
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve(void chrome.runtime.lastError)));
   if (!settings.enableContextMenu) return;
+  await resolveLocale();
   for (const props of menuItems({ ready: client.ready, onSite: !!url, logins, hasCode })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
   menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
 }
@@ -1064,14 +1075,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!frameUrl || sender.tab?.id == null || frameId == null) return sendResponse({ ok: false, error: "no frame" });
           const host = hostnameOf(frameUrl);
           if (!(await isFillUrlAllowed(frameUrl))) {
-            return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS frame" });
+            return sendResponse({ ok: false, error: t("refuseFillHttp") });
           }
           const code = await resolveOneTimeCode(sender.tab.id, Number(msg.id));
           // the frame stays silent when its code field is gone
           const resp = await chrome.tabs
             .sendMessage(sender.tab.id, { type: "fillOtp", code, expectedHost: host }, { frameId })
             .catch(() => null);
-          if (!resp?.filled) return sendResponse({ ok: false, filled: false, error: "Couldn't find the code field." });
+          if (!resp?.filled) return sendResponse({ ok: false, filled: false, error: t("codeFieldNotFound") });
           if ((await getSettings()).copyTotpAfterFill) await copyText(code).catch(() => {});
           sendResponse({ ok: true, filled: true });
           break;
@@ -1086,7 +1097,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           const host = hostnameOf(frameUrl);
           if (!(await isFillUrlAllowed(frameUrl))) {
-            return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS frame" });
+            return sendResponse({ ok: false, error: t("refuseFillHttp") });
           }
           // pass only the username through, sites is caller-supplied
           const safeLogin = { username: msg.loginName?.username };
@@ -1107,7 +1118,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({
               ok: false,
               filled: false,
-              error: "Couldn't read the password for this site.",
+              error: t("passwordReadFailed"),
             });
           }
           let resp;
@@ -1125,7 +1136,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           } catch (e) {
             console.info("[PassBridge] inlineFill", { status: "fill message failed", host, error: String(e?.message ?? e) });
             // the frame stays silent when it has no login field left to fill
-            return sendResponse({ ok: false, filled: false, error: "Couldn't find a login form on this page." });
+            return sendResponse({ ok: false, filled: false, error: t("loginFormNotFound") });
           }
           const filled = !!resp?.filled;
           if (filled) {
@@ -1139,7 +1150,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({
             ok: false,
             filled: false,
-            error: status === "no fields" ? "Couldn't fill this page." : status,
+            error: status === "no fields" ? t("couldntFillPageBg") : status,
           });
           break;
         }
@@ -1152,7 +1163,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           const host = hostnameOf(frameUrl);
           if (!(await isFillUrlAllowed(frameUrl))) {
-            return sendResponse({ ok: false, error: "refusing to save from a non-HTTPS frame" });
+            return sendResponse({ ok: false, error: t("refuseSaveHttp") });
           }
           if (!msg.password) return sendResponse({ ok: false, error: "no password" });
           const detected = (msg.username || "").trim();
@@ -1261,23 +1272,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // popup flow: the setup key is held here, the popup only ever sees issuer and account
         case "totpScanTab": {
           const tab = await activeTab();
-          if (!tab?.id || !/^https?:/i.test(tab.url || "")) return sendResponse({ ok: false, error: "Open the page with the QR code first." });
+          if (!tab?.id || !/^https?:/i.test(tab.url || "")) return sendResponse({ ok: false, error: t("totpOpenQrFirst") });
           let dataUrl;
           try {
             dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
           } catch {
-            return sendResponse({ ok: false, error: "Couldn't capture the page." });
+            return sendResponse({ ok: false, error: t("couldntCapture") });
           }
           await ensureOffscreen();
           const decoded = await chrome.runtime.sendMessage({ type: "offscreenDecodeQr", dataUrl, rect: { x: 0, y: 0, w: 1, h: 1, dpr: 1, whole: true } });
-          if (!decoded?.ok) return sendResponse({ ok: false, error: decoded?.error || "Couldn't read the QR code." });
+          if (!decoded?.ok) return sendResponse({ ok: false, error: decoded?.error || t("qrUnreadableBg") });
           const parsed = (decoded.values || []).map(parseOtpAuth).find(Boolean);
           if (!parsed) {
             return sendResponse({
               ok: false,
               error: (decoded.values || []).length
-                ? "That QR is not a verification-code setup link."
-                : "No QR code visible. Scroll it into view, or paste the setup key.",
+                ? t("totpQrNotLink")
+                : t("totpQrNotVisible"),
             });
           }
           totpOffers.set(tab.id, { at: Date.now(), uri: parsed.uri, pageUrl: tab.url, issuer: parsed.issuer, account: parsed.account, usernames: [] });
@@ -1287,9 +1298,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "totpPaste": {
           const tab = await activeTab();
-          if (!tab?.id || !/^https?:/i.test(tab.url || "")) return sendResponse({ ok: false, error: "Open the page you are setting up first." });
+          if (!tab?.id || !/^https?:/i.test(tab.url || "")) return sendResponse({ ok: false, error: t("totpOpenPageFirst") });
           const parsed = parseSetupInput(msg.text, hostnameOf(tab.url) || "");
-          if (!parsed) return sendResponse({ ok: false, error: "That is not a setup key or otpauth link." });
+          if (!parsed) return sendResponse({ ok: false, error: t("totpNotSetupKey") });
           totpOffers.set(tab.id, { at: Date.now(), uri: parsed.uri, pageUrl: tab.url, issuer: parsed.issuer, account: parsed.account, usernames: [] });
           sendResponse({ ok: true, issuer: parsed.issuer, account: parsed.account });
           break;
@@ -1298,9 +1309,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "totpAdd": {
           const tab = await activeTab();
           const offer = tab?.id != null ? totpOffers.get(tab.id) : null;
-          if (!offer || !secretFresh(offer)) return sendResponse({ ok: false, error: "Scan or paste the code again." });
+          if (!offer || !secretFresh(offer)) return sendResponse({ ok: false, error: t("totpScanAgain") });
           await ensureConnected();
-          if (!client.ready || !client.canSetUpTotp) return sendResponse({ ok: false, error: "This Passwords helper can't set up verification codes." });
+          if (!client.ready || !client.canSetUpTotp) return sendResponse({ ok: false, error: t("totpUnsupported") });
           const username = String(msg.username || "").trim();
           const labelled = withAccount(offer.uri, { username, issuer: offer.issuer || hostnameOf(offer.pageUrl) });
           if (labelled) offer.uri = labelled;
@@ -1316,7 +1327,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const offer = tab?.id != null ? totpOffers.get(tab.id) : null;
           if (tab?.id != null) totpOffers.delete(tab.id);
           const secret = offer?.handedOff && secretFresh(offer) ? otpAuthSecret(offer.uri) : "";
-          if (!secret) return sendResponse({ ok: false, error: "The setup key is no longer held. Add it again." });
+          if (!secret) return sendResponse({ ok: false, error: t("totpKeyGoneAdd") });
           await copyText(secret);
           sendResponse({ ok: true, copied: true });
           break;
@@ -1327,7 +1338,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const offer = sender.tab?.id != null ? totpOffers.get(sender.tab.id) : null;
           if (sender.tab?.id != null) totpOffers.delete(sender.tab.id);
           const secret = offer?.handedOff && secretFresh(offer) ? otpAuthSecret(offer.uri) : "";
-          if (!secret) return sendResponse({ ok: false, error: "The setup key is no longer held. Scan the code again." });
+          if (!secret) return sendResponse({ ok: false, error: t("totpKeyGoneScan") });
           await copyText(secret);
           sendResponse({ ok: true, copied: true });
           break;
@@ -1359,7 +1370,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
           const tab = await activeTab();
           if (!tab?.id) return sendResponse({ ok: false, error: "no tab" });
-          if (!client.ready) return sendResponse({ ok: false, error: "PassBridge is locked." });
+          if (!client.ready) return sendResponse({ ok: false, error: t("locked") });
           const logins = uniqueByUsername(await siteLogins(tab.id, url));
           sendResponse({ ok: true, host: hostnameOf(url), logins: publicLogins(logins) });
           break;
@@ -1374,11 +1385,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           else if (msg.field === "password") {
             const { cred } = await readPasswordForFrame(tab.id, url, msg.username);
             text = cred?.password || "";
-            if (!text) return sendResponse({ ok: false, error: "Couldn't read the password for that login." });
+            if (!text) return sendResponse({ ok: false, error: t("passwordReadLoginFailed") });
           } else if (msg.field === "otp") {
             text = await resolveOneTimeCode(tab.id, Number(msg.id));
           }
-          if (!text) return sendResponse({ ok: false, error: "Nothing to copy." });
+          if (!text) return sendResponse({ ok: false, error: t("nothingToCopy") });
           await copyText(text);
           sendResponse({ ok: true, copied: true });
           break;
@@ -1391,7 +1402,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "getPlatform":
           await platformReady;
-          sendResponse({ ok: true, os: platformOs, label: labelForOs(platformOs) });
+          sendResponse({ ok: true, os: platformOs, label: uiDeviceLabel(platformOs, t) });
           break;
 
         case "checkUpdateNow": {
@@ -1408,7 +1419,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             ok: true,
             state: client.state,
             os: platformOs,
-            label: labelForOs(platformOs),
+            label: uiDeviceLabel(platformOs, t),
             hasChallenge: client.hasChallenge,
             settings: await getSettings(),
             update: await availableUpdate(),
@@ -1556,7 +1567,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (cred && sameSite) pwCacheSet(pageHost, cred);
           }
           if (!cred) {
-            return sendResponse({ ok: false, filled: false, error: "No saved password for that login." });
+            return sendResponse({ ok: false, filled: false, error: t("noSavedPasswordForLogin") });
           }
           // content script re-checks expectedHost against the page being filled
           const resp = await sendFill(tab.id, {
@@ -1572,7 +1583,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           sendResponse(filled
             ? { ok: true, filled: true }
-            : { ok: false, filled: false, error: resp?.error || "Couldn't find a login form on this page." });
+            : { ok: false, filled: false, error: resp?.error || t("loginFormNotFound") });
           break;
         }
 
@@ -1587,7 +1598,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           try {
             const { cred } = await readPasswordForFrame(tab.id, tab.url, entry.username);
-            if (!cred) return sendResponse({ ok: false, refilled: false, error: "No saved password for that login." });
+            if (!cred) return sendResponse({ ok: false, refilled: false, error: t("noSavedPasswordForLogin") });
             pwCacheSet(host, cred);
             const resp = await sendFill(tab.id, {
               type: "fill",
@@ -1596,7 +1607,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               expectedHost: host,
             });
             if (!resp?.filled) {
-              return sendResponse({ ok: false, refilled: false, error: resp?.error || "Couldn't find a login form on this page." });
+              return sendResponse({ ok: false, refilled: false, error: resp?.error || t("loginFormNotFound") });
             }
             sendResponse({ ok: true, refilled: true, username: cred.username });
           } catch (e) {

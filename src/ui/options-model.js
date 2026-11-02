@@ -1,20 +1,19 @@
 import { REPORT_REPO } from "../report-scrub.js";
+import { t } from "../i18n/runtime.js";
 
 /** @typedef {"checking" | "present" | "missing"} HelperState */
 /** @typedef {"ready" | "checking" | "locked"} RowState */
 /** @typedef {{ text: string, href: string | null } | null} Notice */
 
 export const OPTION_TABS = [
-  { id: "autofill", label: "Autofill" },
-  { id: "appearance", label: "Appearance" },
-  { id: "browser", label: "Browser" },
-  { id: "agents", label: "Agents" },
-  { id: "updates", label: "Updates" },
+  { id: "autofill", labelKey: "tabAutofill" },
+  { id: "appearance", labelKey: "tabAppearance" },
+  { id: "browser", labelKey: "tabBrowser" },
+  { id: "agents", labelKey: "tabAgents" },
+  { id: "updates", labelKey: "tabUpdates" },
 ];
 
 const SETUP_URL = `https://github.com/${REPORT_REPO}/blob/main/SETUP.md`;
-const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
-const STANDBY_NOTICE = "Agent sign-in is answered by another browser or profile right now. Close it there or turn it off there to use this one.";
 const SETUP_ANCHORS = {
   mac: { browser: "optional-macos-helper", agents: "agent-sign-in-macos", updates: "one-click-update-macos" },
   windows: { browser: "windows", agents: "agent-sign-in-windows", updates: "automatic-updates-windows" },
@@ -27,8 +26,8 @@ const ROW_STATE = { checking: "checking", present: "ready", missing: "locked" };
  * @returns {string}
  */
 export function policyMessage(reply, isToggle) {
-  if (!reply.ok) return reply.error || (isToggle ? "Couldn't change the policy." : "");
-  return isToggle ? reply.note || "Fully quit and reopen the browser to apply this." : "";
+  if (!reply.ok) return reply.error || (isToggle ? t("policyFail") : "");
+  return isToggle ? reply.note || t("policyRestart") : "";
 }
 
 /**
@@ -46,7 +45,7 @@ export function tabFromHash(hash) {
  */
 export function helperView({ helpers, isWindows, canCheckForUpdates, relay }) {
   const anchors = isWindows ? SETUP_ANCHORS.windows : SETUP_ANCHORS.mac;
-  const notice = (state, tab) => (state === "missing" ? { text: HELPER_NOTICE, href: `${SETUP_URL}#${anchors[tab]}` } : null);
+  const notice = (state, tab) => (state === "missing" ? { text: t("helperNotice"), href: `${SETUP_URL}#${anchors[tab]}` } : null);
   return {
     rows: {
       policy: ROW_STATE[helpers.policy],
@@ -55,7 +54,7 @@ export function helperView({ helpers, isWindows, canCheckForUpdates, relay }) {
     },
     notices: {
       browser: notice(helpers.policy, "browser"),
-      agents: relay === "standby" ? { text: STANDBY_NOTICE, href: null } : notice(helpers.policy, "agents"),
+      agents: relay === "standby" ? { text: t("standbyNotice"), href: null } : notice(helpers.policy, "agents"),
       updates: canCheckForUpdates ? notice(helpers.updater, "updates") : null,
     },
   };

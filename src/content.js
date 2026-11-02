@@ -4,6 +4,7 @@ import { generateAlphanumericPassword, generateApplePassword } from "./password-
 import { isBareCodeOtp } from "./otp-field.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";
 import { SETTINGS_AREA, SETTINGS_DEFAULTS, colorSchemeFor, hostBlocked } from "./settings.js";
+import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
 import { createLifecycle } from "./reload-recovery.js";
 import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
@@ -20,6 +21,15 @@ function hitsUpstreamName(el) {
 
 // OTP inputs are never fillable login fields, that misclassification is apple's balloon-on-every-OTP bug
 console.log("[PassBridge] content script v1.0.0 loaded");
+
+// inline menus and codes follow the UI language; t() falls back to en until this lands
+void resolveLocale();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === SETTINGS_AREA && changes.uiLanguage) {
+    invalidateLocale();
+    void resolveLocale();
+  }
+});
 
 // dispatches the replaced event, so an older copy on this page removes its UI
 const life = createLifecycle();
@@ -923,7 +933,7 @@ function buildSuggestionBox(field) {
   reset.textContent = `${fontFaceCss()}:host{all:initial;display:block}:host::backdrop{display:none}`;
   const box = document.createElement("div");
   box.setAttribute("role", "listbox");
-  box.setAttribute("aria-label", "Saved logins");
+  box.setAttribute("aria-label", t("savedLogins"));
   glassify(box);
   shadow.append(reset, box);
   (document.body || document.documentElement).appendChild(host);
@@ -944,8 +954,8 @@ function placeFieldIcon(field) {
   const shadow = host.attachShadow({ mode: "closed" });
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.title = "PassBridge";
-  btn.setAttribute("aria-label", "PassBridge");
+  btn.title = t("extensionName");
+  btn.setAttribute("aria-label", t("extensionName"));
   const mark = document.createElement("img");
   mark.src = chrome.runtime.getURL("icons/icon48.png");
   mark.alt = "";
@@ -1002,15 +1012,16 @@ async function deviceLabel() {
     const r = await chrome.runtime.sendMessage({ type: "getPlatform" });
     if (r?.label) return r.label;
   } catch (_) {}
-  return "your Mac";
+  return t("deviceMac");
 }
 
 async function buildLockedSuggestion(field, onUnlock) {
+  await resolveLocale();
   const place = await deviceLabel();
   const box = buildSuggestionBox(field);
 
   const msg = document.createElement("div");
-  msg.textContent = `Enter the code shown on ${place}`;
+  msg.textContent = t("enterCodeOn", [place]);
   Object.assign(msg.style, { padding: "8px 10px 4px", fontSize: "12px", opacity: "0.7" });
   box.appendChild(msg);
 
@@ -1018,7 +1029,7 @@ async function buildLockedSuggestion(field, onUnlock) {
   input.type = "text";
   input.inputMode = "numeric";
   input.maxLength = 6;
-  input.placeholder = "------";
+  input.placeholder = t("codePlaceholder");
   Object.assign(input.style, {
     margin: "4px 12px 8px",
     width: "calc(100% - 24px)",
@@ -1047,7 +1058,7 @@ async function buildLockedSuggestion(field, onUnlock) {
   };
 
   const again = document.createElement("div");
-  again.textContent = "Get a new code";
+  again.textContent = t("getNewCode");
   Object.assign(again.style, {
     padding: "0 12px 10px",
     fontSize: "12px",
@@ -1057,10 +1068,10 @@ async function buildLockedSuggestion(field, onUnlock) {
   });
   again.addEventListener("mousedown", (e) => e.stopPropagation());
   again.addEventListener("click", async () => {
-    setStatus(`Asking ${place} for a new code...`, false);
+    setStatus(t("askingNewCode", [place]), false);
     input.value = "";
     await chrome.runtime.sendMessage({ type: "requestChallenge" }).catch(gone);
-    setStatus(`Enter the new code on ${place}`, false);
+    setStatus(t("enterNewCode", [place]), false);
     input.focus();
   });
   box.appendChild(again);
@@ -1103,13 +1114,13 @@ async function buildLockedSuggestion(field, onUnlock) {
     const pin = input.value.trim();
     if (pin.length < 4) return;
     verifying = true;
-    setStatus("Verifying...", false);
+    setStatus(t("verifying"), false);
     let res;
     try {
       res = await chrome.runtime.sendMessage({ type: "verifyPin", pin });
     } catch (err) {
       verifying = false;
-      setStatus("Verification failed, try again", true);
+      setStatus(t("verificationFailedTry"), true);
       return;
     }
     verifying = false;
@@ -1117,8 +1128,8 @@ async function buildLockedSuggestion(field, onUnlock) {
       finishUnlock();
     } else {
       // the attempt burned that challenge, so the background already put a new code on the Mac
-      const base = res?.error || "Verification failed";
-      setStatus(res?.newCode ? `${base} - enter the new code on ${place}` : base, true);
+      const base = res?.error || t("verificationFailed");
+      setStatus(res?.newCode ? `${base} - ${t("enterNewCode", [place])}` : base, true);
       input.value = "";
       input.focus();
     }
@@ -1251,7 +1262,7 @@ function fitLoginScroller(scroller) {
 function appendLoginRows(box, field, logins, preferred = "") {
   for (const login of logins) {
     const isPreferred = !!preferred && usernameMatchesPage(login.username, preferred);
-    const label = login.username || "(no username)";
+    const label = login.username || t("noUsername");
     const row = document.createElement("div");
     row.title = label;
     Object.assign(row.style, {
@@ -1273,7 +1284,7 @@ function appendLoginRows(box, field, logins, preferred = "") {
       fontWeight: isPreferred ? "700" : "500",
     });
     const hint = document.createElement("span");
-    hint.textContent = isPreferred ? "This account" : "Fill";
+    hint.textContent = isPreferred ? t("thisAccount") : t("fill");
     Object.assign(hint.style, {
       flex: "none",
       color: "#0a84ff",
@@ -1298,7 +1309,7 @@ function appendLoginRows(box, field, logins, preferred = "") {
         return;
       }
       busy = false;
-      hint.textContent = res?.error || "Couldn't fill this page.";
+      hint.textContent = res?.error || t("couldntFillPage");
       hint.style.color = "#ff453a";
       hint.style.fontWeight = "500";
       hint.style.whiteSpace = "normal";
@@ -1321,8 +1332,8 @@ function mountLoginList(box, field, logins, hasGenerator) {
   if (capped) {
     search = document.createElement("input");
     search.type = "text";
-    search.placeholder = "Search usernames";
-    search.setAttribute("aria-label", "Search usernames");
+    search.placeholder = t("searchUsernames");
+    search.setAttribute("aria-label", t("searchUsernames"));
     search.autocomplete = "off";
     search.spellcheck = false;
     search.autocapitalize = "off";
@@ -1354,7 +1365,7 @@ function mountLoginList(box, field, logins, hasGenerator) {
   box.removeAttribute("role");
   box.removeAttribute("aria-label");
   scroller.setAttribute("role", "listbox");
-  scroller.setAttribute("aria-label", "Saved logins");
+  scroller.setAttribute("aria-label", t("savedLogins"));
   box.appendChild(scroller);
 
   const genHost = document.createElement("div");
@@ -1375,7 +1386,7 @@ function mountLoginList(box, field, logins, hasGenerator) {
     const matched = logins.filter((login) => usernameMatches(login, query));
     if (!matched.length) {
       const empty = document.createElement("div");
-      empty.textContent = "No matching usernames";
+      empty.textContent = t("noMatching");
       Object.assign(empty.style, { padding: "10px 12px", opacity: "0.65" });
       scroller.appendChild(empty);
     } else {
@@ -1403,8 +1414,8 @@ function mountLoginList(box, field, logins, hasGenerator) {
 
 function appendGeneratorOptions(box, field, separatorAbove) {
   const options = [
-    { label: "Strong Password", value: generateApplePassword() },
-    { label: "Without Special Characters", value: generateAlphanumericPassword() },
+    { label: t("strongPassword"), value: generateApplePassword() },
+    { label: t("noSpecial"), value: generateAlphanumericPassword() },
   ];
   options.forEach((opt, idx) => {
     const item = document.createElement("div");
@@ -1445,6 +1456,7 @@ let offerSeq = 0;
 
 // fetch before building so an empty result never flashes a box on then off
 async function buildOfferSuggestion(field) {
+  await resolveLocale();
   const hasGenerator = isNewPasswordField(field);
   const seq = ++offerSeq;
 
@@ -1471,7 +1483,7 @@ async function buildOfferSuggestion(field) {
   const box = buildSuggestionBox(field);
   if (locked) {
     const row = document.createElement("div");
-    row.textContent = "Unlock to autofill…";
+    row.textContent = t("unlockAutofill");
     Object.assign(row.style, { padding: "8px 10px", cursor: "pointer" });
     registerRow(row, () => buildLockedSuggestion(field));
     box.appendChild(row);
@@ -1580,9 +1592,9 @@ function appendOneTimeCodeRows(box, field, rows) {
     label.textContent =
       r.source === "totp"
         ? r.domain
-          ? `Verification code for ${r.domain}`
-          : "Verification code"
-        : "Code from Messages";
+          ? t("codeFor", [r.domain])
+          : t("codeTotp")
+        : t("codeFromMessages");
     Object.assign(label.style, { fontWeight: "600", fontSize: "13px" });
     text.appendChild(label);
     if (r.username) {
@@ -1610,7 +1622,7 @@ function appendOneTimeCodeRows(box, field, rows) {
         removeSuggestion();
         return;
       }
-      label.textContent = resp?.error || "Couldn't fill the code.";
+      label.textContent = resp?.error || t("couldntFillCode");
       label.style.color = "#d70015";
     });
     box.appendChild(row);
@@ -1618,6 +1630,7 @@ function appendOneTimeCodeRows(box, field, rows) {
 }
 
 async function buildOneTimeCodeSuggestion(field) {
+  await resolveLocale();
   if (otpFilling) return;
   const seq = ++offerSeq;
   let res;
@@ -1642,7 +1655,7 @@ async function buildOneTimeCodeSuggestion(field) {
   const box = buildSuggestionBox(field);
   if (locked) {
     const row = document.createElement("div");
-    row.textContent = "Unlock to fill verification codes…";
+    row.textContent = t("unlockCodes");
     Object.assign(row.style, { padding: "8px 10px", cursor: "pointer" });
     registerRow(row, () => buildLockedSuggestion(field, () => buildOneTimeCodeSuggestion(field)));
     box.appendChild(row);

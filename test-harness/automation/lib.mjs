@@ -46,6 +46,7 @@ export async function launchExtension(ext) {
   open.push(entry);
   entry.ctx = await chromium.launchPersistentContext(profile, {
     headless: false,
+    locale: "en-US",
     args: [
       `--disable-extensions-except=${ext}`,
       `--load-extension=${ext}`,

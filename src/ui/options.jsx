@@ -5,6 +5,8 @@ import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
 import { helperView, policyMessage, tabFromHash } from "./options-model.js";
+import { applyDocumentLanguage } from "../i18n/runtime.js";
+import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
 import { followTheme } from "./page-theme.js";
 
@@ -14,6 +16,7 @@ const IS_WINDOWS = isWindows();
 const IS_EDGE = !!navigator.userAgentData?.brands?.some((b) => b.brand === "Microsoft Edge");
 
 function OptionsApp() {
+  const locale = useLocale();
   const [settings, setSettings] = useState(DEFAULTS);
   const [isLoaded, setIsLoaded] = useState(false);
   const [lists, setLists] = useState(() => Object.fromEntries(LIST_KEYS.map((k) => [k, ""])));
@@ -211,4 +214,5 @@ function setPrivacy(name, on, setRow, storageKey) {
 }
 
 followTheme();
+void applyDocumentLanguage(document, "settingsTitle");
 createRoot(document.getElementById("root")).render(<OptionsApp />);

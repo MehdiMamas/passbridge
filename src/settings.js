@@ -29,6 +29,8 @@ export const SETTINGS_DEFAULTS = {
   // installs a newer signed release on its own when the update helper is there
   autoInstallUpdates: true,
   theme: "system",
+  // UI language of the popup, menus and pages; "" follows Chrome's UI language
+  uiLanguage: "",
 };
 
 /**

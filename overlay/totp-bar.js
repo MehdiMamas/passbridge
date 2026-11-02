@@ -1,3 +1,6 @@
+// the verification-code hand-off bar, drawn inside a closed popover iframe on the page
+import { applyDocumentLanguage, resolveLocale, t } from "../src/i18n/runtime.js";
+
 const params = new URLSearchParams(location.search);
 const token = params.get("token") || "";
 document.documentElement.style.colorScheme = params.get("scheme") || "";
@@ -44,12 +47,12 @@ function render(data) {
   const who = [data.issuer, data.account].filter(Boolean).join(" · ");
   if (data.mode === "error") {
     root.append(
-      line("Couldn't add a verification code", "font-weight:650;margin-bottom:4px"),
-      line(data.error || "Something went wrong.", "opacity:.7;margin-bottom:12px"),
+      line(t("addErrTitle"), "font-weight:650;margin-bottom:4px"),
+      line(data.error || t("somethingWrong"), "opacity:.7;margin-bottom:12px"),
     );
     const row = document.createElement("div");
     row.style.cssText = "display:flex;justify-content:flex-end";
-    row.append(button("OK", "cancel", true));
+    row.append(button(t("ok"), "cancel", true));
     root.append(row);
     reportHeight();
     requestAnimationFrame(reportHeight);
@@ -57,18 +60,18 @@ function render(data) {
   }
   if (data.mode === "handed") {
     root.append(
-      line(data.launched ? "Sent to Passwords" : "Couldn't open Passwords", "font-weight:650;margin-bottom:4px"),
+      line(data.launched ? t("sentToPasswords") : t("couldntOpenPasswordsBar"), "font-weight:650;margin-bottom:4px"),
       line(
-        data.detail || "Finish adding the code in Passwords. If it did not take the code, copy the setup key and paste it there.",
+        data.detail || t("handedDetail"),
         "opacity:.7;margin-bottom:8px",
       ),
     );
     // only on an explicit click: Windows clipboard history and cloud clipboard keep what was copied
-    if (data.hasKey) root.append(line("The setup key is a secret. Clipboard history may keep it after PassBridge clears it.", "opacity:.7;font-size:12px;margin-bottom:12px"));
+    if (data.hasKey) root.append(line(t("clipboardWarn"), "opacity:.7;font-size:12px;margin-bottom:12px"));
     const row = document.createElement("div");
     row.style.cssText = "display:flex;gap:8px;justify-content:flex-end";
-    if (data.hasKey) row.append(button("Copy setup key", "copyKey", false));
-    row.append(button("OK", "cancel", true));
+    if (data.hasKey) row.append(button(t("copyKey"), "copyKey", false));
+    row.append(button(t("ok"), "cancel", true));
     root.append(row);
     reportHeight();
     requestAnimationFrame(reportHeight);
@@ -76,12 +79,12 @@ function render(data) {
   }
   if (data.mode === "copied") {
     root.append(
-      line(data.filled ? "Verification code added" : "Setup key copied", "font-weight:650;margin-bottom:4px"),
-      line(data.detail || "Paste it in Passwords, then clear your clipboard history.", "opacity:.7;margin-bottom:12px"),
+      line(data.filled ? t("codeAdded") : t("keyCopied"), "font-weight:650;margin-bottom:4px"),
+      line(data.detail || t("pasteDetail"), "opacity:.7;margin-bottom:12px"),
     );
     const row = document.createElement("div");
     row.style.cssText = "display:flex;justify-content:flex-end";
-    row.append(button("OK", "cancel", true));
+    row.append(button(t("ok"), "cancel", true));
     root.append(row);
     reportHeight();
     requestAnimationFrame(reportHeight);
@@ -89,20 +92,20 @@ function render(data) {
   }
   if (data.mode === "empty") {
     root.append(
-      line("No saved login for this site", "font-weight:650;margin-bottom:4px"),
-      line(who ? `${who}. This code can only live on a login.` : "This code can only live on a login.", "opacity:.7;margin-bottom:12px"),
+      line(t("noLoginSite"), "font-weight:650;margin-bottom:4px"),
+      line(who ? t("emptyWho", [who]) : t("emptyDetail"), "opacity:.7;margin-bottom:12px"),
     );
     const row = document.createElement("div");
     row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;align-items:center";
-    row.append(button("Create a login in Passwords", "create", false), button("Cancel", "cancel", true));
+    row.append(button(t("createLogin"), "create", false), button(t("cancel"), "cancel", true));
     root.append(row);
     reportHeight();
     requestAnimationFrame(reportHeight);
     return;
   }
   root.append(
-    line("Add a verification code?", "font-weight:650;margin-bottom:4px"),
-    line(who || "Verification code", "opacity:.7;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"),
+    line(t("addCodeQ"), "font-weight:650;margin-bottom:4px"),
+    line(who || t("codeTotp"), "opacity:.7;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"),
   );
   const list = document.createElement("ul");
   list.style.cssText = "margin:0 0 8px;padding:0 0 0 18px;max-height:96px;overflow:auto";
@@ -114,18 +117,24 @@ function render(data) {
   }
   root.append(
     list,
-    line("Passwords asks which login gets this code. You can pick a different one, or create a new login, there.", "opacity:.7;margin-bottom:12px"),
+    line(t("pickExplain"), "opacity:.7;margin-bottom:12px"),
   );
   const row = document.createElement("div");
   row.style.cssText = "display:flex;gap:8px;justify-content:flex-end";
-  row.append(button("Cancel", "cancel", false), button("Choose a login", "choose", true));
+  row.append(button(t("cancel"), "cancel", false), button(t("chooseLogin"), "choose", true));
   root.append(row);
   reportHeight();
   requestAnimationFrame(reportHeight);
 }
 
-window.addEventListener("message", (e) => {
-  if (e.source !== parent || e.data?.token !== token || e.data?.type !== "totp-bar") return;
-  render(e.data);
+// resolve the UI language before the parent paints: t() falls back to en meanwhile
+resolveLocale().then(() => {
+  window.addEventListener("message", (e) => {
+    if (e.source !== parent || e.data?.token !== token || e.data?.type !== "totp-bar") return;
+    render(e.data);
+  });
+  parent.postMessage({ token, action: "ready" }, "*");
 });
-parent.postMessage({ token, action: "ready" }, "*");
+
+// iframe pages can set their own <html lang> and title
+void applyDocumentLanguage(document, "extensionName");

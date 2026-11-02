@@ -1,14 +1,18 @@
+import { t } from "../i18n/runtime.js";
+
 const muted = "text-[color-mix(in_srgb,CanvasText_60%,Canvas)]";
+
 const border = "border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
 const primary = "cursor-pointer rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:cursor-default disabled:opacity-50";
 const link = "cursor-pointer text-accent";
 
 const STEPS = [
-  ["download", "Download"],
-  ["verify", "Check the signature"],
-  ["write", "Replace the files"],
-  ["restart", "Restart PassBridge"],
+  ["download", "stepDownload"],
+  ["verify", "stepVerify"],
+  ["write", "stepWrite"],
+  ["restart", "stepRestart"],
 ];
+
 
 function Steps({ step }) {
   const at = STEPS.findIndex(([id]) => id === step);
@@ -22,7 +26,8 @@ function Steps({ step }) {
           >
             {i < at ? "✓" : ""}
           </span>
-          <span className={i === at ? "font-semibold" : ""}>{label}</span>
+          <span className={i === at ? "font-semibold" : ""}>{t(label)}</span>
+
         </li>
       ))}
     </ol>
@@ -44,112 +49,113 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
     <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8 text-[13px]">
       <header className="flex items-center gap-2">
         <img src="../icons/icon48.png" alt="" width="28" height="28" />
-        <h1 className="text-lg font-semibold">Update PassBridge</h1>
+        <h1 className="text-lg font-semibold">{t("updTitle")}</h1>
+
       </header>
 
       <section className={`grid grid-cols-[auto_1fr] items-baseline gap-x-6 gap-y-2 rounded-xl border ${border} p-4`}>
-        <span className={muted}>Installed</span>
+        <span className={muted}>{t("installed")}</span>
         <span data-passbridge="installed" className="font-mono">{installed}</span>
         {release?.version && (
           <>
-            <span className={muted}>New version</span>
+            <span className={muted}>{t("newVersion")}</span>
             <span className="flex flex-wrap items-baseline gap-x-3">
               <span data-passbridge="latest" className="font-mono font-semibold">{release.version}</span>
               <a className={link} href={release.pageUrl} target="_blank" rel="noopener">
-                What's new on GitHub ↗
+                {t("whatsNew")}
               </a>
             </span>
           </>
         )}
         {!native && (phase === "ready" || working || phase === "failed") && (
           <>
-            <span className={muted}>Folder</span>
+            <span className={muted}>{t("folder")}</span>
             <span className="flex flex-wrap items-baseline gap-x-3">
-              <span data-passbridge="folder">{folderName || "Not chosen yet"}</span>
+              <span data-passbridge="folder">{folderName || t("folderNone")}</span>
               {folderName && !working && (
                 <button type="button" className={link} onClick={onChangeFolder}>
-                  Change folder
+                  {t("changeFolder")}
                 </button>
               )}
             </span>
           </>
         )}
+
       </section>
 
       <section data-passbridge="update-body" data-phase={phase} className="flex flex-col gap-3">
-        {phase === "checking" && <p className={muted}>Checking GitHub for a new version…</p>}
-        {phase === "current" && <p>PassBridge is up to date.</p>}
-        {phase === "done" && <p className="font-semibold text-ok">PassBridge is now {installed}.</p>}
+        {phase === "checking" && <p className={muted}>{t("checkingGithub")}</p>}
+        {phase === "current" && <p>{t("upToDateMsg")}</p>}
+        {phase === "done" && <p className="font-semibold text-ok">{t("updatedMsg", [installed])}</p>}
         {phase === "stale" && (
           <>
             <p data-passbridge="update-error" className="text-danger">
-              Something went wrong: PassBridge is still {installed}, not {expected}.
+              {t("staleMsg", [installed, expected])}
             </p>
             <button type="button" className={`${primary} self-start`} onClick={onRetry}>
-              Try again
+              {t("tryAgain")}
             </button>
           </>
         )}
         {phase === "network" && (
           <>
-            <p>Couldn't reach GitHub.</p>
+            <p>{t("networkMsg")}</p>
             <button type="button" className={`${primary} self-start`} onClick={onRetry}>
-              Try again
+              {t("tryAgain")}
             </button>
           </>
         )}
         {(phase === "unsigned" || phase === "unsupported") && (
           <>
             <p>
-              {phase === "unsigned"
-                ? "This release isn't signed, so PassBridge can't install it for you."
-                : "This browser can't let PassBridge edit its own folder."}
+              {phase === "unsigned" ? t("unsignedMsg") : t("unsupportedMsg")}
             </p>
             <a className={`${primary} self-start`} href={release?.pageUrl} target="_blank" rel="noopener">
-              Download from the release page
+              {t("downloadRelease")}
             </a>
           </>
         )}
+
         {phase === "helper" && (
           <>
-            <p className="font-semibold">Install the PassBridge helper once, then every update installs by itself with no prompts.</p>
+            <p className="font-semibold">{t("helperMsg")}</p>
             <a className={`${primary} self-start`} href={helperUrl} target="_blank" rel="noopener">
-              Download the helper
+              {t("downloadHelper")}
             </a>
             <ol className="ml-5 flex list-decimal flex-col gap-1">
-              <li>Extract the zip and open the folder.</li>
+              <li>{t("helperStep1")}</li>
               <li>
-                Run <code className="font-mono">powershell -ExecutionPolicy Bypass -File .\install.ps1</code>
+                {t("helperStep2Run")} <code className="font-mono">powershell -ExecutionPolicy Bypass -File .\install.ps1</code>
               </li>
-              <li>Restart Chrome.</li>
-              <li>Click Update again.</li>
+              <li>{t("helperStep3")}</li>
+              <li>{t("helperStep4")}</li>
             </ol>
             <button type="button" className={`${link} self-start`} onClick={onRetry}>
-              Check again
+              {t("checkAgain")}
             </button>
-            <p className={muted}>Rather not install the helper?</p>
+            <p className={muted}>{t("ratherNot")}</p>
             <button type="button" className={`${link} self-start`} onClick={onNoHelper}>
-              Update without the helper
+              {t("withoutHelper")}
             </button>
-            <p className={muted}>You pick the PassBridge folder and Chrome asks you to save each file. Click Save every time, or the update is left half done.</p>
+            <p className={muted}>{t("withoutHelperNote")}</p>
           </>
         )}
+
         {phase === "ready" && (
           <>
             <button type="button" className={`${primary} self-start`} onClick={onUpdate}>
-              Update now
+              {t("updateNow")}
             </button>
             <p className={muted}>
               {native ? (
-                <>The helper installs it. No prompts, PassBridge restarts by itself.</>
+                <>{t("readyNative")}</>
               ) : folderName ? (
                 <>
-                  If the folder picker opens, press Select and choose <strong>Allow on every visit</strong>. Later updates then take one click.
+                  {t("readyFolderBefore")} <strong>{t("allowEveryVisit")}</strong> {t("readyFolderAfter")}
                 </>
               ) : (
                 <>
-                  You'll choose the PassBridge folder, the one loaded in chrome://extensions, and allow PassBridge to edit it. Choose{" "}
-                  <strong>Allow on every visit</strong> when Chrome offers it.
+                  {t("readyPickBefore")} <strong>{t("allowEveryVisit")}</strong> {t("readyPickAfter")}
                 </>
               )}
             </p>
@@ -160,7 +166,7 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
             <Progress value={progress} />
             <Steps step={step} />
             <p className={muted}>
-              <strong>Keep this tab open</strong> until PassBridge restarts.
+              <strong>{t("keepOpen")}</strong> {t("keepOpenRest")}
             </p>
           </>
         )}
@@ -169,20 +175,21 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
             <p data-passbridge="update-error" className="text-danger">
               {error?.message}
             </p>
-            <p className={muted}>{error?.restored ? "Your previous version was restored." : "Nothing was changed."}</p>
+            <p className={muted}>{error?.restored ? t("restored") : t("nothingChanged")}</p>
             <button type="button" className={`${primary} self-start`} onClick={onRetry}>
-              Try again
+              {t("tryAgain")}
             </button>
           </>
         )}
         {phase === "interrupted" && (
           <>
-            <p>The last update didn't finish. Restore the previous version, then update again.</p>
+            <p>{t("interrupted")}</p>
             <button type="button" className={`${primary} self-start`} onClick={onRestore}>
-              Restore previous version
+              {t("restorePrev")}
             </button>
           </>
         )}
+
       </section>
     </main>
   );

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "./chrome.js";
+import { applyDocumentLanguage, resolveLocale, t } from "../i18n/runtime.js";
+import { useLocale } from "../i18n/use.jsx";
 
 async function helperReady(tries = 3) {
   for (let i = 0; i < tries; i++) {
@@ -14,9 +16,10 @@ import { UPDATE_PAGE } from "../update/check.js";
 import { followTheme } from "./page-theme.js";
 
 function PopupApp() {
+  const locale = useLocale();
   const [state, setState] = useState("connecting");
   const [os, setOs] = useState("mac");
-  const [label, setLabel] = useState("your Mac");
+  const [label, setLabel] = useState(null);
   const [site, setSite] = useState("");
   const [logins, setLogins] = useState([]);
   const [codes, setCodes] = useState([]);
@@ -63,7 +66,7 @@ function PopupApp() {
     const res = await send({ type: "lookupLogins", url: raw });
     if (gen !== lookupGen.current) return;
     if (!res?.ok) {
-      showNote(res?.error || "Couldn't look up that site.", "danger");
+      showNote(res?.error || t("couldntLookup"), "danger");
       return;
     }
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
@@ -88,7 +91,7 @@ function PopupApp() {
     setShowFavicons(res.settings?.showFavicons !== false);
     setCanCheckUpdate(res.settings?.canCheckForUpdates !== false);
     setUpdate(res.update || null);
-    if (res.helperNote) showNote("The PassBridge helper is old. Install it once more from the release page and it will update itself from then on.", "");
+    if (res.helperNote) showNote(t("noteOldHelper"), "");
     setCanInstallUpdate(!!res.canInstallUpdate);
     setCaps(res.caps || {});
     let next = res.state || "connecting";
@@ -126,11 +129,13 @@ function PopupApp() {
     };
   }, []);
 
+  const labelText = label || t(os === "win" ? "deviceWin" : "deviceMac");
+
   return (
     <PopupScreen
       state={state}
       os={os}
-      label={label}
+      label={labelText}
       site={site}
       logins={logins}
       codes={codes}
@@ -149,24 +154,24 @@ function PopupApp() {
           await applyState(res.state);
           return true;
         }
-        setPinError(res?.newCode ? `${res.error || "Verification failed."} — enter the new code on ${label}` : res?.error || "Verification failed.");
+        setPinError(res?.newCode ? `${res.error || t("verificationFailed")} — ${t("enterNewCode", [labelText])}` : res?.error || t("verificationFailed"));
         return false;
       }}
       onNewCode={async () => {
         setPinError("");
         const res = await send({ type: "requestChallenge" });
-        if (!res?.ok) setPinError(res?.error || "Couldn't request a code.");
+        if (!res?.ok) setPinError(res?.error || t("couldntRequestCode"));
         else await applyState(res.state);
       }}
       onFill={async (login) => {
         const res = await send({ type: "fillOnPage", url: lookupUrl || undefined, loginName: login });
         if (res?.ok && res.filled) window.close();
-        else showNote(res?.error || "Couldn't find a login form on this page.", "danger");
+        else showNote(res?.error || t("couldntFillForm"), "danger");
       }}
       onFillCode={async (row) => {
         const res = await send({ type: "fillOneTimeCode", id: row.id });
         if (res?.ok && res.filled) window.close();
-        else if (!(res?.ok && res.code)) showNote(res?.error ? `Couldn't read the code: ${res.error}` : "Couldn't read the code", "danger");
+        else if (!(res?.ok && res.code)) showNote(res?.error ? t("couldntReadCodeDetail", [res.error]) : t("couldntReadCode"), "danger");
         return res;
       }}
       onCopy={async (field, login) => {
@@ -177,8 +182,8 @@ function PopupApp() {
           id: login.id,
           url: field === "password" ? lookupUrl || undefined : undefined,
         });
-        if (!res?.ok) showNote(res?.error || "nothing to copy", "danger");
-        else showNote("Copied", "ok");
+        if (!res?.ok) showNote(res?.error || t("nothingToCopy"), "danger");
+        else showNote(t("copied"), "ok");
       }}
       onLookup={(raw) => {
         window.clearTimeout(lookupTimer.current);
@@ -204,21 +209,21 @@ function PopupApp() {
         if (state === "needs_pin") {
           const res = await send({ type: "requestChallenge" });
           if (res?.ok) await applyState(res.state);
-          else setPinError(res?.error || "Couldn't request a code.");
+          else setPinError(res?.error || t("couldntRequestCode"));
           return;
         }
         const res = await send({ type: "refreshAndRefill" });
         await loadUnlocked();
-        if (res?.refilled) showNote(`Re-filled ${res.username} with the latest password`, "ok");
-        else if (res?.reason === "none") showNote("Nothing to re-fill", "muted");
-        else showNote(res?.error || "Couldn't re-fill this page.", "danger");
+        if (res?.refilled) showNote(t("refilled", [res.username]), "ok");
+        else if (res?.reason === "none") showNote(t("nothingToRefill"), "muted");
+        else showNote(res?.error || t("couldntRefill"), "danger");
       }}
       onSettings={() => chrome.runtime.openOptionsPage()}
       onReport={async () => {
-        showNote("Collecting the page…", "muted");
+        showNote(t("collectingPage"), "muted");
         const res = await send({ type: "reportPage" });
         if (res?.ok) window.close();
-        else showNote(res?.error || "Couldn't read this page.", "danger");
+        else showNote(res?.error || t("couldntReadPage"), "danger");
       }}
       onOpenUpdate={async () => {
         await chrome.tabs.create({ url: update.url });
@@ -236,7 +241,7 @@ function PopupApp() {
         const res = await send({ type: "installUpdate" });
         if (!res?.ok) {
           setInstalling(false);
-          showNote(res?.error || "Couldn't install the update.", "danger");
+          showNote(res?.error || t("couldntInstallUpdate"), "danger");
         }
       }}
       onDismissUpdate={() => {
@@ -250,11 +255,11 @@ function PopupApp() {
               setCheckingUpdate(true);
               const r = await send({ type: "checkUpdateNow" });
               setCheckingUpdate(false);
-              if (!r?.ok || !r.reached) showNote("Couldn't reach GitHub. Try again later.", "danger");
+              if (!r?.ok || !r.reached) showNote(t("couldntReachGithub"), "danger");
               else if (r.available) {
                 setUpdate(r.available);
                 showNote("", "");
-              } else showNote(`Up to date (${r.current})`, "ok");
+              } else showNote(t("upToDate", [r.current]), "ok");
             }
           : undefined
       }
@@ -263,4 +268,5 @@ function PopupApp() {
 }
 
 followTheme();
+void applyDocumentLanguage(document, "extensionName");
 createRoot(document.getElementById("root")).render(<PopupApp />);

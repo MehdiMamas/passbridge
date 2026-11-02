@@ -5,23 +5,26 @@ import { markUpdatedTo } from "../update/check.js";
 import { downloadRelease, latestRelease } from "../update/release.js";
 import { manifestProblem, readZip } from "../update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, looksLikeSource, recoverUpdate, setUpdating } from "../update/files.js";
-import { BUSY_MESSAGE, withUpdateLock } from "../update/lock.js";
+import { withUpdateLock } from "../update/lock.js";
 import { HELPER_ZIP_URL, isWindows, updateRoute } from "../update/platform.js";
 import { updaterAvailable } from "../update/install.js";
 import { folderForUpdate, folderStore, pickFolder } from "../update/folder.js";
 import { followTheme } from "./page-theme.js";
+import { applyDocumentLanguage, t } from "../i18n/runtime.js";
+import { useLocale } from "../i18n/use.jsx";
 
-const ERRORS = {
-  cancelled: "No folder was chosen.",
-  notsource: "That folder doesn't hold the PassBridge source (no PassBridge manifest.json). Choose the folder loaded in chrome://extensions.",
-  busy: BUSY_MESSAGE,
-  notown: "That folder isn't the one PassBridge runs from. Choose the folder loaded in chrome://extensions.",
-  download: "Couldn't download the update.",
-  verify: "The update failed its signature check.",
-  zip: "The update file is damaged.",
-  mismatch: "The update doesn't belong to this install.",
-  write: "Couldn't write the new files.",
-  restore: "Couldn't restore the previous version.",
+// update error codes; the message shown on the page is t(ERROR_KEYS[code])
+const ERROR_KEYS = {
+  cancelled: "errCancelled",
+  notsource: "errNotSource",
+  busy: "errBusy",
+  notown: "errNotOwn",
+  download: "errDownload",
+  verify: "errVerify",
+  zip: "errZip",
+  mismatch: "errMismatch",
+  write: "errWrite",
+  restore: "errRestore",
 };
 
 // the running extension serves its folder straight from disk, so this reads what is there now
@@ -38,6 +41,7 @@ const folderDeps = {
 const SPAN = { download: [0, 0.45], verify: [0.45, 0.5], write: [0.5, 0.95], restart: [1, 1] };
 
 function UpdateApp() {
+  const locale = useLocale();
   const installed = chrome.runtime.getManifest().version;
   const [phase, setPhase] = useState("checking");
   const [release, setRelease] = useState(null);
@@ -87,7 +91,7 @@ function UpdateApp() {
   }, [phase, step]);
 
   function fail(key, restored = false) {
-    setError({ message: ERRORS[key] || ERRORS.write, restored });
+    setError({ message: t(ERROR_KEYS[key] || ERROR_KEYS.write), restored });
     setPhase("failed");
   }
 
@@ -109,7 +113,7 @@ function UpdateApp() {
     advance("download");
     const res = await chrome.runtime.sendMessage({ type: "installUpdate" }).catch(() => null);
     if (!res?.ok) {
-      setError({ message: res?.error || ERRORS.write, restored: false });
+      setError({ message: res?.error || t(ERROR_KEYS.write), restored: false });
       return setPhase("failed");
     }
     advance("restart");
@@ -191,4 +195,5 @@ function UpdateApp() {
 }
 
 followTheme();
+void applyDocumentLanguage(document, "updTitle");
 createRoot(document.getElementById("root")).render(<UpdateApp />);
