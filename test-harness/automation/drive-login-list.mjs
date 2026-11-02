@@ -190,13 +190,13 @@ await main(async () => {
   const cjkMenu = async () => (await cjk.locator('[data-passbridge-host="menu"]').count()) > 0;
   await cjk.goto(`${BASE}/username-cjk-noform.html`, { waitUntil: "domcontentloaded" });
   await cjk.waitForTimeout(300);
-  await cjk.focus("#cjkUser");
+  await cjk.focus(".ant-input:not([type=password])");
   await cjk.waitForTimeout(500);
   ok("CJK-labelled username box without a form gets the menu", await cjkMenu(), "no host");
   await clickMenu(cjk, "test@example.com");
   await cjk.waitForTimeout(600);
-  const cjkUser = await cjk.inputValue("#cjkUser");
-  const cjkPw = await cjk.inputValue("#cjkPass");
+  const cjkUser = await cjk.inputValue(".ant-input:not([type=password])");
+  const cjkPw = await cjk.inputValue("input[type=password]");
   ok(
     "fill sets username in the first box and password in the second",
     cjkUser === "test@example.com" && cjkPw === "TestPass123",
@@ -207,9 +207,9 @@ await main(async () => {
   await cjk.waitForTimeout(300);
   await cjk.evaluate(() => {
     document.querySelectorAll('input[type="password"]').forEach((p) => p.remove());
-    document.querySelector("#cjkUser").placeholder = "搜索";
+    document.querySelector(".ant-input:not([type=password])").placeholder = "搜索";
   });
-  await cjk.focus("#cjkUser");
+  await cjk.focus(".ant-input:not([type=password])");
   await cjk.waitForTimeout(500);
   ok("Chinese search box with no password nearby gets no menu", !(await cjkMenu()), "menu host found");
   await cjkCtx.close();
