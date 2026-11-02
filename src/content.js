@@ -145,6 +145,9 @@ function pageHasVisiblePassword(field) {
   return false;
 }
 
+// no \b: word boundaries do not work for CJK text
+const CJK_IDENTITY = /邮箱|郵箱|电子邮件|電子郵件|手机|手機|账号|帳號|账户|帳戶|用户名|使用者名稱|登录名|登入|メール|ユーザー|アカウント|이메일|아이디|사용자/;
+
 function hasStrongIdentitySignal(el) {
   const t = (el.type || "text").toLowerCase();
   const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
@@ -152,7 +155,9 @@ function hasStrongIdentitySignal(el) {
   if (ac.includes("username") || ac.includes("email") || ac.includes("webauthn")) return true;
   if (hitsUpstreamName(el)) return true;
   if (t === "email") return true;
-  return /\b(e[\s-]?mail|sign[\s-]?in[\s-]?id|log[\s-]?in[\s-]?id|user[\s-]?id|username|passkey)\b/i.test(attrBlob(el));
+  const blob = attrBlob(el);
+  if (CJK_IDENTITY.test(blob)) return true;
+  return /\b(e[\s-]?mail|sign[\s-]?in[\s-]?id|log[\s-]?in[\s-]?id|user[\s-]?id|username|passkey)\b/i.test(blob);
 }
 
 const LOGINISH = /log[\s_-]?in|sign[\s_-]?in|auth|session|sso|oauth|account|idp|passport/i;
@@ -189,9 +194,19 @@ function isNumericIdField(el) {
 
 // the visible input right before the first visible password in the same form
 function isRightBeforePassword(el) {
-  const form = el.form;
-  if (!form) return false;
-  const inputs = Array.from(form.querySelectorAll("input")).filter((i) => i.type !== "hidden" && isVisible(i));
+  let scope = el.form;
+  if (!scope) {
+    // no <form> (Ant Design logins): nearest ancestor holding el and a visible password
+    let up = el.parentElement;
+    for (let n = 0; up && n < 6; n++, up = up.parentElement) {
+      if (Array.from(up.querySelectorAll("input")).some((i) => isPasswordField(i) && isVisible(i))) {
+        scope = up;
+        break;
+      }
+    }
+  }
+  if (!scope) return false;
+  const inputs = Array.from(scope.querySelectorAll("input")).filter((i) => i.type !== "hidden" && isVisible(i));
   const pass = inputs.find(isPasswordField);
   if (!pass) return false;
   const at = inputs.indexOf(pass);
@@ -212,8 +227,8 @@ function isUsernameField(el) {
   const blob = attrBlob(el);
   if (NONLOGIN_HINT.test(blob)) return false;
   if (/\b(user|login|signin|sign[\s-]?in|loginid)\b/i.test(blob)) return true;
-  // a box with no attributes at all right before the password (bestproxy.com/login)
-  return !blob.trim() && isRightBeforePassword(el);
+  // a box with no non-login hint right before the password (bestproxy.com/login, CJK-only labels)
+  return isRightBeforePassword(el);
 }
 
 let fillStyleInjected = false;
