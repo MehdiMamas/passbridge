@@ -31,3 +31,9 @@ export async function confirmLoginAdded({
     await sleep(pollMs);
   }
 }
+
+// Add login takes Passwords' new-login sheet when this username already shows for the site,
+// so the helper never turns "add" into "update" another login (#170).
+export function useNewLoginSheet({ username, before, canSheet }) {
+  return !!String(username || "").trim() && before > 0 && canSheet === true;
+}

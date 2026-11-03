@@ -8,7 +8,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { addToAllowlist, agentHostFor, agentOfferFor } from "../../src/session/agent-allow.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
-import { confirmLoginAdded } from "../../src/session/add-login-check.js";
+import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
@@ -1205,3 +1205,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
+ok("add login: same username shown takes the new-login sheet", useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: true }));
+ok("add login: no match saves normally", !useNewLoginSheet({ username: "me@x.com", before: 0, canSheet: true }));
+ok("add login: empty username saves normally", !useNewLoginSheet({ username: "  ", before: 2, canSheet: true }));
+ok("add login: helper without the sheet saves normally", !useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: false }));

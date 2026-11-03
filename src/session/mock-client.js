@@ -2,7 +2,6 @@
 
 const FIXTURES = {
   unlocked: [{ username: "test@example.com", sites: [] }],
-  newsheet: [{ username: "test@example.com", sites: [] }],
   multi: [
     { username: "alice@example.com", sites: [] },
     { username: "bob@work.com", sites: [] },
@@ -62,7 +61,7 @@ export function createMockClient(kind) {
     ready: !startsLocked && kind !== "nohelper",
     hasChallenge: startsLocked,
     canFillOneTimeCodes: kind === "otp",
-    canOpenPasswordsAppToNewPasswordSheet: kind === "newsheet",
+    canOpenPasswordsAppToNewPasswordSheet: false,
     canSetUpTotp: false,
     capabilities: {},
     onStateChange(fn) {

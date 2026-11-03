@@ -20,7 +20,7 @@ import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable }
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
-import { confirmLoginAdded, countLogins } from "./session/add-login-check.js";
+import { confirmLoginAdded, countLogins, useNewLoginSheet } from "./session/add-login-check.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
 
 // menu titles and the errors sent back to the pages follow the UI language
@@ -1556,7 +1556,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           let before = 0;
           try { before = countLogins(await lookup(), username); } catch {}
           // a same-username login already matches (a sibling tenant): the Passwords new-login sheet adds it without an update prompt
-          if (username && before > 0 && client.canOpenPasswordsAppToNewPasswordSheet) {
+          if (useNewLoginSheet({ username, before, canSheet: client.canOpenPasswordsAppToNewPasswordSheet })) {
             client.launchPasswordsApp({ newPasswordUrl: full });
             return sendResponse({ ok: true, sheet: true, note: t("addLoginInPasswordsApp") });
           }
