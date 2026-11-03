@@ -5,7 +5,7 @@ import { domainLines } from "../session/agent-allow.js";
 import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
-import { helperView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
+import { helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
 import { applyDocumentLanguage } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
@@ -171,6 +171,8 @@ function OptionsApp() {
         onPrivacy={onPrivacy}
         agentLog={agentLog}
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
+        passkeys={passkeysView(IS_WINDOWS)}
+        onOpenUrl={(url) => chrome.tabs.create({ url })}
         onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
         onPasswordSettings={IS_EDGE ? null : () => chrome.tabs.create({ url: "chrome://password-manager/settings" })}
       />

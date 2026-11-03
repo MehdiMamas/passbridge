@@ -356,7 +356,7 @@ function AppearanceTab({ settings, onChange }) {
 }
 
 
-function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings }) {
+function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings, passkeys, onOpenUrl }) {
   const isShown = (p) => p.shown && !p.disabled;
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
@@ -367,6 +367,12 @@ function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPri
         label={t("hidePasskeys")}
         help={t("hidePasskeysHelp")}
         {...toggle("hidePasskeys")}
+      />
+      <ButtonRow
+        label={t("passkeys")}
+        help={t(passkeys.helpKey)}
+        button={t("passkeysBtn")}
+        onClick={() => onOpenUrl(passkeys.url)}
       />
       {isShown(privacy.address) && (
         <SwitchRow

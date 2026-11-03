@@ -18,6 +18,15 @@ const SETUP_ANCHORS = {
   mac: { browser: "optional-macos-helper", agents: "agent-sign-in-macos", updates: "one-click-update-macos" },
   windows: { browser: "windows", agents: "agent-sign-in-windows", updates: "automatic-updates-windows" },
 };
+
+/**
+ * @param {boolean} isWindows
+ * @returns {{ helpKey: "passkeysHelpWin" | "passkeysHelpMac", url: string }}
+ */
+export function passkeysView(isWindows) {
+  return { helpKey: isWindows ? "passkeysHelpWin" : "passkeysHelpMac", url: `${SETUP_URL}#passkeys` };
+}
+
 const ROW_STATE = { checking: "checking", present: "ready", missing: "locked" };
 
 /**
