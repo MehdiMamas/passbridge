@@ -197,7 +197,7 @@ function PopupApp() {
       }}
       onAddLogin={async (login) => {
         const res = await send({ type: "popupAddLogin", ...login });
-        if (res?.ok) showNote(t("loginSent"), "ok");
+        if (res?.ok && res.saved) showNote(t("loginSaved"), "ok");
         return res;
       }}
       onTotpScan={() => send({ type: "totpScanTab" })}

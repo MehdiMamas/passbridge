@@ -8,6 +8,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { addToAllowlist, agentHostFor, agentOfferFor } from "../../src/session/agent-allow.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
+import { confirmLoginAdded } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
@@ -1183,5 +1184,24 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
     ok("agent allow: offer hidden for an allowed host", !agentOfferFor(on, "gist.github.com", true).show);
     ok("agent allow: suggested follows generated", agentOfferFor(on, "amazon.jobs", true).suggested === true && agentOfferFor(on, "amazon.jobs", false).suggested === false && agentOfferFor(on, "amazon.jobs", true).show);
   }
+{
+  const run = (script, { before = 0, ready = () => true } = {}) => {
+    let t = 0;
+    let i = 0;
+    const lookup = async () => {
+      const step = script[Math.min(i++, script.length - 1)];
+      if (step === "throw") throw new Error("busy");
+      return step;
+    };
+    return confirmLoginAdded({ lookup, username: " Me@X.com ", before, isReady: ready, now: () => t, sleep: async (ms) => { t += ms; } });
+  };
+  const me = { username: "me@x.com" };
+  ok("add login: found on the 2nd poll is saved", (await run([[], [me]])) === "saved");
+  ok("add login: never found times out", (await run([[]])) === "timeout");
+  ok("add login: a throw then found is saved", (await run(["throw", [me]])) === "saved");
+  ok("add login: an old entry that stays is not saved", (await run([[me]], { before: 1 })) === "timeout");
+  let calls = 0;
+  ok("add login: locked mid-check stops", (await run([[]], { ready: () => ++calls < 3 })) === "locked");
+}
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

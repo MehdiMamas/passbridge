@@ -20,6 +20,7 @@ import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable }
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
+import { confirmLoginAdded, countLogins } from "./session/add-login-check.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
 
 // menu titles and the errors sent back to the pages follow the UI language
@@ -1544,12 +1545,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (tab?.id == null) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           await ensureConnected();
           if (!client.ready) return sendResponse({ ok: false, error: t("errUnlockFirst") });
+          const username = typeof msg.username === "string" ? msg.username.trim() : "";
+          const lookup = () => client.getLoginNamesForURL(tab.id, full);
+          let before = 0;
+          try { before = countLogins(await lookup(), username); } catch {}
           try {
-            await client.saveLogin(tab.id, full, typeof msg.username === "string" ? msg.username.trim() : "", msg.password, { asNew: true });
+            await client.saveLogin(tab.id, full, username, msg.password, { asNew: true });
           } catch (e) {
             return sendResponse({ ok: false, error: String(e?.message || e) });
           }
-          sendResponse({ ok: true });
+          const result = await confirmLoginAdded({ lookup, username, before, isReady: () => client.ready });
+          if (result === "saved") return sendResponse({ ok: true, saved: true });
+          if (result === "locked") return sendResponse({ ok: false, error: t("errUnlockFirst") });
+          sendResponse({ ok: false, error: t("errLoginNotSaved") });
           break;
         }
 
