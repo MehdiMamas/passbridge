@@ -111,6 +111,7 @@
   "inlineOnFocus": { "message": "欄位聚焦時顯示" },
   "inlineOnClick": { "message": "點擊圖示時顯示" },
   "inlineOff": { "message": "關閉" },
+  "inlineNoLogins": { "message": "此網站沒有已儲存的登入資訊" },
   "blockedSites": { "message": "不顯示內嵌選單的網站" },
   "blockedHelp": { "message": "每行一個網站。包含子網域。" },
   "autofillLoad": { "message": "頁面載入時自動填寫" },
