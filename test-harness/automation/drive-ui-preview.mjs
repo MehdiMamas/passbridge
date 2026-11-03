@@ -17,7 +17,7 @@ await main(async () => {
       server = await serveStatic(out);
       pageUrl = `${server.url}/src/preview.html`;
     }
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ headless: true, locale: "en-US" });
     try {
       await mkdir(SHOTS, { recursive: true });
       const page = await browser.newPage({ viewport: { width: 1400, height: 1200 } });

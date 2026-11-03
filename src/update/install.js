@@ -2,8 +2,18 @@
 import { availableUpdate, isNewerVersion, markUpdatedTo } from "./check.js";
 import { getSettings } from "../settings.js";
 import { downloadRelease, latestHelperRelease, latestRelease } from "./release.js";
-import { BUSY_MESSAGE, withUpdateLock } from "./lock.js";
+import { withUpdateLock } from "./lock.js";
 import { PUBLIC_KEY_B64 } from "./verify.js";
+import { t } from "../i18n/runtime.js";
+
+// short error texts the popup shows; the messages are t(MESSAGES[code])
+const MESSAGES = {
+  download: "errDownload",
+  unsigned: "updErrUnsigned",
+  verify: "updErrVerify",
+  host: "updErrHost",
+  nokey: "updErrNokey",
+};
 
 export const UPDATER_HOST = "com.passbridge.updater";
 
@@ -24,19 +34,11 @@ function toB64(bytes) {
   return btoa(bin);
 }
 
-const MESSAGES = {
-  download: "Couldn't download the update.",
-  unsigned: "This release isn't signed, so it can't be installed here. Download it from the release page.",
-  verify: "The update failed its signature check, so it was not installed.",
-  host: "The updater helper didn't answer. Run the helper install again.",
-  nokey: "This build can't verify updates yet.",
-};
-
 // returns {ok:true} (the extension reloads right after) or {ok:false, error} with short text for the popup.
 // shares one lock with the folder update page, so only one update runs across all PassBridge pages
 export async function installUpdate(currentVersion = chrome.runtime.getManifest().version, { publicKey = PUBLIC_KEY_B64, locks, auto = false } = {}) {
   const locked = await withUpdateLock(() => runInstall(currentVersion, publicKey, auto), locks);
-  return locked.ok ? locked.value : { ok: false, error: BUSY_MESSAGE };
+  return locked.ok ? locked.value : { ok: false, error: t("errBusy") };
 }
 
 // the helper is updated first, so an extension that needs a newer helper finds it. never blocks the extension update.
@@ -75,7 +77,7 @@ export async function updateHelper({ publicKey = PUBLIC_KEY_B64, send = (m) => c
 }
 
 async function runInstall(currentVersion, publicKey, auto = false) {
-  const fail = (key, extra) => ({ ok: false, error: extra || MESSAGES[key] });
+  const fail = (key, extra) => ({ ok: false, error: extra || t(MESSAGES[key]) });
   if (!publicKey) return fail("nokey");
   await updateHelper({ publicKey }).catch(() => {});
   const release = await latestRelease(currentVersion);
@@ -88,7 +90,7 @@ async function runInstall(currentVersion, publicKey, auto = false) {
   } catch {
     return fail("host");
   }
-  if (!reply?.ok) return fail("host", reply?.error ? `Update failed: ${String(reply.error).slice(0, 120)}` : MESSAGES.host);
+  if (!reply?.ok) return fail("host", reply?.error ? `Update failed: ${String(reply.error).slice(0, 120)}` : t(MESSAGES.host));
   await markUpdatedTo(release.version);
   if (auto) await chrome.storage.local.set({ autoUpdatedTo: release.version });
   // give the reply time to reach the popup before the extension restarts

@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
+import { t } from "../i18n/runtime.js";
 
 function StatusDot({ state }) {
   const color =
     state === "unlocked" ? "bg-ok" : state === "needs_pin" ? "bg-warn" : state === "no_helper" ? "bg-danger" : "bg-current opacity-30";
   const label =
-    state === "unlocked" ? "Unlocked" : state === "needs_pin" ? "Needs the verification code" : state === "no_helper" ? "Password helper unavailable" : "Connecting";
+    state === "unlocked" ? t("statusUnlocked") : state === "needs_pin" ? t("statusNeedsPin") : state === "no_helper" ? t("statusNoHelper") : t("statusConnecting");
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={label} />;
 }
 
@@ -61,18 +62,16 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
         <div className="flex items-center gap-2 px-2 py-1">
           <span className="min-w-0 flex-1 text-[13px]">
             {isTotp ? (
-              "Verification code"
+              t("codeTotp")
             ) : (
-              <>
-                Verification code from <span className="italic opacity-60">Messages</span>
-              </>
+              <span className="italic opacity-60">{t("codeSms")}</span>
             )}
           </span>
           <span className="flex shrink-0 items-center gap-1">
             {shown ? (
               <span className="font-mono text-sm tracking-widest">{shown}</span>
             ) : (
-              <IconButton label="Copy verification code" onClick={() => onCopy("otp", row)}>
+              <IconButton label={t("copyCode")} onClick={() => onCopy("otp", row)}>
                 <LockIcon />
               </IconButton>
             )}
@@ -92,7 +91,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
                   setBusy(false);
                 }}
               >
-                Fill
+                {t("fill")}
               </button>
             )}
           </span>
@@ -197,7 +196,7 @@ export function PopupScreen({
           <button
             type="button"
             className="rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-2 py-0.5 text-base"
-            aria-label="Refresh passwords"
+            aria-label={t("refreshPasswords")}
             onClick={() => {
               if (state === "needs_pin") setPin("");
               onRefresh();
@@ -209,29 +208,29 @@ export function PopupScreen({
         <StatusDot state={state} />
       </header>
       {agentOn && (
-        <p className="shrink-0 px-3 pt-1.5 text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">{agentAll ? "Agent sign-in on, every site" : "Agent sign-in on"}</p>
+        <p className="shrink-0 px-3 pt-1.5 text-[11px] text-[color-mix(in_srgb,CanvasText_55%,Canvas)]">{agentAll ? t("agentOnAll") : t("agentOn")}</p>
       )}
       {update && (
         <div
           data-passbridge="update"
           className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,var(--color-accent)_10%,Canvas)] py-1.5 pr-1.5 pl-3 text-[12px]"
         >
-          <span className="min-w-0 flex-1 truncate">v{update.version} is available!</span>
+          <span className="min-w-0 flex-1 truncate">{t("updateAvailable", [`v${update.version}`])}</span>
           <button
             type="button"
             disabled={installingUpdate}
             className="shrink-0 cursor-pointer font-semibold text-accent disabled:opacity-60"
             onClick={onInstallUpdate}
           >
-            {installingUpdate ? "Updating…" : "Update now"}
+            {installingUpdate ? t("updating") : t("updateNow")}
           </button>
           <button type="button" className="shrink-0 cursor-pointer font-semibold text-accent" onClick={onOpenUpdate}>
-            View release
+            {t("viewRelease")}
           </button>
           <button
             type="button"
             aria-label="Dismiss update notice"
-            title="Dismiss"
+            title={t("dismiss")}
             className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg text-sm opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
             onClick={onDismissUpdate}
           >
@@ -248,8 +247,8 @@ export function PopupScreen({
               setQuery(next);
               onLookup(next.trim());
             }}
-            placeholder="Look up another site"
-            aria-label="Look up another site"
+            placeholder={t("lookupPlaceholder")}
+            aria-label={t("lookupPlaceholder")}
             autoComplete="off"
             spellCheck={false}
             className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1.5 text-[13px]"
@@ -260,12 +259,10 @@ export function PopupScreen({
       <main className={`flex flex-col gap-2 px-3 py-2 ${unlocked ? "min-h-0 flex-1 overflow-y-auto" : "flex-1"}`}>
         {state === "no_helper" && (
           <p className="text-[13px] leading-snug text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
-            {win
-              ? "Couldn't reach Apple's password helper. Install iCloud for Windows, turn on Passwords, run native/windows/install.ps1, and fully quit the browser."
-              : "Couldn't reach Apple's password helper. This needs macOS 14+ with the Passwords app, and the extension must run with Apple's accepted ID."}
+            {win ? t("noHelperWin") : t("noHelperMac")}
           </p>
         )}
-        {state === "connecting" && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">Connecting to Apple Passwords…</p>}
+        {state === "connecting" && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">{t("connectingApple")}</p>}
         {state === "needs_pin" && (
           <form
             className="flex flex-col gap-2"
@@ -275,20 +272,18 @@ export function PopupScreen({
             }}
           >
             <p className="text-[13px] leading-snug text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">
-              {win
-                ? "A verification code was sent by iCloud for Windows. Enter it to grant access."
-                : `A verification code was generated on ${label || "your Mac"}. Enter it to grant access.`}
+              {win ? t("pinSentWin") : t("pinSentMac", [label || t("deviceMac")])}
             </p>
             <input
               value={pin}
               onChange={(e) => onPinChange(e.target.value)}
               inputMode="numeric"
               autoComplete="one-time-code"
-              placeholder="••••••"
+              placeholder={t("pinPlaceholder")}
               className="rounded-xl border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-3 py-2 text-center text-xl tracking-[0.4em]"
             />
             <button type="submit" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-white">
-              Unlock
+              {t("unlock")}
             </button>
             <button
               type="button"
@@ -298,14 +293,14 @@ export function PopupScreen({
                 onNewCode();
               }}
             >
-              Request a new code
+              {t("requestNewCode")}
             </button>
             {pinError && <p className="text-[13px] text-danger">{pinError}</p>}
           </form>
         )}
         {unlocked && (
           <>
-            {logins.length === 0 && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">No saved passwords for this site.</p>}
+            {logins.length === 0 && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">{t("noSavedPasswords")}</p>}
             <ul className="flex flex-col gap-1">
               {groups.map(({ login, codes: ownCodes }) => (
                 <Fragment key={login.username}>
@@ -314,12 +309,12 @@ export function PopupScreen({
                       {showFavicons && site && (
                         <img alt="" width="16" height="16" className="h-4 w-4 shrink-0 rounded" src={`https://icons.duckduckgo.com/ip3/${site}.ico`} />
                       )}
-                      <span className="truncate text-[13px] font-medium">{login.username || "(no username)"}</span>
+                      <span className="truncate text-[13px] font-medium">{login.username || t("noUsername")}</span>
                     </span>
-                    <IconButton label="Copy username" onClick={() => onCopy("username", login)}>
+                    <IconButton label={t("copyUsername")} onClick={() => onCopy("username", login)}>
                       <UserIcon />
                     </IconButton>
-                    <IconButton label="Copy password" onClick={() => onCopy("password", login)}>
+                    <IconButton label={t("copyPassword")} onClick={() => onCopy("password", login)}>
                       <KeyIcon />
                     </IconButton>
                     <button
@@ -327,7 +322,7 @@ export function PopupScreen({
                       className="shrink-0 rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
                       onClick={() => onFill(login)}
                     >
-                      Fill
+                      {t("fill")}
                     </button>
                   </li>
                   {ownCodes.map((row) => (
@@ -343,7 +338,7 @@ export function PopupScreen({
               <div data-passbridge="add-totp" className="flex flex-col gap-1.5">
                 {!addOpen ? (
                   <button type="button" className="self-start text-xs font-semibold text-accent" onClick={() => setAddOpen(true)}>
-                    Add verification code…
+                    {t("addCode")}
                   </button>
                 ) : (
                   <div className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2">
@@ -353,9 +348,9 @@ export function PopupScreen({
                           type="button"
                           className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
                           onClick={async () => {
-                            setAddMsg("Scanning the visible page…");
+                            setAddMsg(t("scanningPage"));
                             const res = await onTotpScan();
-                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || "Couldn't read a QR code.");
+                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
                           }}
                         >
                           Scan the visible page
@@ -363,8 +358,8 @@ export function PopupScreen({
                         <input
                           value={pasted}
                           onChange={(e) => setPasted(e.target.value)}
-                          placeholder="Or paste the setup key"
-                          aria-label="Setup key"
+                          placeholder={t("pasteKey")}
+                          aria-label={t("setupKey")}
                           autoComplete="off"
                           spellCheck={false}
                           className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1 text-[13px]"
@@ -376,7 +371,7 @@ export function PopupScreen({
                           onClick={async () => {
                             const res = await onTotpPaste(pasted);
                             setPasted("");
-                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || "Not a setup key.");
+                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
                           }}
                         >
                           Use this key
@@ -385,12 +380,12 @@ export function PopupScreen({
                     )}
                     {held && !added && (
                       <>
-                        <p className="text-[12px]">Which login is this code for?</p>
-                        {logins.length === 0 && <p className="text-[12px] opacity-70">No saved login here. You can pick it in Passwords.</p>}
+                        <p className="text-[12px]">{t("codeForLogin")}</p>
+                        {logins.length === 0 && <p className="text-[12px] opacity-70">{t("noLoginHere")}</p>}
                         {logins.map((login) => (
                           <label key={login.username} className="flex items-center gap-2 text-[13px]">
                             <input type="radio" name="totp-login" checked={target === login.username} onChange={() => setTarget(login.username)} />
-                            <span className="truncate">{login.username || "(no username)"}</span>
+                            <span className="truncate">{login.username || t("noUsername")}</span>
                           </label>
                         ))}
                         <button
@@ -399,20 +394,20 @@ export function PopupScreen({
                           className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
                           onClick={async () => {
                             const res = await onTotpAdd(target);
-                            if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || "Couldn't open Passwords.");
+                            if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || t("couldntOpenPasswords"));
                           }}
                         >
-                          Add to Passwords
+                          {t("addToPasswords")}
                         </button>
                       </>
                     )}
                     {added && (
                       <>
                         <p className="text-[12px]">
-                          Passwords is open. It can't be pointed at one login, so choose {target ? <b>{target}</b> : "the login"} there and confirm.
+                          {target ? t("passwordsOpenNoteWith", [target]) : t("passwordsOpenNote")}
                         </p>
-                        <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? "Setup key copied." : r?.error || ""); }}>
-                          Copy setup key
+                        <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
+                          {t("copySetupKey")}
                         </button>
                       </>
                     )}
@@ -431,11 +426,11 @@ export function PopupScreen({
         {unlocked && (
           <div className="flex flex-col items-start pb-1">
             <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search")}>
-              Open in Passwords app
+              {t("openInPasswords")}
             </button>
             {caps?.newPasswordSheet && (
               <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("new")}>
-                New login in Passwords app…
+                {t("newLoginInPasswords")}
               </button>
             )}
           </div>
@@ -443,22 +438,22 @@ export function PopupScreen({
         <div className="flex items-center justify-between">
           {unlocked ? (
             <button type="button" className="text-xs text-accent" onClick={onLock}>
-              Lock
+              {t("lock")}
             </button>
           ) : (
             <span />
           )}
           <span className="flex items-center gap-3">
             <button type="button" className="text-xs text-accent" onClick={onReport}>
-              Report this page
+              {t("reportThisPage")}
             </button>
             {onCheckUpdate && (
               <button type="button" disabled={checkingUpdate} className="text-xs text-accent disabled:opacity-60" onClick={onCheckUpdate}>
-                {checkingUpdate ? "Checking…" : "Check for updates"}
+                {checkingUpdate ? t("checking") : t("checkForUpdates")}
               </button>
             )}
             <button type="button" className="text-xs text-accent" onClick={onSettings}>
-              Settings
+              {t("settings")}
             </button>
           </span>
         </div>

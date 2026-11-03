@@ -1,5 +1,7 @@
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
+import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
+
 
 const muted = "text-[color-mix(in_srgb,CanvasText_62%,Canvas)]";
 const hairline = "border-[color-mix(in_srgb,CanvasText_10%,Canvas)]";
@@ -8,28 +10,16 @@ const field = `rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas
 const secondaryButton = `cursor-pointer rounded-lg border border-[color-mix(in_srgb,CanvasText_16%,Canvas)] px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 hover:bg-[color-mix(in_srgb,CanvasText_6%,Canvas)] active:bg-[color-mix(in_srgb,CanvasText_10%,Canvas)] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 
 const ACTIVITY_COLUMNS = [
-  ["Time", "w-32"],
-  ["Request", "w-20"],
-  ["Site", ""],
-  ["Username", ""],
-  ["Result", "w-26"],
+  ["colTime", "w-32"],
+  ["colRequest", "w-20"],
+  ["colSite", ""],
+  ["colUsername", ""],
+  ["colResult", "w-26"],
 ];
+
 const activityCell = "truncate px-2.5 py-1.5";
 const SHORT_TIME = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
 
-const THEME_OPTIONS = [
-  ["system", "System"],
-  ["light", "Light"],
-  ["dark", "Dark"],
-];
-
-const CLEAR_OPTIONS = [
-  ["10000", "10 seconds"],
-  ["20000", "20 seconds"],
-  ["30000", "30 seconds"],
-  ["60000", "1 minute"],
-  ["300000", "5 minutes"],
-];
 
 function Icon({ children }) {
   return (
@@ -220,27 +210,31 @@ function Notice({ notice }) {
           <>
             {" "}
             <a href={notice.href} target="_blank" rel="noreferrer" className={`font-medium text-accent underline-offset-2 hover:underline ${focusRing}`}>
-              How to install
+              {t("howToInstall")}
             </a>
           </>
         )}
+
       </p>
     </div>
   );
 }
 
 function ActivityTable({ log }) {
-  if (!log.length) return <p className={`text-[13px] ${muted}`}>No requests yet.</p>;
+  if (!log.length) return <p className={`text-[13px] ${muted}`}>{t("noRequests")}</p>;
+
   return (
-    <div role="region" aria-label="Agent activity" tabIndex={0} className={`max-h-80 overflow-auto rounded-lg border ${hairline} ${focusRing}`}>
+    <div role="region" aria-label={t("agentActivity")} tabIndex={0} className={`max-h-80 overflow-auto rounded-lg border ${hairline} ${focusRing}`}>
+
       <table className="w-full min-w-[32rem] table-fixed text-left text-[12px]">
         <thead className={`sticky top-0 bg-[Canvas] shadow-[0_1px_0_color-mix(in_srgb,CanvasText_10%,Canvas)] ${muted}`}>
           <tr>
             {ACTIVITY_COLUMNS.map(([h, width]) => (
               <th key={h} className={`${activityCell} font-medium ${width}`}>
-                {h}
+                {t(h)}
               </th>
             ))}
+
           </tr>
         </thead>
         <tbody>
@@ -278,88 +272,110 @@ const toggleProps = (settings, onChange, key) => ({ checked: settings[key], onCh
 function AutofillTab({ settings, onChange, lists, onListChange, onListBlur }) {
   const list = (key) => ({ value: lists[key], onChange: (text) => onListChange(key, text), onBlur: () => onListBlur(key) });
   const toggle = (key) => toggleProps(settings, onChange, key);
+  const clearOptions = [
+    ["10000", t("clear10s")],
+    ["20000", t("clear20s")],
+    ["30000", t("clear30s")],
+    ["60000", t("clear1m")],
+    ["300000", t("clear5m")],
+  ];
   return (
     <>
-      <Row label="Inline menu" help="When the saved-login menu opens on a login field.">
+      <Row label={t("inlineMenu")} help={t("inlineMenuHelp")}>
         {(ids, isDisabled) => (
           <Select
             ids={ids}
             value={settings.inlineMenuVisibility}
             disabled={isDisabled}
             options={[
-              ["on-focus", "Show on field focus"],
-              ["on-click", "Show when the icon is clicked"],
-              ["off", "Off"],
+              ["on-focus", t("inlineOnFocus")],
+              ["on-click", t("inlineOnClick")],
+              ["off", t("inlineOff")],
             ]}
             onChange={(v) => onChange({ inlineMenuVisibility: v })}
           />
         )}
       </Row>
-      <ListRow label="Sites without the inline menu" help="One site per line. Subdomains are included." {...list("blockedDomains")} />
+      <ListRow label={t("blockedSites")} help={t("blockedHelp")} {...list("blockedDomains")} />
       <SwitchRow
-        label="Autofill on page load"
-        help="Fills the login as the page opens when exactly one saved login matches. Can ask for Touch ID or Windows Hello right away."
+        label={t("autofillLoad")}
+        help={t("autofillLoadHelp")}
         {...toggle("autofillOnPageLoad")}
       />
-      <SwitchRow label="Fill and save on HTTP pages" help="HTTP pages are unencrypted and can be spoofed. Keep this off unless you need it." {...toggle("canFillOnHttp")} />
-      <SwitchRow label="Ask to save new logins" help="Offers to save a login PassBridge doesn't have yet, after you sign in." {...toggle("askToSave")} />
-      <SwitchRow label="Ask to update changed passwords" help="Offers to update a saved login when you sign in with a new password." {...toggle("askToUpdate")} />
-      <ListRow label="Never-save sites" help="One site per line. PassBridge never offers to save on these sites." {...list("excludedDomains")} />
-      <SwitchRow label="Copy codes after filling" help="Also copies a verification code to the clipboard when PassBridge fills it." {...toggle("copyTotpAfterFill")} />
-      <Row
-        label="Clear clipboard after"
-        help="Clears anything PassBridge copies (passwords, usernames, codes) after this time. Windows clipboard history and clipboard apps keep their own copy."
-      >
+      <SwitchRow label={t("httpFill")} help={t("httpHelp")} {...toggle("canFillOnHttp")} />
+      <SwitchRow label={t("askSave")} help={t("askSaveHelp")} {...toggle("askToSave")} />
+      <SwitchRow label={t("askUpdate")} help={t("askUpdateHelp")} {...toggle("askToUpdate")} />
+      <ListRow label={t("neverSave")} help={t("neverSaveHelp")} {...list("excludedDomains")} />
+      <SwitchRow label={t("copyCodesFill")} help={t("copyCodesHelp")} {...toggle("copyTotpAfterFill")} />
+      <Row label={t("clipboardClear")} help={t("clipboardHelp")}>
         {(ids, isDisabled) => (
-          <Select ids={ids} value={String(settings.clipboardClearMs)} disabled={isDisabled} options={CLEAR_OPTIONS} onChange={(v) => onChange({ clipboardClearMs: Number(v) })} />
+          <Select ids={ids} value={String(settings.clipboardClearMs)} disabled={isDisabled} options={clearOptions} onChange={(v) => onChange({ clipboardClearMs: Number(v) })} />
         )}
       </Row>
     </>
   );
 }
 
+
 function AppearanceTab({ settings, onChange }) {
   const toggle = (key) => toggleProps(settings, onChange, key);
+  const themeOptions = [
+    ["system", t("themeSystem")],
+    ["light", t("themeLight")],
+    ["dark", t("themeDark")],
+  ];
   return (
     <>
-      <Row label="Theme" help="Light or dark for the popup, these pages, and the menus PassBridge shows on sites. System follows your computer.">
+      <Row label={t("theme")} help={t("themeHelp")}>
         {(ids, isDisabled) => (
-          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={THEME_OPTIONS} onChange={(v) => onChange({ theme: v })} />
+          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={themeOptions} onChange={(v) => onChange({ theme: v })} />
         )}
       </Row>
-      <SwitchRow label="Fill animation" help="Briefly highlights each field as it is filled." {...toggle("showAnimations")} />
-      <SwitchRow label="Website icons" help="Shows site icons in the popup. Icons load from DuckDuckGo." {...toggle("showFavicons")} />
-      <SwitchRow label="Login count on the toolbar icon" help="Shows how many saved logins match the current site." {...toggle("enableBadge")} />
+      <SwitchRow label={t("animations")} help={t("animationsHelp")} {...toggle("showAnimations")} />
+      <SwitchRow label={t("favicons")} help={t("faviconsHelp")} {...toggle("showFavicons")} />
+      <SwitchRow label={t("badge")} help={t("badgeHelp")} {...toggle("enableBadge")} />
+      <Row label={t("language")} help={t("languageHelp")}>
+        {(ids, isDisabled) => (
+          <Select
+            ids={ids}
+            value={settings.uiLanguage}
+            disabled={isDisabled}
+            options={[["", t("langSystem")], ...SUPPORTED_LOCALES.map((l) => [l, LOCALE_NAMES[l]])]}
+            onChange={(v) => onChange({ uiLanguage: v })}
+          />
+        )}
+      </Row>
     </>
   );
 }
+
 
 function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings }) {
   const isShown = (p) => p.shown && !p.disabled;
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
-      <SwitchRow label="Right-click menu" help="Adds PassBridge fill options to the page's right-click menu." {...toggle("enableContextMenu")} />
-      <ButtonRow label="Keyboard shortcuts" help="Set the keys that show your logins, fill a login, or lock PassBridge." button="Change" onClick={onShortcuts} />
+      <SwitchRow label={t("contextMenu")} help={t("contextMenuHelp")} {...toggle("enableContextMenu")} />
+      <ButtonRow label={t("shortcuts")} help={t("shortcutsHelp")} button={t("shortcutsBtn")} onClick={onShortcuts} />
       <SwitchRow
-        label="Hide passkey suggestions"
-        help="Hides the passkey option in a login field's menu. Passkey sign-in buttons still work."
+        label={t("hidePasskeys")}
+        help={t("hidePasskeysHelp")}
         {...toggle("hidePasskeys")}
       />
       {isShown(privacy.address) && (
         <SwitchRow
-          label="Hide the browser's address suggestions"
-          help="Turns off the browser's own address autofill on forms."
+          label={t("hideAddress")}
+          help={t("hideAddressHelp")}
           checked={privacy.address.checked}
           onChange={(on) => onPrivacy("address", on)}
         />
       )}
       {isShown(privacy.bubble) && (
-        <SwitchRow label="Hide the browser's save-password prompt" help="Only PassBridge offers to save logins." checked={privacy.bubble.checked} onChange={(on) => onPrivacy("bubble", on)} />
+        <SwitchRow label={t("hideBubble")} help={t("hideBubbleHelp")} checked={privacy.bubble.checked} onChange={(on) => onPrivacy("bubble", on)} />
       )}
       <SwitchRow
-        label="Hide the browser's password manager"
-        help="Locks the browser's offer to save passwords off with a policy, so it can't be turned back on. Passwords the browser already saved still fill. Quit and reopen the browser to apply."
+        label={t("hidePm")}
+        help={t("hidePmHelp")}
         note={policy.message || undefined}
         state={view.rows.policy}
         isLabel={false}
@@ -368,12 +384,13 @@ function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPri
       />
       {onPasswordSettings && (
         <ButtonRow
-          label="The browser's saved passwords"
-          help={`The browser still suggests passwords it saved before. Turn off "Sign in automatically", then move those passwords to iCloud Passwords and delete them in the browser.`}
-          button="Open password settings"
+          label={t("pmSettings")}
+          help={t("pmSettingsHelp")}
+          button={t("pmOpen")}
           onClick={onPasswordSettings}
         />
       )}
+
     </>
   );
 }
@@ -383,26 +400,27 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
   return (
     <>
       <SwitchRow
-        label="Allow agent sign-in"
-        help="A local program, such as an AI agent, can ask PassBridge to sign in on the sites below. It sees the site and username, never the password or code."
+        label={t("agentSignIn")}
+        help={t("agentSignInHelp")}
         state={state}
         {...toggleProps(settings, onChange, "agentSignIn")}
       />
       <SwitchRow
-        label="Allow every site (*)"
-        help="Off by default. When on, an agent can sign in on any https site you have a saved login for, not only the list below, banks and email included. A page that tricks the agent could steer it into any of those accounts. A login only fills on the site it was saved for, and each password read still needs your approval. This setting follows your Chrome profile to every computer signed in to it."
+        label={t("agentAllowAll")}
+        help={t("agentAllowAllHelp")}
         state={settings.agentSignIn === true ? state : "locked"}
         {...toggleProps(settings, onChange, "agentAllowAll")}
       />
       <ListRow
-        label="Allowed sites"
-        help="One site per line. Subdomains are included. A typed * does nothing here: use Allow every site above."
+        label={t("allowedSites")}
+        help={t("allowedHelp")}
         state={state}
         value={lists.agentAllowlist}
         onChange={(text) => onListChange("agentAllowlist", text)}
         onBlur={() => onListBlur("agentAllowlist")}
       />
-      <Row label="Activity" help="The last 50 agent requests." state={state} isWide isLabel={false}>
+      <Row label={t("activity")} help={t("activityHelp")} state={state} isWide isLabel={false}>
+
         {() => <ActivityTable log={agentLog} />}
       </Row>
     </>
@@ -414,25 +432,26 @@ function UpdatesTab({ settings, onChange, view, onCheckNow }) {
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
-      <SwitchRow label="Check for updates" help="Looks for a new PassBridge release on GitHub." {...toggle("canCheckForUpdates")} />
+      <SwitchRow label={t("checkUpdates")} help={t("checkUpdatesHelp")} {...toggle("canCheckForUpdates")} />
       {settings.canCheckForUpdates && (
         <>
           <SwitchRow
-            label="Install updates automatically with the helper"
-            help="Installs a new signed release without asking."
+            label={t("autoInstall")}
+            help={t("autoInstallHelp")}
             state={view.rows.autoInstall}
             {...toggle("autoInstallUpdates")}
           />
-          <div data-row="Check now" className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4 ${hairline}`}>
+          <div data-row={t("checkNow")} className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4 ${hairline}`}>
             <button type="button" aria-describedby={checkNoteId} className={secondaryButton} onClick={onCheckNow}>
-              Check now
+              {t("checkNow")}
             </button>
             <p id={checkNoteId} className={`text-[13px] ${muted}`}>
-              Opens the update page in a new tab.
+              {t("checkNowNote")}
             </p>
           </div>
         </>
       )}
+
     </>
   );
 }
@@ -455,14 +474,15 @@ export function OptionsScreen(props) {
               <img src="../icons/icon48.png" alt="" width="24" height="24" />
               <span className="text-[15px] font-semibold">PassBridge</span>
             </div>
-            <nav aria-label="Settings">
+            <nav aria-label={t("settingsNav")}>
+
               <ul className="flex flex-wrap gap-1 px-3 pb-3 @2xl:flex-col">
-                {OPTION_TABS.map((t) => {
-                  const isCurrent = t.id === current.id;
+                {OPTION_TABS.map((tab) => {
+                  const isCurrent = tab.id === current.id;
                   return (
-                    <li key={t.id} className="shrink-0">
+                    <li key={tab.id} className="shrink-0">
                       <a
-                        href={`#${t.id}`}
+                        href={`#${tab.id}`}
                         aria-current={isCurrent ? "page" : undefined}
                         className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm transition-colors duration-150 ${focusRing} ${
                           isCurrent
@@ -470,9 +490,10 @@ export function OptionsScreen(props) {
                             : `border-transparent ${muted} hover:bg-[color-mix(in_srgb,CanvasText_5%,Canvas)] hover:text-[CanvasText]`
                         }`}
                       >
-                        {TAB_ICONS[t.id]}
-                        {t.label}
+                        {TAB_ICONS[tab.id]}
+                        {t(tab.labelKey)}
                       </a>
+
                     </li>
                   );
                 })}
@@ -482,7 +503,8 @@ export function OptionsScreen(props) {
         </aside>
         <main className="min-w-0 flex-1 px-5 py-6 @2xl:px-10 @2xl:py-8">
           <div className="max-w-2xl">
-            <h1 className="text-xl font-semibold tracking-tight">{current.label}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{t(current.labelKey)}</h1>
+
             {notice && <Notice notice={notice} />}
             <div className="mt-4">
               <Body {...props} />

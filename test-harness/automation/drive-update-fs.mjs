@@ -22,7 +22,7 @@ async function releaseStyleZip(dir) {
 await main(async () => {
   const tmp = await mkdtemp(join(tmpdir(), "pb-update-fs-"));
   const server = await serveStatic(join(HERE, "..", ".."));
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, locale: "en-US" });
   try {
     const zip = await releaseStyleZip(tmp);
     if (!zip) console.log("SKIP zip check (no zip command)");

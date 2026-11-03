@@ -1,4 +1,6 @@
 import { frameOffsetFromWindow } from "./adapter/frame-offset.js";
+import { t } from "./i18n/runtime.js";
+
 
 let qrImageEl = null;
 let qrImageAt = 0;
@@ -135,7 +137,8 @@ export function showTotpBar(payload, colorScheme) {
         void chrome.runtime.lastError;
         showTotpBar(resp?.ok
           ? { mode: "handed", launched: !!resp.launched, hasKey: !!resp.hasKey, detail: resp.detail || "" }
-          : { mode: "error", error: resp?.error || "Couldn't add a verification code." }, colorScheme);
+          : { mode: "error", error: resp?.error || t("totpAddFailed") }, colorScheme);
+
       });
       return;
     }
@@ -145,7 +148,8 @@ export function showTotpBar(payload, colorScheme) {
         void chrome.runtime.lastError;
         showTotpBar(resp?.ok
           ? { mode: "copied" }
-          : { mode: "error", error: resp?.error || "Couldn't copy the setup key." }, colorScheme);
+          : { mode: "error", error: resp?.error || t("totpCopyKeyFailed") }, colorScheme);
+
       });
       return;
     }

@@ -1,4 +1,5 @@
 import jsQR from "jsqr";
+import { t } from "./i18n/runtime.js";
 
 let timer = null;
 let pending = "";
@@ -75,7 +76,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       ok = writeClipboard(text);
     } catch {}
     if (!ok) {
-      sendResponse({ ok: false, error: "Couldn't write to the clipboard." });
+      sendResponse({ ok: false, error: t("couldntWriteClipboard") });
       return false;
     }
     pending = text;
@@ -98,7 +99,7 @@ function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Couldn't read the screenshot."));
+    img.onerror = () => reject(new Error(t("screenshotReadFailed")));
     img.src = url;
   });
 }
