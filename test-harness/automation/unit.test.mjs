@@ -26,6 +26,8 @@ import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../
 import { OPTION_TABS, helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
 import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.js";
 import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.js";
+import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "../../src/passkeys/store.js";
+import { createMockClient } from "../../src/session/mock-client.js";
 import { parseBitwarden, parseCxf, parseExport } from "../../src/passkeys/import.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
@@ -1363,6 +1365,28 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("import cxf: the P-256 passkey is kept, the P-384 one skipped with a reason", cxfOut.records.length === 1 && cxfOut.records[0].userName === "ann" && cxfOut.skipped.length === 1 && cxfOut.skipped[0].reason.includes("P-256"));
   ok("import: parseExport picks the format", (await parseExport(JSON.stringify(cxf))).records.length === 1 && (await parseExport(JSON.stringify(bw))).records.length === 2);
   ok("import: not JSON and unknown JSON give a plain error", (await refused(() => parseExport("nope"))) === "Error" && (await refused(() => parseExport("{}"))) === "Error");
+}
+{
+  // passkeys: store over the mock client
+  const client = createMockClient("unlocked");
+  const rec = (rpId, id, name = "ann") => makeRecord({ rpId, credentialId: id, userHandle: "dXNlcjE", userName: name, key: "a2V5" });
+  const a = rec("example.test", "AAAAAAAAAAAA");
+  ok("passkey store: nothing listed at first", (await listPasskeys(client, 1)).length === 0);
+  ok("passkey store: save is confirmed from the vault", (await savePasskey(client, 1, a, { pollMs: 1 })) === "saved");
+  ok("passkey store: saving the same passkey again writes nothing", (await savePasskey(client, 1, a, { pollMs: 1 })) === "exists" && (await listPasskeys(client, 1)).length === 1);
+  await savePasskey(client, 1, rec("other.test", "BBBBBBBBBBBB", "bo"), { pollMs: 1 });
+  const list = await listPasskeys(client, 1);
+  ok("passkey store: list parses the names", list.length === 2 && list[0].rpId === "example.test" && list[0].userName === "ann");
+  ok("passkey store: a site sees its own passkeys and its parent domain's", passkeysForHost(list, "login.example.test").length === 1 && passkeysForHost(list, "example.test").length === 1 && passkeysForHost(list, "badexample.test").length === 0 && passkeysForHost(list, "none.test").length === 0);
+  const read = await readPasskey(client, 1, list[0]);
+  ok("passkey store: read returns the saved record, UV off by default", JSON.stringify(read.record) === JSON.stringify(a) && read.userVerified === false);
+  globalThis.__mockVerified = true;
+  ok("passkey store: UV is reported only when the client says it verified", (await readPasskey(client, 1, list[0])).userVerified === true);
+  delete globalThis.__mockVerified;
+  const locked = createMockClient("locked");
+  ok("passkey store: a locked vault throws on list and save", (await Promise.all([listPasskeys(locked, 1).then(() => "ok", () => "throw"), savePasskey(locked, 1, a).then(() => "ok", () => "throw")])).join() === "throw,throw");
+  const unreadable = { getPasswordForLoginName: async () => ({ username: "x", password: "not a record" }) };
+  ok("passkey store: a password that is not a record reads as null", (await readPasskey(unreadable, 1, list[0])) === null);
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
