@@ -541,7 +541,7 @@ function showSaveBar(msg) {
   );
   Object.assign(iframe.style, {
     width: "360px",
-    height: "268px",
+    height: "360px",
     border: "none",
     borderRadius: "14px",
     background: "transparent",
@@ -559,7 +559,7 @@ function showSaveBar(msg) {
     overflow: "hidden",
     zIndex: "2147483647",
     width: "360px",
-    height: "268px",
+    height: "360px",
   });
   (document.body || document.documentElement).appendChild(host);
   try { host.showPopover(); } catch {}

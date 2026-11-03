@@ -20,6 +20,7 @@ const field = "mt-1 w-full rounded-lg border bg-[Canvas] px-2 py-1 text-[13px] t
 function SavePrompt() {
   const [username, setUsername] = useState(user);
   const [password, setPassword] = useState("");
+  const [site, setSite] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [shown, setShown] = useState(false);
 
@@ -29,13 +30,15 @@ function SavePrompt() {
       if (r?.ok) {
         setUsername(r.username || "");
         setPassword(r.password || "");
+        setSite(r.site || "");
       }
       setLoaded(true);
     }).catch(() => setLoaded(true));
   }, []);
 
-  async function save() {
-    try { await chrome.runtime.sendMessage({ type: "confirmSave", username: username.trim(), password }); } catch {}
+  // asNew makes a separate login even when one with this username and site exists
+  async function save(asNew) {
+    try { await chrome.runtime.sendMessage({ type: "confirmSave", username: username.trim(), password, site: site.trim(), asNew: asNew === true }); } catch {}
     close("save");
   }
 
@@ -44,6 +47,18 @@ function SavePrompt() {
     <div data-passbridge="save-bar" className="w-[360px] rounded-2xl border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] p-3.5 text-[CanvasText] shadow-xl">
       <p className="text-sm font-semibold">{update ? t("updateTitle") : t("saveTitle")}</p>
 
+      <label className="mt-2 block text-xs opacity-70">
+        {t("website")}
+        <input
+          type="text"
+          data-field="site"
+          autoComplete="off"
+          spellCheck={false}
+          value={site}
+          onChange={(e) => setSite(e.target.value)}
+          className={`${field} border-[color-mix(in_srgb,CanvasText_25%,Canvas)]`}
+        />
+      </label>
       <label className="mt-2 block text-xs opacity-70">
         {t("username")}
         <input
@@ -84,10 +99,15 @@ function SavePrompt() {
         <button type="button" className="px-2 py-1 text-[13px] opacity-80" onClick={() => close("dismiss")}>
           {t("notNow")}
         </button>
-
-        <button type="button" data-action="save" disabled={!loaded || !password} className="rounded-lg bg-accent px-2.5 py-1 text-[13px] font-semibold text-white disabled:opacity-50" onClick={save}>
+      </div>
+      <div className="mt-1 flex justify-end gap-2">
+        {update && (
+          <button type="button" data-action="save-new" disabled={!loaded || !password || noUser} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_25%,Canvas)] px-2.5 py-1 text-[13px] font-semibold disabled:opacity-50" onClick={() => save(true)}>
+            {t("saveAsNewLogin")}
+          </button>
+        )}
+        <button type="button" data-action="save" disabled={!loaded || !password} className="rounded-lg bg-accent px-2.5 py-1 text-[13px] font-semibold text-white disabled:opacity-50" onClick={() => save(false)}>
           {update ? t("update") : t("save")}
-
         </button>
       </div>
     </div>

@@ -346,5 +346,8 @@
   "totpScanAgain": { "message": "请重新扫描或粘贴验证码。" },
   "totpKeyGoneAdd": { "message": "设置密钥已不再保留。请再次添加。" },
   "totpKeyGoneScan": { "message": "设置密钥已不再保留。请再次扫描。" },
-  "screenshotReadFailed": { "message": "无法读取屏幕截图。" }
+  "screenshotReadFailed": { "message": "无法读取屏幕截图。" },
+  "website": { "message": "网站" },
+  "saveAsNewLogin": { "message": "另存为新登录信息" },
+  "errSiteInvalid": { "message": "该网站地址无效。" }
 }
