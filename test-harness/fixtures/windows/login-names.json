@@ -1,0 +1,52 @@
+{
+  "TID": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "STATUS": 0,
+  "Entries": [
+    {
+      "HLD": "example.com",
+      "customTitle": "x",
+      "USR": "user@example.com",
+      "PWD": "x",
+      "ModDate": "x",
+      "CDate": "x",
+      "sites": [
+        "example.com"
+      ],
+      "NOTES": "",
+      "TOTP": "0"
+    },
+    {
+      "HLD": "example.com",
+      "customTitle": "x",
+      "USR": "user@example.com",
+      "PWD": "x",
+      "ModDate": "x",
+      "CDate": "x",
+      "sites": [
+        "example.com"
+      ],
+      "NOTES": "",
+      "TOTP": "00000"
+    }
+  ],
+  "Entry_0": {
+    "HLD": "example.com",
+    "USR": "user@example.com",
+    "PWD": "x",
+    "ModDate": "x",
+    "CDate": "x",
+    "sites": [
+      "example.com"
+    ]
+  },
+  "Entry_1": {
+    "HLD": "example.com",
+    "USR": "user@example.com",
+    "PWD": "x",
+    "ModDate": "x",
+    "CDate": "x",
+    "sites": [
+      "example.com"
+    ]
+  }
+}

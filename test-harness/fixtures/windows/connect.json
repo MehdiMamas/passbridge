@@ -1,0 +1,9 @@
+{
+  "cmd": 14,
+  "capabilities": {
+    "secretSessionVersion": 1,
+    "canFillOneTimeCodes": true,
+    "supportsSubURLs": true,
+    "scanForOTPURI": true
+  }
+}

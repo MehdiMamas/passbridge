@@ -407,7 +407,7 @@ export class ApplePasswords {
         if (pake.TID !== session.username) throw new Error("verification for another session");
         // Windows answers a failed verify with TID and ErrCode only, no MSG: read the error first
         const errCode = asInt(pake.ErrCode);
-        if (errCode === 1) throw new Error("Incorrect code");
+        if (errCode === 1 || errCode === 5) throw new Error("Incorrect code");
         if (errCode !== 0 && errCode !== undefined) throw new Error(`verification error ${pake.ErrCode}`);
         // a missing MSG is fine here, the HAMK check below is what proves the server
         if (pake.MSG !== undefined && String(pake.MSG) !== String(MSGType.ServerVerification)) throw new Error("unexpected server message");
