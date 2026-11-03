@@ -276,6 +276,7 @@
   "noUserFound": { "message": "找不到使用者名稱，請輸入一個" },
   "show": { "message": "顯示" },
   "hide": { "message": "隱藏" },
+  "generate": { "message": "產生" },
   "neverSite": { "message": "永遠不在這個網站儲存" },
   "notNow": { "message": "稍後" },
   "save": { "message": "儲存" },

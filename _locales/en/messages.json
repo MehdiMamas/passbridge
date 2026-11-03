@@ -276,6 +276,7 @@
   "noUserFound": { "message": "No username found, type one" },
   "show": { "message": "Show" },
   "hide": { "message": "Hide" },
+  "generate": { "message": "Generate" },
   "neverSite": { "message": "Never for this site" },
   "notNow": { "message": "Not now" },
   "save": { "message": "Save" },
