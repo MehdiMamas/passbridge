@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Create Account (no form)</title></head>
+<body>
+<h1>Create Account</h1>
+<div>
+  <label>Email <input id="email" type="text" autocomplete="username"></label>
+  <label>Password <input id="pw1" type="password" autocomplete="new-password"></label>
+  <label>Verify password <input id="pw2" type="password" autocomplete="new-password"></label>
+  <button type="button">Create Account</button>
+</div>
+<script>
+  // like Workday: changing the first box clears the confirm box shortly after
+  const p1 = document.getElementById("pw1"), p2 = document.getElementById("pw2");
+  p1.addEventListener("input", () => setTimeout(() => { p2.value = ""; }, 20));
+</script>
+</body></html>

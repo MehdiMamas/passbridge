@@ -18,6 +18,9 @@
   "menuCopyCode": { "message": "Copy verification code" },
   "menuFillStrong": { "message": "Fill a strong password" },
   "menuCopyStrong": { "message": "Copy a strong password" },
+  "menuFillStrongAlnum": { "message": "Fill password without special characters" },
+  "menuCopyStrongAlnum": { "message": "Copy password without special characters" },
+  "menuCopyGenerated": { "message": "Copy generated password" },
   "menuScanImage": { "message": "Scan this image for a verification code" },
   "menuReport": { "message": "Report this page…" },
 

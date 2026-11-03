@@ -18,6 +18,9 @@
   "menuCopyCode": { "message": "复制验证码" },
   "menuFillStrong": { "message": "填充一个强密码" },
   "menuCopyStrong": { "message": "复制一个强密码" },
+  "menuFillStrongAlnum": { "message": "填充不含特殊字符的密码" },
+  "menuCopyStrongAlnum": { "message": "复制不含特殊字符的密码" },
+  "menuCopyGenerated": { "message": "复制已生成的密码" },
   "menuScanImage": { "message": "扫描此图片中的验证码" },
   "menuReport": { "message": "报告此页面…" },
 

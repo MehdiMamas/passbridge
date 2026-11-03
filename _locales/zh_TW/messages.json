@@ -18,6 +18,9 @@
   "menuCopyCode": { "message": "複製驗證碼" },
   "menuFillStrong": { "message": "填寫一個強密碼" },
   "menuCopyStrong": { "message": "複製一個強密碼" },
+  "menuFillStrongAlnum": { "message": "填寫不含特殊字元的密碼" },
+  "menuCopyStrongAlnum": { "message": "複製不含特殊字元的密碼" },
+  "menuCopyGenerated": { "message": "複製已產生的密碼" },
   "menuScanImage": { "message": "掃描此圖片中的驗證碼" },
   "menuReport": { "message": "回報此頁面…" },
 

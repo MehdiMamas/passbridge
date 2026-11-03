@@ -5,7 +5,7 @@ import { State, setDeviceLabel } from "./apple/protocol.js";
 import { createClient } from "./session/create-client.js";
 import { labelForOs, uiDeviceLabel } from "./apple/os-label.js";
 import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
-import { generateApplePassword } from "./password-generate.js";
+import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
@@ -486,7 +486,27 @@ const CONTENT_ALLOWED = new Set([
   "confirmTotp",
   "copyTotpKey",
   "dismissTotp",
+  "generatedFilled",
 ]);
+
+// the last generated password filled on a tab, kept in memory only, so the menu can copy it
+const GENERATED_HOLD_MS = 10 * 60_000;
+/** @type {Map<number, { password: string, at: number, timer: ReturnType<typeof setTimeout> }>} */
+const generatedByTab = new Map();
+function holdGenerated(tabId, password) {
+  dropGenerated(tabId);
+  const timer = setTimeout(() => {
+    generatedByTab.delete(tabId);
+    refreshActiveTab();
+  }, GENERATED_HOLD_MS);
+  generatedByTab.set(tabId, { password, at: Date.now(), timer });
+}
+function dropGenerated(tabId) {
+  const e = generatedByTab.get(tabId);
+  if (e) clearTimeout(e.timer);
+  generatedByTab.delete(tabId);
+}
+chrome.tabs?.onRemoved.addListener((tabId) => dropGenerated(tabId));
 
 const saveOffers = new Map();
 const totpOffers = new Map();
@@ -847,7 +867,8 @@ async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve(void chrome.runtime.lastError)));
   if (!settings.enableContextMenu) return;
   await resolveLocale();
-  for (const props of menuItems({ ready: client.ready, onSite: !!url, logins, hasCode })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+  const hasGenerated = tab?.id != null && generatedByTab.has(tab.id);
+  for (const props of menuItems({ ready: client.ready, onSite: !!url, logins, hasCode, hasGenerated })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
   menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
 }
 
@@ -919,8 +940,21 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
       chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }, { frameId: info.frameId ?? 0 }).catch(() => {});
       return;
     }
+    if (info.menuItemId === "pb-gen-alnum") {
+      chrome.tabs.sendMessage(tab.id, { type: "generatePassword", alnum: true }, { frameId: info.frameId ?? 0 }).catch(() => {});
+      return;
+    }
     if (info.menuItemId === "pb-gen-copy") {
       await copyText(generateApplePassword());
+      return;
+    }
+    if (info.menuItemId === "pb-gen-copy-alnum") {
+      await copyText(generateAlphanumericPassword());
+      return;
+    }
+    if (info.menuItemId === "pb-gen-last") {
+      const held = generatedByTab.get(tab.id);
+      if (held) await copyText(held.password);
       return;
     }
     if (info.menuItemId === "pb-qr-image") {
@@ -1032,6 +1066,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       switch (msg?.type) {
+        case "generatedFilled": {
+          // only the tab's own content script, from its top frame or a frame of that tab
+          if (fromContent && sender.tab?.id != null && typeof msg.password === "string" && msg.password.length > 0 && msg.password.length <= 256) {
+            holdGenerated(sender.tab.id, msg.password);
+            refreshActiveTab();
+          }
+          sendResponse({ ok: true });
+          return;
+        }
         case "inlineLogins": {
           // keyed to sender.url not the top tab
           const frameUrl = sender.url;

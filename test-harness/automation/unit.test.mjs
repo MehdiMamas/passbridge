@@ -1127,6 +1127,9 @@ ok("update page: Windows is read from userAgentData or platform", isWindows({ us
   ok("menu: code item shows when the site has a code", two.some((i) => i.id === "pb-otp"));
   const gen = one.find((i) => i.id === "pb-gen"), genCopy = one.find((i) => i.id === "pb-gen-copy");
   ok("menu: fill a password only on fields, copy one only on pages", gen.contexts.join() === "editable" && genCopy.contexts.join() === "page");
+  const genAlnum = one.find((i) => i.id === "pb-gen-alnum"), genCopyAlnum = one.find((i) => i.id === "pb-gen-copy-alnum");
+  ok("menu: no-special-characters fill on fields, copy on pages", genAlnum?.contexts.join() === "editable" && genCopyAlnum?.contexts.join() === "page");
+  ok("menu: Copy generated password only when one is held", !one.some((i) => i.id === "pb-gen-last") && menuItems({ ready: true, logins: [], hasCode: false, hasGenerated: true }).some((i) => i.id === "pb-gen-last"));
   ok("menu: ids are unique", new Set(two.map((i) => i.id)).size === two.length);
   ok("menu: loginAction reads the id", JSON.stringify(loginAction("pb-pass-2")) === '{"action":"pass","index":2}' && loginAction("pb-acct-1") === null && loginAction("pb-otp") === null);
 }

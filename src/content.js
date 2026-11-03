@@ -499,7 +499,7 @@ onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
     case "generatePassword": {
       const clicked = contextField && contextField.isConnected && isPasswordField(contextField) ? contextField : null;
       const field = clicked || anchorPwField(document) || document.querySelector('input[type="password"]');
-      if (field instanceof HTMLInputElement) fillGeneratedPassword(field, generateApplePassword());
+      if (field instanceof HTMLInputElement) fillGeneratedPassword(field, msg.alnum ? generateAlphanumericPassword() : generateApplePassword());
       return false;
     }
   }
@@ -1173,24 +1173,48 @@ function liveField(field) {
   return anchorPwField(document) || field;
 }
 
-async function fillGeneratedPassword(field, pw) {
-  field = liveField(field);
-  const targets = new Set([field]);
+function newPasswordTargets(field) {
+  const out = [];
   for (const p of Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[type="password"]'))).filter(isFillable)) {
-    if (p === field || p.value) continue;
+    if (p === field) continue;
     if (p.form && field.form && p.form !== field.form) continue;
     // a change-password form's current password is not a new password
     if ((p.getAttribute("autocomplete") || "").toLowerCase().includes("current-password")) continue;
-    targets.add(p);
+    out.push(p);
   }
+  return out;
+}
+
+async function fillGeneratedPassword(field, pw) {
+  field = liveField(field);
+  const targets = new Set([field]);
+  for (const p of newPasswordTargets(field)) if (!p.value) targets.add(p);
   for (const t of targets) {
     setValue(t, pw);
     everPassword.add(t);
+  }
+  // a page that re-renders or clears the confirm box when the first changes (no <form>, e.g. Workday)
+  // loses its value: look again and refill what was dropped
+  for (const ms of [50, 400]) {
+    setTimeout(() => {
+      const f = liveField(field);
+      if (!f || !f.isConnected) return;
+      targets.add(f);
+      for (const p of newPasswordTargets(f)) if (!p.value) targets.add(p);
+      for (const t of targets) {
+        const el = liveField(t);
+        if (!el || !el.isConnected || el.value === pw) continue;
+        // a value the user typed meanwhile stays; only an emptied or replaced-by-page value is refilled
+        setValue(el, pw);
+        everPassword.add(el);
+      }
+    }, ms);
   }
   // set before the hash resolves: a submit right after the fill used to miss it
   const passwordHash = sha256Hex(pw).catch(() => "");
   lastGenerated = { host: location.hostname, passwordHash, at: Date.now() };
   await passwordHash;
+  chrome.runtime.sendMessage({ type: "generatedFilled", password: pw }).catch(gone);
 }
 
 // More than six saved logins scrolls inside the menu. Search is a case-insensitive
