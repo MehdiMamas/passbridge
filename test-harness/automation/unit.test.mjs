@@ -23,7 +23,7 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdat
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
-import { OPTION_TABS, helperView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { OPTION_TABS, helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -1176,6 +1176,9 @@ ok("a zip code field on a verification form is not a one-time code", !isBareCode
 ok("a big page around a bare code field is not used as context", !isBareCodeOtp(["code"], backblazeForm + " x".repeat(400)));
 
 {
+  ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
+  ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
+  ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));
   ok("options: tabs in order", OPTION_TABS.map((t) => t.id).join() === "autofill,appearance,browser,agents,updates");
   ok("options: hash opens its tab", tabFromHash("#updates") === "updates");
   ok("options: odd hashes open autofill", ["", "#", "#AGENTS", "#agents?x", "#%E2"].every((h) => tabFromHash(h) === "autofill"));
