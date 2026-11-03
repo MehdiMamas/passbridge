@@ -22,7 +22,7 @@ await main(async () => {
   const u1 = await page.inputValue('input[name="username"]');
   ok("http default: fill refused", u1 === "", `username="${u1}"`);
   const t2 = await menuText(page);
-  ok("http default: refusal names HTTPS", /non-HTTPS/.test(t2), `got "${t2}"`);
+  ok("http default: refusal names HTTPS", /secure \(HTTPS\)/.test(t2), `got "${t2}"`);
 
   await sw.evaluate(() => chrome.storage.sync.set({ canFillOnHttp: true }));
   await page.reload({ waitUntil: "domcontentloaded" });
