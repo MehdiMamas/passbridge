@@ -493,8 +493,7 @@ export class ApplePasswords {
   }
 
   // ACT maybeAdd lets the helper decide add-vs-update and drive the native save prompt
-  // asNew uses ADD_NEW so an existing login for the same site and username is kept, not updated
-  async saveLogin(tabId, url, username, password, { asNew = false } = {}) {
+  async saveLogin(tabId, url, username, password) {
     if (!this.ready) throw new Error("not unlocked");
     if (!password) throw new Error("no password to save");
     const { hostname } = new URL(url);
@@ -502,7 +501,7 @@ export class ApplePasswords {
       const session = this._liveSession();
       const sdata = session.serialize(
         await session.encrypt({
-          ACT: asNew ? Action.ADD_NEW : Action.MAYBE_ADD,
+          ACT: Action.MAYBE_ADD,
           URL: "",
           USR: "",
           PWD: "",

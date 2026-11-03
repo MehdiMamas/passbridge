@@ -1272,6 +1272,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             password: offer.password,
             site: draftHost,
             agentOffer: agentOfferFor(await getSettings(), draftHost, offer.generated),
+            canNewSheet: client.canOpenPasswordsAppToNewPasswordSheet === true,
           });
           break;
         }
@@ -1298,7 +1299,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!ok) return sendResponse({ ok: false, error: t("errSiteInvalid") });
             url = full;
           }
-          await client.saveLogin(offer.tabId, url, username, password, { asNew: msg.asNew === true });
+          if (msg.asNew === true && client.canOpenPasswordsAppToNewPasswordSheet) {
+            // Passwords' own new-login sheet is the reliable way to force a separate entry
+            client.launchPasswordsApp({ newPasswordUrl: url });
+          } else {
+            await client.saveLogin(offer.tabId, url, username, password);
+          }
           // only our own bar may ask, and only while the offer still holds in the current settings
           if (msg.allowAgent === true && (sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
             try {
@@ -1550,7 +1556,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           let before = 0;
           try { before = countLogins(await lookup(), username); } catch {}
           try {
-            await client.saveLogin(tab.id, full, username, msg.password, { asNew: true });
+            await client.saveLogin(tab.id, full, username, msg.password);
           } catch (e) {
             return sendResponse({ ok: false, error: String(e?.message || e) });
           }
