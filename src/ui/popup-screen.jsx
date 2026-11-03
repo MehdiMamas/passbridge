@@ -350,7 +350,7 @@ export function PopupScreen({
                     className="self-start text-xs font-semibold text-accent"
                     onClick={() => { setNewSite(site || ""); setNewUser(""); setNewPass(""); setLoginMsg(""); setLoginOpen(true); }}
                   >
-                    Add login…
+                    {t("addLogin")}
                   </button>
                 ) : (
                   <form
@@ -362,20 +362,20 @@ export function PopupScreen({
                       const res = await onAddLogin({ site: newSite.trim(), username: newUser.trim(), password: newPass });
                       setLoginBusy(false);
                       if (res?.ok) { setLoginOpen(false); setNewPass(""); }
-                      else setLoginMsg(res?.error || "Couldn't save the login.");
+                      else setLoginMsg(res?.error || t("errSaveLogin"));
                     }}
                   >
-                    <input value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder="Website" aria-label="Website" data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                    <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder="Username or email" aria-label="Username" data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                    <input value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder={t("website")} aria-label={t("website")} data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                    <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
                     <span className="flex gap-1.5">
-                      <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="Password" aria-label="Password" data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                      <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? "Hide" : "Show"}</button>
+                      <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                      <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? t("hide") : t("show")}</button>
                     </span>
                     {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}
                     <span className="flex justify-end gap-2">
-                      <button type="button" className="text-xs opacity-80" onClick={() => setLoginOpen(false)}>Cancel</button>
+                      <button type="button" className="text-xs opacity-80" onClick={() => setLoginOpen(false)}>{t("cancel")}</button>
                       <button type="submit" data-action="add-login" disabled={loginBusy || !newSite.trim() || !newPass} className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
-                        {loginBusy ? "Saving…" : "Save login"}
+                        {loginBusy ? t("savingLogin") : t("saveLoginBtn")}
                       </button>
                     </span>
                   </form>

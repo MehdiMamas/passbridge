@@ -197,7 +197,7 @@ function PopupApp() {
       }}
       onAddLogin={async (login) => {
         const res = await send({ type: "popupAddLogin", ...login });
-        if (res?.ok) showNote("Login sent to iCloud Passwords", "ok");
+        if (res?.ok) showNote(t("loginSent"), "ok");
         return res;
       }}
       onTotpScan={() => send({ type: "totpScanTab" })}

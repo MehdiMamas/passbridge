@@ -1485,12 +1485,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const full = /^[a-z][a-z0-9+.-]*:\/\//i.test(site) ? site : `https://${site}`;
           let ok = false;
           try { ok = !!site && !!new URL(full).hostname && (await isFillUrlAllowed(full)); } catch {}
-          if (!ok) return sendResponse({ ok: false, error: "That website address isn't valid." });
-          if (typeof msg.password !== "string" || !msg.password) return sendResponse({ ok: false, error: "Type a password." });
+          if (!ok) return sendResponse({ ok: false, error: t("errSiteInvalid") });
+          if (typeof msg.password !== "string" || !msg.password) return sendResponse({ ok: false, error: t("errTypePassword") });
           const tab = await activeTab();
-          if (tab?.id == null) return sendResponse({ ok: false, error: "Open the site first." });
+          if (tab?.id == null) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           await ensureConnected();
-          if (!client.ready) return sendResponse({ ok: false, error: "Unlock PassBridge first." });
+          if (!client.ready) return sendResponse({ ok: false, error: t("errUnlockFirst") });
           try {
             await client.saveLogin(tab.id, full, typeof msg.username === "string" ? msg.username.trim() : "", msg.password, { asNew: true });
           } catch (e) {

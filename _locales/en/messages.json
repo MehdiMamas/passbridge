@@ -352,5 +352,14 @@
   "screenshotReadFailed": { "message": "Couldn't read the screenshot." },
   "website": { "message": "Website" },
   "saveAsNewLogin": { "message": "Save as new login" },
-  "errSiteInvalid": { "message": "That website address isn't valid." }
+  "errSiteInvalid": { "message": "That website address isn't valid." },
+  "addLogin": { "message": "Add login…" },
+  "usernameOrEmail": { "message": "Username or email" },
+  "saveLoginBtn": { "message": "Save login" },
+  "savingLogin": { "message": "Saving…" },
+  "errSaveLogin": { "message": "Couldn't save the login." },
+  "loginSent": { "message": "Login sent to iCloud Passwords" },
+  "errTypePassword": { "message": "Type a password." },
+  "errOpenSiteFirst": { "message": "Open the site first." },
+  "errUnlockFirst": { "message": "Unlock PassBridge first." }
 }
