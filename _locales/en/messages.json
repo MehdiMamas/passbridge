@@ -82,7 +82,6 @@
   "couldntFillForm": { "message": "Couldn't find a login form on this page." },
   "couldntReadCode": { "message": "Couldn't read the code" },
   "couldntReadCodeDetail": { "message": "Couldn't read the code: $1", "placeholders": { "error": { "content": "$1", "example": "timed out" } } },
-  "nothingToCopy": { "message": "nothing to copy" },
   "copied": { "message": "Copied" },
   "refilled": { "message": "Re-filled $1 with the latest password", "placeholders": { "username": { "content": "$1", "example": "ada@example.com" } } },
   "nothingToRefill": { "message": "Nothing to re-fill" },
