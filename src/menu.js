@@ -7,11 +7,11 @@ const ON_PAGE = ["editable", "page"];
 void resolveLocale();
 
 /**
- * @param {{ ready: boolean, onSite?: boolean, logins: { username?: string }[], hasCode: boolean }} state
+ * @param {{ ready: boolean, onSite?: boolean, logins: { username?: string }[], hasCode: boolean, hasGenerated?: boolean }} state
  * ready: the vault is unlocked; onSite: the tab is a web page that can have logins
  * @returns {chrome.contextMenus.CreateProperties[]}
  */
-export function menuItems({ ready, onSite = true, logins, hasCode }) {
+export function menuItems({ ready, onSite = true, logins, hasCode, hasGenerated = false }) {
   const items = [{ id: "pb-root", title: t("menuRoot"), contexts: ["editable", "page", "image"] }];
   const add = (props) => items.push({ parentId: "pb-root", contexts: ON_PAGE, ...props });
   if (!ready) {
@@ -37,7 +37,10 @@ export function menuItems({ ready, onSite = true, logins, hasCode }) {
   if (ready && hasCode) add({ id: "pb-otp", title: t("menuCopyCode") });
   add({ id: "pb-sep-1", type: "separator" });
   add({ id: "pb-gen", title: t("menuFillStrong"), contexts: ["editable"] });
+  add({ id: "pb-gen-alnum", title: t("menuFillAlnum"), contexts: ["editable"] });
   add({ id: "pb-gen-copy", title: t("menuCopyStrong"), contexts: ["page"] });
+  add({ id: "pb-gen-copy-alnum", title: t("menuCopyAlnum"), contexts: ["page"] });
+  if (hasGenerated) add({ id: "pb-gen-last", title: t("menuCopyGenerated") });
   add({ id: "pb-qr-image", title: t("menuScanImage"), contexts: ["image"] });
   add({ id: "pb-sep-2", type: "separator", contexts: ["page"] });
   add({ id: "pb-report", title: t("menuReport"), contexts: ["page"] });

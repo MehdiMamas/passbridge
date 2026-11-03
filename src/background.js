@@ -5,7 +5,7 @@ import { State, setDeviceLabel } from "./apple/protocol.js";
 import { createClient } from "./session/create-client.js";
 import { labelForOs, uiDeviceLabel } from "./apple/os-label.js";
 import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
-import { generateApplePassword } from "./password-generate.js";
+import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
@@ -486,9 +486,21 @@ const CONTENT_ALLOWED = new Set([
   "confirmTotp",
   "copyTotpKey",
   "dismissTotp",
+  "generatedFilled",
 ]);
 
 const saveOffers = new Map();
+// the password last generated and filled in each tab: memory only, dropped after 10 minutes or when the tab closes
+const GENERATED_HOLD_MS = 600_000;
+/** @type {Map<number, { password: string, at: number, timer: any }>} */
+const generatedByTab = new Map();
+function dropGenerated(tabId) {
+  const held = generatedByTab.get(tabId);
+  if (!held) return;
+  clearTimeout(held.timer);
+  generatedByTab.delete(tabId);
+  refreshActiveTab();
+}
 const totpOffers = new Map();
 const cycleByTab = new Map();
 
@@ -847,7 +859,7 @@ async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve(void chrome.runtime.lastError)));
   if (!settings.enableContextMenu) return;
   await resolveLocale();
-  for (const props of menuItems({ ready: client.ready, onSite: !!url, logins, hasCode })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
+  for (const props of menuItems({ ready: client.ready, onSite: !!url, logins, hasCode, hasGenerated: tab?.id != null && generatedByTab.has(tab.id) })) chrome.contextMenus.create(props, () => void chrome.runtime.lastError);
   menuFor = { tabId: tab?.id ?? null, host: (url && hostnameOf(url)) || "", logins };
 }
 
@@ -915,12 +927,21 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
       await reportPage(tab);
       return;
     }
-    if (info.menuItemId === "pb-gen") {
-      chrome.tabs.sendMessage(tab.id, { type: "generatePassword" }, { frameId: info.frameId ?? 0 }).catch(() => {});
+    if (info.menuItemId === "pb-gen" || info.menuItemId === "pb-gen-alnum") {
+      chrome.tabs.sendMessage(tab.id, { type: "generatePassword", alnum: info.menuItemId === "pb-gen-alnum" }, { frameId: info.frameId ?? 0 }).catch(() => {});
       return;
     }
     if (info.menuItemId === "pb-gen-copy") {
       await copyText(generateApplePassword());
+      return;
+    }
+    if (info.menuItemId === "pb-gen-copy-alnum") {
+      await copyText(generateAlphanumericPassword());
+      return;
+    }
+    if (info.menuItemId === "pb-gen-last") {
+      const held = generatedByTab.get(tab.id);
+      if (held) await copyText(held.password);
       return;
     }
     if (info.menuItemId === "pb-qr-image") {
@@ -1004,6 +1025,8 @@ try {
 } catch {}
 
 chrome.tabs?.onRemoved.addListener((tabId) => {
+  clearTimeout(generatedByTab.get(tabId)?.timer);
+  generatedByTab.delete(tabId);
   totpOffers.delete(tabId);
   saveOffers.delete(tabId);
   cycleByTab.delete(tabId);
@@ -1032,6 +1055,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       switch (msg?.type) {
+        case "generatedFilled": {
+          const tabId = sender.tab?.id;
+          if (tabId == null || typeof msg.password !== "string" || !msg.password || msg.password.length > 256) return sendResponse({ ok: false });
+          clearTimeout(generatedByTab.get(tabId)?.timer);
+          generatedByTab.set(tabId, { password: msg.password, at: Date.now(), timer: setTimeout(() => dropGenerated(tabId), GENERATED_HOLD_MS) });
+          refreshActiveTab();
+          return sendResponse({ ok: true });
+        }
         case "inlineLogins": {
           // keyed to sender.url not the top tab
           const frameUrl = sender.url;
