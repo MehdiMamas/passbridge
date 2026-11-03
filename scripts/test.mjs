@@ -26,6 +26,9 @@ function run(label, cmd, args) {
   if (r.status !== 0) failed.push(`${label} (exit ${r.status ?? r.error?.code})`);
 }
 
+// static locale check first: fails fast on a missing key or placeholder mismatch
+run("check-locales.mjs", process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "check-locales.mjs")]);
+
 for (const file of SUITES) run(file, process.execPath, [join(AUTO, file)]);
 
 const python = findPython();
@@ -33,9 +36,10 @@ if (python) {
   for (const file of PY_SUITES) run(file, python[0], [...python.slice(1), "-I", join(AUTO, file)]);
 } else console.log("\nSKIP the Python suites (no Python 3 on PATH; set PB_PYTHON to point at one)");
 
-console.log("\n" + "=".repeat(50));
+console.log(`\n${"=".repeat(50)}`);
 if (failed.length) {
   console.log("FAILED: " + failed.join(", "));
   process.exit(1);
 }
-console.log(`${SUITES.length + (python ? PY_SUITES.length : 0)} suites passed${python ? "" : " (Python checks skipped)"}`);
+const n = 1 + SUITES.length + (python ? PY_SUITES.length : 0);
+console.log(`${n} checks/suites passed${python ? "" : " (Python checks skipped)"}`);
