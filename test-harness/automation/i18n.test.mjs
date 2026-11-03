@@ -74,5 +74,11 @@ ok("menu: fill title carries the username", items.find((i) => i.id === "pb-fill-
 const none = menuItems({ ready: true, onSite: true, logins: [], hasCode: false });
 ok("menu: empty site shows the greyed note", none.find((i) => i.id === "pb-none").title === "No saved logins for this site" && none.find((i) => i.id === "pb-none").enabled === false);
 
+// icon-click empty row key exists in every locale
+for (const locale of SUPPORTED_LOCALES) {
+  const cat = JSON.parse(readFileSync(new URL(`../../_locales/${locale}/messages.json`, import.meta.url), "utf8"));
+  ok(`catalog ${locale}: inlineNoLogins present`, typeof cat.inlineNoLogins?.message === "string" && cat.inlineNoLogins.message.length > 0);
+}
+
 console.log("" + (failed ? `i18n: ${failed} FAIL` : "i18n ok"));
 process.exit(failed ? 1 : 0);

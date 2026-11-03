@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Icon click</title>
+</head>
+<body>
+  <!-- ?mode=replace swaps the input for a new one when it takes focus (a re-rendering app) -->
+  <form id="f" onsubmit="return false">
+    <label>Email <input id="em" type="email" name="email" autocomplete="email"></label>
+    <label>Password <input id="pw" type="password" name="password" autocomplete="current-password"></label>
+    <button type="submit">Sign in</button>
+  </form>
+  <script>
+    if (new URLSearchParams(location.search).get("mode") === "replace") {
+      const old = document.getElementById("em");
+      old.addEventListener("focus", () => {
+        setTimeout(() => {
+          const fresh = old.cloneNode();
+          old.replaceWith(fresh);
+        }, 150);
+      }, { once: true });
+    }
+  </script>
+</body>
+</html>

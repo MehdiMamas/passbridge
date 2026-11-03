@@ -986,8 +986,15 @@ function placeFieldIcon(field) {
     if (!e.isTrusted) return;
     e.preventDefault();
     e.stopPropagation();
-    if (isOtpField(field)) buildOneTimeCodeSuggestion(field);
-    else buildOfferSuggestion(field);
+    // mousedown keeps focus where it was, and a re-rendering page may have replaced the field
+    let target = field;
+    if (!target.isConnected) {
+      target = liveField(target);
+      removeIcon();
+    }
+    if (target.isConnected && target !== deepActiveElement()) target.focus({ preventScroll: true });
+    if (isOtpField(target)) buildOneTimeCodeSuggestion(target);
+    else buildOfferSuggestion(target, { fromIcon: true });
   });
   shadow.appendChild(btn);
   Object.assign(host.style, {
@@ -1474,7 +1481,7 @@ function deepActiveElement() {
 let offerSeq = 0;
 
 // fetch before building so an empty result never flashes a box on then off
-async function buildOfferSuggestion(field) {
+async function buildOfferSuggestion(field, { fromIcon = false } = {}) {
   await resolveLocale();
   const hasGenerator = isNewPasswordField(field);
   const seq = ++offerSeq;
@@ -1485,11 +1492,20 @@ async function buildOfferSuggestion(field) {
   } catch {
     res = null;
   }
-  if (seq !== offerSeq || field !== deepActiveElement()) return;
+  if (seq !== offerSeq || (!fromIcon && field !== deepActiveElement())) return;
 
   const locked = !!(res?.ok && res.locked);
   const logins = res?.ok && !locked ? res.logins || [] : [];
-  if (!locked && !logins.length && !hasGenerator) return;
+  if (!locked && !logins.length && !hasGenerator) {
+    if (!fromIcon) return;
+    const box = buildSuggestionBox(field);
+    const row = document.createElement("div");
+    row.textContent = t("inlineNoLogins");
+    Object.assign(row.style, { padding: "8px 10px", opacity: "0.65" });
+    box.appendChild(row);
+    positionBox();
+    return;
+  }
   // the background accepts the PIN only from the top frame, so a sub-frame can't offer to unlock
   if (locked && window !== window.top) {
     if (!hasGenerator) return;

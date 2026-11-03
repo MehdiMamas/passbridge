@@ -110,6 +110,7 @@
   "inlineOnFocus": { "message": "Show on field focus" },
   "inlineOnClick": { "message": "Show when the icon is clicked" },
   "inlineOff": { "message": "Off" },
+  "inlineNoLogins": { "message": "No saved logins for this site" },
   "blockedSites": { "message": "Sites without the inline menu" },
   "blockedHelp": { "message": "One site per line. Subdomains are included." },
   "autofillLoad": { "message": "Autofill on page load" },

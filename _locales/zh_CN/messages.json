@@ -111,6 +111,7 @@
   "inlineOnFocus": { "message": "字段聚焦时显示" },
   "inlineOnClick": { "message": "点击图标时显示" },
   "inlineOff": { "message": "关闭" },
+  "inlineNoLogins": { "message": "此网站没有已保存的登录信息" },
   "blockedSites": { "message": "不显示内联菜单的网站" },
   "blockedHelp": { "message": "每行一个网站。包含子域名。" },
   "autofillLoad": { "message": "页面加载时自动填充" },
