@@ -4,13 +4,11 @@ const ICON = "[data-passbridge-icon]";
 
 // focus the field so its icon appears, then drop focus without the focusout that removes the icon
 async function unfocusKeepingIcon(page, sel) {
+  await page.goto(`${BASE}/icon-click.html?mode=sticky`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(300);
   await page.focus(sel);
   await page.waitForTimeout(500);
-  await page.evaluate((s) => {
-    const el = document.querySelector(s);
-    el.disabled = true;
-    el.disabled = false;
-  }, sel);
+  await page.evaluate(() => document.activeElement.blur());
   await page.waitForTimeout(100);
 }
 
@@ -24,8 +22,6 @@ await main(async () => {
   // no logins, unfocused email field: the click says so
   const emptyCtx = await launchExtension(build("empty"));
   let page = await emptyCtx.newPage();
-  await page.goto(`${BASE}/icon-click.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(300);
   await unfocusKeepingIcon(page, "#em");
   ok("icon is up with the field unfocused", (await page.locator(ICON).count()) > 0, "no icon");
   ok("field is not focused before the click", (await page.evaluate(() => document.activeElement?.id)) !== "em");
@@ -36,8 +32,6 @@ await main(async () => {
   // logins, unfocused password field: the click opens the list
   const ctx = await launchExtension(build("unlocked"));
   page = await ctx.newPage();
-  await page.goto(`${BASE}/icon-click.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(300);
   await unfocusKeepingIcon(page, "#pw");
   await clickIcon(page);
   const list = await menuText(page);

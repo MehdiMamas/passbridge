@@ -12,6 +12,10 @@
     <button type="submit">Sign in</button>
   </form>
   <script>
+    // ?mode=sticky hides focusout from other scripts, so the icon outlives a blur like a field the app moved focus from
+    if (new URLSearchParams(location.search).get("mode") === "sticky") {
+      document.addEventListener("focusout", (e) => e.stopImmediatePropagation(), true);
+    }
     if (new URLSearchParams(location.search).get("mode") === "replace") {
       const old = document.getElementById("em");
       old.addEventListener("focus", () => {
