@@ -46,13 +46,23 @@ if (!process.env.OP_BASE) {
   process.env.OP_BASE = server.url;
 }
 
+const DRIVER_LIMIT_MS = 300000;
+
 function run(file) {
   return new Promise((resolve) => {
     const p = spawn(process.execPath, [join(HERE, file)], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
+    // a driver that hangs is stopped and reported with what it printed, not left to the job timeout
+    const timer = setTimeout(() => {
+      out += `\nFAIL driver stopped after ${DRIVER_LIMIT_MS / 1000} s\n`;
+      p.kill("SIGKILL");
+    }, DRIVER_LIMIT_MS);
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (out += d));
-    p.on("close", (code) => resolve({ code, out }));
+    p.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code, out });
+    });
   });
 }
 

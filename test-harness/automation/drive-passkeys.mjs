@@ -40,14 +40,24 @@ window.wrongOrigin=async function(){
 };
 </script>`;
 
+// every browser call is bounded and named, so a stuck step fails with its name instead of hanging the job
+const within = (label, promise, ms = 20000) => {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`passkeys: stuck at "${label}" after ${ms} ms`)), ms);
+  });
+  console.log(`step: ${label}`);
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+};
+
 await main(async () => {
   const web = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(PAGE));
   await new Promise((r) => web.listen(0, "127.0.0.1", r));
   const port = web.address().port;
   try {
-    const ctx = await launchExtension(build("passkeys"));
+    const ctx = await within("launch", launchExtension(build("passkeys")), 60000);
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
-    if (!(await sw.evaluate(() => typeof chrome.webAuthenticationProxy?.attach === "function"))) {
+    if (!(await within("api check", sw.evaluate(() => typeof chrome.webAuthenticationProxy?.attach === "function")))) {
       ok("passkeys: SKIPPED, this browser has no chrome.webAuthenticationProxy API", true);
       return;
     }
@@ -57,31 +67,32 @@ await main(async () => {
     const key = b64u(new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey)));
     const seed = makeRecord({ rpId: "localhost", credentialId: b64u(crypto.getRandomValues(new Uint8Array(16))), userHandle: "AQID", userName: "seed", key });
 
-    const options = await ctx.newPage();
-    await options.goto(new URL("options.html", sw.url()).href);
-    await sw.evaluate(() => chrome.storage.local.set({ passkeyStore: true }));
-    const saved = await options.evaluate((record) => chrome.runtime.sendMessage({ type: "passkeySave", record }), seed);
+    const options = await within("open options page", ctx.newPage());
+    await within("load options page", options.goto(new URL("options.html", sw.url()).href));
+    await within("turn the setting on", sw.evaluate(() => chrome.storage.local.set({ passkeyStore: true })));
+    const saved = await within("store a passkey", options.evaluate((record) => chrome.runtime.sendMessage({ type: "passkeySave", record }), seed), 40000);
     ok("passkeys: the options page can store a passkey in the vault", saved?.ok && saved.result === "saved", JSON.stringify(saved));
 
     // a site with nothing stored: the proxy must stay detached, so the request is not answered by PassBridge
-    const other = await ctx.newPage();
-    await other.goto(`http://openpw.test:${port}/`);
+    const other = await within("open site without a passkey", ctx.newPage());
+    await within("load site without a passkey", other.goto(`http://openpw.test:${port}/`));
     await other.bringToFront();
     await other.waitForTimeout(1500);
-    const idle = await other.evaluate(() => window.run("openpw.test"));
+    const idle = await within("request on site without a passkey", other.evaluate(() => window.run("openpw.test")), 40000);
     ok("passkeys: no stored passkey for the site, PassBridge does not answer", idle.create !== "ok", JSON.stringify(idle));
-    await other.close();
+    await within("close that tab", other.close());
 
-    const page = await ctx.newPage();
-    await page.goto(`http://localhost:${port}/`);
+    const page = await within("open site with a passkey", ctx.newPage());
+    await within("load site with a passkey", page.goto(`http://localhost:${port}/`));
     await page.bringToFront();
     await page.waitForTimeout(2000);
-    const r = await page.evaluate(() => window.run("localhost"));
+    const r = await within("create and two gets", page.evaluate(() => window.run("localhost")), 60000);
     ok("passkeys: create is answered with the page's origin in clientDataJSON", r.create === "ok" && r.createOrigin === true, JSON.stringify(r));
     ok("passkeys: two gets return signatures that verify with the public key from create", r.gets?.length === 2 && r.gets.every(Boolean), JSON.stringify(r));
-    const wrong = await page.evaluate(() => window.wrongOrigin());
+    const wrong = await within("other site rp id", page.evaluate(() => window.wrongOrigin()), 20000);
     ok("passkeys: a request for another site's rp id is refused", /SecurityError|NotAllowedError/.test(wrong), wrong);
   } finally {
+    web.closeAllConnections?.();
     await new Promise((r) => web.close(r));
   }
 });
