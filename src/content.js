@@ -1203,8 +1203,8 @@ async function fillGeneratedPassword(field, pw) {
       for (const p of newPasswordTargets(f)) if (!p.value) targets.add(p);
       for (const t of targets) {
         const el = liveField(t);
-        if (!el || !el.isConnected || el.value === pw) continue;
-        // a value the user typed meanwhile stays; only an emptied or replaced-by-page value is refilled
+        if (!el || !el.isConnected || el.value) continue;
+        // a value already there (ours or one the user typed meanwhile) stays; only an emptied box is refilled
         setValue(el, pw);
         everPassword.add(el);
       }
