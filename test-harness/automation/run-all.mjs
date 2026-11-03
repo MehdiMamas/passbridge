@@ -30,6 +30,7 @@ const DRIVERS = [
   ["Login list (search, scroll cap, keyboard)", "drive-login-list.mjs"],
   ["UI preview (popup screens and the update page)", "drive-ui-preview.mjs"],
   ["Options page (tabs, help lines, helper notices, saving)", "drive-options.mjs"],
+  ["Passkeys (create, two signed gets, wrong origin, detached elsewhere)", "drive-passkeys.mjs"],
   ["Folder update on Chrome's file system (OPFS)", "drive-update-fs.mjs"],
   ["Unit (matching, otpauth, protocol, SRP, update)", "unit.test.mjs"],
 ];

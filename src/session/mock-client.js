@@ -6,6 +6,7 @@ const FIXTURES = {
     { username: "alice@example.com", sites: [] },
     { username: "bob@work.com", sites: [] },
   ],
+  passkeys: [{ username: "test@example.com", sites: [] }],
   locked: [],
   empty: [],
   nohelper: [],
