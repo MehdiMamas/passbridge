@@ -349,6 +349,7 @@
   "screenshotReadFailed": { "message": "无法读取屏幕截图。" },
   "website": { "message": "网站" },
   "saveAsNewLogin": { "message": "另存为新登录信息" },
+  "letAgentsSignIn": { "message": "允许智能体在 $1 登录", "placeholders": { "host": { "content": "$1", "example": "amazon.jobs" } } },
   "errSiteInvalid": { "message": "该网站地址无效。" },
   "addLogin": { "message": "添加登录信息…" },
   "usernameOrEmail": { "message": "用户名或电子邮件" },

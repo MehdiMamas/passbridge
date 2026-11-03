@@ -10,6 +10,7 @@ import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
+import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
@@ -191,6 +192,7 @@ async function flushPendingSaves() {
         password: s.password,
         host: s.host,
         update: isUpdate,
+        generated: s.generated,
       });
     } catch {}
   }
@@ -493,7 +495,7 @@ const totpOffers = new Map();
 const cycleByTab = new Map();
 
 // the bar must answer; a closed port used to look like "no bar" and saved immediately
-async function presentSaveOffer({ tabId, frameUrl, target, password, host, update }) {
+async function presentSaveOffer({ tabId, frameUrl, target, password, host, update, generated }) {
   saveOffers.set(tabId, {
     tabId,
     frameUrl,
@@ -501,6 +503,7 @@ async function presentSaveOffer({ tabId, frameUrl, target, password, host, updat
     password,
     host,
     update,
+    generated: !!generated,
     at: Date.now(),
   });
   let offered = false;
@@ -1218,6 +1221,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             password: msg.password,
             host,
             update: isUpdate,
+            generated,
           }));
           break;
         }
@@ -1229,7 +1233,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!secretFresh(offer) || !(sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
             return sendResponse({ ok: false, error: "nothing to edit" });
           }
-          sendResponse({ ok: true, username: offer.target || "", password: offer.password, site: offer.host || hostnameOf(offer.frameUrl) || "" });
+          const draftHost = offer.host || hostnameOf(offer.frameUrl) || "";
+          sendResponse({
+            ok: true,
+            username: offer.target || "",
+            password: offer.password,
+            site: draftHost,
+            agentOffer: agentOfferFor(await getSettings(), draftHost, offer.generated),
+          });
           break;
         }
 
@@ -1256,6 +1267,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             url = full;
           }
           await client.saveLogin(offer.tabId, url, username, password, { asNew: msg.asNew === true });
+          // only our own bar may ask, and only while the offer still holds in the current settings
+          if (msg.allowAgent === true && (sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
+            try {
+              const settings = await getSettings();
+              const agentHost = agentHostFor(hostnameOf(url) || offer.host);
+              if (agentOfferFor(settings, agentHost, false).show) {
+                const { agentAllowlist } = await settingsStore().get({ agentAllowlist: settings.agentAllowlist });
+                await settingsStore().set({ agentAllowlist: addToAllowlist(agentAllowlist, agentHost) });
+              }
+            } catch {}
+          }
           sendResponse({ ok: true, saved: true });
           break;
         }

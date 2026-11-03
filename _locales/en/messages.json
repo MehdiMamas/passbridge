@@ -351,6 +351,7 @@
   "screenshotReadFailed": { "message": "Couldn't read the screenshot." },
   "website": { "message": "Website" },
   "saveAsNewLogin": { "message": "Save as new login" },
+  "letAgentsSignIn": { "message": "Let agents sign in on $1", "placeholders": { "host": { "content": "$1", "example": "amazon.jobs" } } },
   "errSiteInvalid": { "message": "That website address isn't valid." },
   "addLogin": { "message": "Add login…" },
   "usernameOrEmail": { "message": "Username or email" },

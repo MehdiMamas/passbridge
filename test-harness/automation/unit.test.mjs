@@ -5,6 +5,7 @@ import { parseSetupInput, totpHandoff, withAccount } from "../../src/totp-setup.
 import { loginAction, menuItems } from "../../src/menu.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
+import { addToAllowlist, agentHostFor, agentOfferFor } from "../../src/session/agent-allow.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
@@ -1168,5 +1169,16 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("theme: system or an unknown value follows the computer", ["system", undefined, null, "", "blue"].every((t) => colorSchemeFor(t) === "light dark"));
   ok("options: reading the policy shows only an error", policyMessage({ ok: true, hidden: true }, false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
 }
+  {
+    const on = { agentSignIn: true, agentAllowAll: false, agentAllowlist: ["github.com"] };
+    const list = addToAllowlist(["github.com"], "Amazon.jobs");
+    ok("agent allow: adds a host once, lowercase", list.join() === "github.com,amazon.jobs" && addToAllowlist(list, "amazon.jobs").join() === list.join());
+    ok("agent allow: a Workday tenant host stays whole", agentHostFor("acme.wd5.myworkdayjobs.com") === "acme.wd5.myworkdayjobs.com");
+    ok("agent allow: a normal site gives its registrable domain", agentHostFor("www.amazon.jobs") === "amazon.jobs");
+    ok("agent allow: offer hidden with agentSignIn off", !agentOfferFor({ ...on, agentSignIn: false }, "amazon.jobs", true).show);
+    ok("agent allow: offer hidden with allow every site on", !agentOfferFor({ ...on, agentAllowAll: true }, "amazon.jobs", true).show);
+    ok("agent allow: offer hidden for an allowed host", !agentOfferFor(on, "gist.github.com", true).show);
+    ok("agent allow: suggested follows generated", agentOfferFor(on, "amazon.jobs", true).suggested === true && agentOfferFor(on, "amazon.jobs", false).suggested === false && agentOfferFor(on, "amazon.jobs", true).show);
+  }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
