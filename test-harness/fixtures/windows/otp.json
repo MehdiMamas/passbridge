@@ -1,0 +1,14 @@
+{
+  "TID": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "STATUS": 0,
+  "Entries": [
+    {
+      "source": "x",
+      "domain": "example.com",
+      "username": "user@example.com",
+      "code": "000000",
+      "duration": 22,
+      "period": 30
+    }
+  ]
+}
