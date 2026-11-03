@@ -1555,6 +1555,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const lookup = () => client.getLoginNamesForURL(tab.id, full);
           let before = 0;
           try { before = countLogins(await lookup(), username); } catch {}
+          // a same-username login already matches (a sibling tenant): the Passwords new-login sheet adds it without an update prompt
+          if (username && before > 0 && client.canOpenPasswordsAppToNewPasswordSheet) {
+            client.launchPasswordsApp({ newPasswordUrl: full });
+            return sendResponse({ ok: true, sheet: true, note: t("addLoginInPasswordsApp") });
+          }
           try {
             await client.saveLogin(tab.id, full, username, msg.password);
           } catch (e) {
