@@ -5,6 +5,7 @@ import { parseSetupInput, totpHandoff, withAccount } from "../../src/totp-setup.
 import { loginAction, menuItems } from "../../src/menu.js";
 import { generateApplePassword } from "../../src/password-generate.js";
 import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
+import { addToAllowlist, agentHostFor, agentOfferFor, domainLines } from "../../src/session/agent-allow.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
@@ -1168,5 +1169,23 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("theme: system or an unknown value follows the computer", ["system", undefined, null, "", "blue"].every((t) => colorSchemeFor(t) === "light dark"));
   ok("options: reading the policy shows only an error", policyMessage({ ok: true, hidden: true }, false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
 }
-console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
+
+// agent allowlist: normaliser, host choice and the save-bar offer
+{
+  ok("domainLines strips scheme, path, port and wildcard, dedupes", JSON.stringify(domainLines("https://A.com/x, *.a.com:8080\nb.org\nb.org")) === JSON.stringify(["a.com", "a.com", "b.org"].filter((v, i, a) => a.indexOf(v) === i)));
+  ok("addToAllowlist adds once", JSON.stringify(addToAllowlist(["github.com"], "Amazon.jobs")) === JSON.stringify(["github.com", "amazon.jobs"]));
+  ok("addToAllowlist dedupes an existing host", JSON.stringify(addToAllowlist(["amazon.jobs"], "amazon.jobs")) === JSON.stringify(["amazon.jobs"]));
+  ok("agentHostFor gives the registrable domain", agentHostFor("www.amazon.jobs") === "amazon.jobs" && agentHostFor("careers.metacareers.com") === "metacareers.com");
+  ok("agentHostFor keeps a Workday tenant whole", agentHostFor("acme.wd5.myworkdayjobs.com") === "acme.wd5.myworkdayjobs.com" && agentHostFor("x.wd1.myworkdaysite.com") === "x.wd1.myworkdaysite.com");
+  const on = { agentSignIn: true, agentAllowAll: false, agentAllowlist: ["github.com"] };
+  const offer = agentOfferFor(on, "www.amazon.jobs", true);
+  ok("offer shows for a new site, host is the registrable domain", offer.show && offer.host === "amazon.jobs");
+  ok("offer is suggested for a generated password only", offer.suggested === true && agentOfferFor(on, "amazon.jobs", false).suggested === false && agentOfferFor(on, "amazon.jobs", false).show === true);
+  ok("offer hidden with agent sign-in off", agentOfferFor({ ...on, agentSignIn: false }, "amazon.jobs", true).show === false);
+  ok("offer hidden with allow every site on", agentOfferFor({ ...on, agentAllowAll: true }, "amazon.jobs", true).show === false);
+  ok("offer hidden for an already allowed host", agentOfferFor(on, "gist.github.com", true).show === false);
+  ok("offer hidden when the host is empty", agentOfferFor(on, "", true).show === false);
+}
+
+console.log(failed ? `\n${failed} failed` : "\nunit ok");

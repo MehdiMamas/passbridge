@@ -266,6 +266,7 @@
   "updErrNokey": { "message": "此建構版本尚無法驗證更新。" },
 
   "saveTitle": { "message": "儲存登入至 iCloud 密碼？" },
+  "letAgentsSignIn": { "message": "允許代理在 $1 登入", "placeholders": { "host": { "content": "$1", "example": "amazon.jobs" } } },
   "updateTitle": { "message": "在 iCloud 密碼中更新密碼？" },
   "username": { "message": "使用者名稱" },
   "password": { "message": "密碼" },

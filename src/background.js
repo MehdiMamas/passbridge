@@ -10,6 +10,7 @@ import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
+import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
@@ -493,7 +494,7 @@ const totpOffers = new Map();
 const cycleByTab = new Map();
 
 // the bar must answer; a closed port used to look like "no bar" and saved immediately
-async function presentSaveOffer({ tabId, frameUrl, target, password, host, update }) {
+async function presentSaveOffer({ tabId, frameUrl, target, password, host, update, generated = false }) {
   saveOffers.set(tabId, {
     tabId,
     frameUrl,
@@ -501,6 +502,7 @@ async function presentSaveOffer({ tabId, frameUrl, target, password, host, updat
     password,
     host,
     update,
+    generated: generated === true,
     at: Date.now(),
   });
   let offered = false;
@@ -1218,6 +1220,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             password: msg.password,
             host,
             update: isUpdate,
+            generated,
           }));
           break;
         }
@@ -1229,7 +1232,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!secretFresh(offer) || !(sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
             return sendResponse({ ok: false, error: "nothing to edit" });
           }
-          sendResponse({ ok: true, username: offer.target || "", password: offer.password, site: offer.host || hostnameOf(offer.frameUrl) || "" });
+          const draftHost = offer.host || hostnameOf(offer.frameUrl) || "";
+          sendResponse({
+            ok: true,
+            username: offer.target || "",
+            password: offer.password,
+            site: draftHost,
+            agentOffer: agentOfferFor(await getSettings(), draftHost, offer.generated),
+          });
           break;
         }
 
@@ -1247,6 +1257,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const password = typeof msg.password === "string" && msg.password ? msg.password : offer.password;
           // the bar shows the website too; a changed one is checked by the same gate as every save
           let url = offer.frameUrl;
+          let savedHost = offer.host || hostnameOf(offer.frameUrl) || "";
           const site = typeof msg.site === "string" ? msg.site.trim() : "";
           if (site && site.toLowerCase() !== String(offer.host || hostnameOf(offer.frameUrl)).toLowerCase()) {
             const full = /^[a-z][a-z0-9+.-]*:\/\//i.test(site) ? site : `https://${site}`;
@@ -1254,8 +1265,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             try { ok = !!new URL(full).hostname && (await isFillUrlAllowed(full)); } catch {}
             if (!ok) return sendResponse({ ok: false, error: t("errSiteInvalid") });
             url = full;
+            savedHost = hostnameOf(full) || savedHost;
           }
           await client.saveLogin(offer.tabId, url, username, password, { asNew: msg.asNew === true });
+          // only the bar's own frame may add a site for agents, and only if the setting still allows it
+          if (msg.allowAgent === true && (sender.url || "").startsWith(chrome.runtime.getURL("overlay/save-bar.html"))) {
+            try {
+              const settings = await getSettings();
+              if (agentOfferFor(settings, savedHost, false).show) {
+                await settingsStore().set({ agentAllowlist: addToAllowlist(settings.agentAllowlist, agentHostFor(savedHost)) });
+              }
+            } catch {}
+          }
           sendResponse({ ok: true, saved: true });
           break;
         }

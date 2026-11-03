@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
+import { SETTINGS_AREA, SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
 import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
@@ -9,6 +9,7 @@ import { applyDocumentLanguage } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
 import { followTheme } from "./page-theme.js";
+import { domainLines } from "../session/agent-allow.js";
 
 const LIST_KEYS = ["blockedDomains", "excludedDomains", "agentAllowlist"];
 const BLUR_SAVED_LIST = "agentAllowlist";
@@ -47,6 +48,15 @@ function OptionsApp() {
       if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
+    // the save bar can add a site while this tab is open; keep the box current so a later save never writes the old list back
+    const onAllow = (changes, area) => {
+      if (area === SETTINGS_AREA && changes.agentAllowlist) {
+        const list = changes.agentAllowlist.newValue || [];
+        setSettings((s) => ({ ...s, agentAllowlist: list }));
+        setLists((l) => ({ ...l, agentAllowlist: list.join("\n") }));
+      }
+    };
+    chrome.storage.onChanged.addListener(onAllow);
     try {
       chrome.storage.session.get({ agentRelay: "" }, (o) => setRelay(o.agentRelay || ""));
     } catch {}
@@ -70,6 +80,7 @@ function OptionsApp() {
     addEventListener("pagehide", onPageHide);
     return () => {
       chrome.storage.onChanged.removeListener(onLog);
+      chrome.storage.onChanged.removeListener(onAllow);
       chrome.storage.onChanged.removeListener(onRelay);
       removeEventListener("hashchange", onHash);
       removeEventListener("pagehide", onPageHide);
@@ -142,23 +153,6 @@ function OptionsApp() {
       />
     </div>
   );
-}
-
-// hostBlocked compares bare hostnames, so https://example.com/ or *.example.com would never match
-function domainLines(value) {
-  const out = [];
-  for (const line of value.split(/[\n,]+/)) {
-    const d = line
-      .trim()
-      .toLowerCase()
-      .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
-      .replace(/[/?#].*$/, "")
-      .replace(/:\d+$/, "")
-      .replace(/^\*\./, "")
-      .replace(/^\.+|\.+$/g, "");
-    if (d && !out.includes(d)) out.push(d);
-  }
-  return out;
 }
 
 function sendPolicy(action) {

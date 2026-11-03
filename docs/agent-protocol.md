@@ -13,6 +13,7 @@ macOS and Windows. The request and reply format is the same on both; only how a 
 1. Run the helper's installer: `install.sh` on macOS (1.4.0 or later), `install.ps1` on Windows (needs Python). It registers the native host `com.passbridge.agent`.
 2. Quit and reopen the browser.
 3. In PassBridge Settings, on the Agents tab, turn on Allow agent sign-in. It is off by default.
+4. Optional: when you create a new account with a generated password, the save bar offers "Let agents sign in on <site>" (ticked from the start only for a generated password). Saving with it ticked adds the site to the allowlist. It is not shown when Allow every site is on or the site is already listed.
 
 While it is off, the extension doesn't start the host, so the socket or pipe below doesn't exist.
 

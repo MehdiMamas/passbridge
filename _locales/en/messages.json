@@ -266,6 +266,7 @@
   "updErrNokey": { "message": "This build can't verify updates yet." },
 
   "saveTitle": { "message": "Save login to iCloud Passwords?" },
+  "letAgentsSignIn": { "message": "Let agents sign in on $1", "placeholders": { "host": { "content": "$1", "example": "amazon.jobs" } } },
   "updateTitle": { "message": "Update password in iCloud Passwords?" },
   "username": { "message": "Username" },
   "password": { "message": "Password" },

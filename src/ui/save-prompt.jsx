@@ -23,6 +23,8 @@ function SavePrompt() {
   const [site, setSite] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [shown, setShown] = useState(false);
+  const [agentOffer, setAgentOffer] = useState(null);
+  const [allowAgent, setAllowAgent] = useState(false);
 
   // the captured values are read from the background, not passed in the iframe URL
   useEffect(() => {
@@ -31,6 +33,10 @@ function SavePrompt() {
         setUsername(r.username || "");
         setPassword(r.password || "");
         setSite(r.site || "");
+        if (r.agentOffer?.show) {
+          setAgentOffer(r.agentOffer);
+          setAllowAgent(r.agentOffer.suggested === true);
+        }
       }
       setLoaded(true);
     }).catch(() => setLoaded(true));
@@ -38,7 +44,7 @@ function SavePrompt() {
 
   // asNew makes a separate login even when one with this username and site exists
   async function save(asNew) {
-    try { await chrome.runtime.sendMessage({ type: "confirmSave", username: username.trim(), password, site: site.trim(), asNew: asNew === true }); } catch {}
+    try { await chrome.runtime.sendMessage({ type: "confirmSave", username: username.trim(), password, site: site.trim(), asNew: asNew === true, allowAgent: agentOffer?.show === true && allowAgent }); } catch {}
     close("save");
   }
 
@@ -92,6 +98,12 @@ function SavePrompt() {
           </button>
         </span>
       </label>
+      {agentOffer && (
+        <label className="mt-2 flex items-center gap-2 text-xs">
+          <input type="checkbox" data-field="allow-agent" checked={allowAgent} onChange={(e) => setAllowAgent(e.target.checked)} />
+          {t("letAgentsSignIn", [agentOffer.host])}
+        </label>
+      )}
       <div className="mt-3 flex justify-end gap-2">
         <button type="button" className="px-2 py-1 text-[13px] opacity-80" onClick={() => close("never")}>
           {t("neverSite")}
