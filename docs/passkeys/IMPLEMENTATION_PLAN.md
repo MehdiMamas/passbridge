@@ -1,6 +1,6 @@
 # Passkeys: implementation plan
 
-Status: slice C shipped in this change. Option A is awaiting a decision.
+Status: slice C shipped. Phase 1 (Windows passkey store in iCloud Passwords, opt-in) is built. Phase 2 is later.
 
 ## Slice C (this change)
 
@@ -11,9 +11,17 @@ Status: slice C shipped in this change. Option A is awaiting a decision.
 - Tests: unit test for `passkeysView`; the options browser check lists the row and its text.
 - No change to `src/passkey-guard.js`, manifest permissions or WebAuthn behaviour.
 
-## Option A: possible future experiment
+## Phase 1: Windows passkey store (built)
 
-Opt-in only. Not started.
+PassBridge keeps passkeys as logins in the user's iCloud Passwords vault and answers WebAuthn through a scoped `chrome.webAuthenticationProxy`. Design in [ARCHITECTURE.md](ARCHITECTURE.md), tests in [TESTING.md](TESTING.md). Import is from an unencrypted Bitwarden JSON or Credential Exchange file.
+
+## Phase 2 (later)
+
+- A macOS app that receives passkeys from Apple Passwords through Credential Exchange, so no export file is needed.
+- A Windows 11 plugin credential provider, so passkeys work in every app and browser, not only Chrome.
+- A chooser when several passkeys match, and `excludeCredentials` on create.
+
+## Option A as first written: possible future experiment
 
 1. A macOS/iOS credential-provider app that receives passkeys from Apple Passwords through Credential Exchange (a user-started copy; see RESEARCH.md section 1).
 2. End-to-end encrypted sync of that store to the Windows machine.
@@ -21,4 +29,4 @@ Opt-in only. Not started.
 
 Open costs: a new private-key store to protect, a signed native app, sync and an audit, and the proxy suspends all native WebAuthn while attached ([SECURITY.md](SECURITY.md)). Mature managers already import from Apple Passwords this way ([COMPATIBILITY.md](COMPATIBILITY.md#other-password-managers)).
 
-Decision needed: build the experiment, or stay with slice C.
+Phase 1 above covers the opt-in store without a companion app or sync.

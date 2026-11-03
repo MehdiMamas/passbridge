@@ -66,3 +66,11 @@ Researched 2026-11-03 (checked 2026-11-03). Items marked UNCONFIRMED could not b
 
 ### Windows 11 plugin providers (context)
 Generally available with the November 2025 security update, "starting with 1Password and Bitwarden today and other passkey managers coming soon" (https://techcommunity.microsoft.com/blog/windows-itpro-blog/windows-11-expands-passkey-manager-support/4467572 ). Dashlane, Proton Pass and KeePassXC are not shown as shipped.
+
+## PassBridge passkey store (Windows, opt-in)
+
+- Chrome with `chrome.webAuthenticationProxy` (the API Proof 2 used); other Chromium browsers: UNCONFIRMED.
+- Passkeys with an ES256 (P-256) key only. Others are skipped on import.
+- Import from an unencrypted Bitwarden JSON export or a Credential Exchange (CXF 1.0) file ([Proof 4](TESTING.md)).
+- Only one extension can hold the proxy at a time. If another passkey manager holds it, PassBridge cannot attach.
+- Needs the iCloud Passwords vault unlocked; a request waits for the unlock.

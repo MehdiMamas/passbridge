@@ -64,3 +64,7 @@ Bitwarden JSON: `items[].login.fido2Credentials[]`, each with these string field
 CXF 1.0: a `credentials[]` entry with `type: "passkey"` and `credentialId`, `rpId`, `username`, `userDisplayName`, `userHandle`, `key` (all base64url strings except the text ones). `key` MUST be PKCS#8 DER, base64url. Under the spec, a passkey with a non-zero counter is left out of the export and importers set the counter to zero. The envelope is `accounts[].items[].credentials[]`.
 
 PassBridge only supports P-256 (ES256) keys; other algorithms are skipped with a reason.
+
+## Browser test: passkey store end to end
+
+`test-harness/automation/drive-passkeys.mjs` (part of `run-all.mjs`; the test build holds the `webAuthenticationProxy` permission up front). It stores a synthetic passkey for `localhost`, then checks in a real Chromium that a page can create a passkey, get twice with signatures verified in the page against the public key from create, is refused for another site's relying-party id, and that a site with no stored passkey is not answered by PassBridge. It prints a SKIP line only when the browser has no `chrome.webAuthenticationProxy`.
