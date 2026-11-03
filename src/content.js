@@ -1244,6 +1244,9 @@ function findPageUsername(field) {
         }
       }
     }
+    // an account chip (Google's 2-step page) carries the address in data-email
+    const chip = (document.querySelector("[data-email]")?.getAttribute("data-email") || "").trim();
+    if (chip && chip.length <= 320 && EMAIL_RE.test(chip)) return chip;
     let node = field;
     for (let i = 0; node && i < 6; i++) {
       node = node.parentElement;
@@ -1610,8 +1613,9 @@ function codeIcon() {
   return svg;
 }
 
-function appendOneTimeCodeRows(box, field, rows) {
+function appendOneTimeCodeRows(box, field, rows, preferred = "") {
   for (const r of rows) {
+    const isPreferred = !!preferred && !!r.username && usernameMatchesPage(r.username, preferred);
     const row = document.createElement("div");
     Object.assign(row.style, {
       padding: "8px 12px",
@@ -1637,6 +1641,7 @@ function appendOneTimeCodeRows(box, field, rows) {
       sub.textContent = r.username;
       Object.assign(sub.style, {
         fontSize: "12px",
+        fontWeight: isPreferred ? "700" : "400",
         opacity: "0.65",
         marginTop: "1px",
         overflowWrap: "anywhere",
@@ -1644,6 +1649,18 @@ function appendOneTimeCodeRows(box, field, rows) {
       text.appendChild(sub);
     }
     row.appendChild(text);
+    if (isPreferred) {
+      const hint = document.createElement("span");
+      hint.textContent = t("thisAccount");
+      Object.assign(hint.style, {
+        flex: "none",
+        marginLeft: "auto",
+        color: "#0a84ff",
+        fontWeight: "600",
+        fontSize: "12px",
+      });
+      row.appendChild(hint);
+    }
     let filling = false;
     registerRow(row, async () => {
       if (filling) return;
@@ -1682,7 +1699,8 @@ async function buildOneTimeCodeSuggestion(field) {
   if (active !== field && active instanceof HTMLInputElement) field = active;
   if (!res?.ok) return;
   const locked = !!res.locked;
-  const rows = res.rows || [];
+  const preferred = findPageUsername(field);
+  const rows = orderByPageUsername(res.rows || [], preferred);
   // a locked vault is worth a row only if this helper can offer codes at all
   if (!locked && !rows.length) return;
   if (locked && (res.supported === false || window !== window.top)) return;
@@ -1697,7 +1715,7 @@ async function buildOneTimeCodeSuggestion(field) {
     positionBox();
     return;
   }
-  appendOneTimeCodeRows(box, field, rows);
+  appendOneTimeCodeRows(box, field, rows, preferred);
   positionBox();
 }
 

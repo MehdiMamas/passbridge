@@ -29,6 +29,7 @@ const FIXTURES = {
 
 const OTP_ROWS = [
   { source: "totp", username: "alice@example.com", domain: "acme.example", code: "246810" },
+  { source: "totp", username: "synthetic.two@example.test", domain: "acme.example", code: "864209" },
   { source: "totp", username: "test@example.com", domain: "instagram.example", code: "135790" },
   { source: "totp", username: "panel@example.com", domain: "127.0.0.1.nip.io", code: "112233" },
   { source: "sms", username: "", domain: "", code: "975318" },

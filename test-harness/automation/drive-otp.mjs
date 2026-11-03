@@ -47,6 +47,40 @@ await main(async () => {
     await page.close();
   }
 
+  {
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/otp-totp-pin-chip.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(300);
+    await page.focus('input[name="totpPin"]');
+    await page.waitForTimeout(600);
+    const t = await menuText(page);
+    const iTwo = t.indexOf("synthetic.two@example.test");
+    const iAlice = t.indexOf("alice@example.com");
+    ok(
+      "otp: chip page puts this account's code first with \"This account\"",
+      iTwo >= 0 && iAlice > iTwo && /This account/.test(t),
+      `got "${t}"`,
+    );
+    await page.close();
+  }
+
+  {
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/otp-totp-pin.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(300);
+    await page.focus('input[name="totpPin"]');
+    await page.waitForTimeout(600);
+    const t = await menuText(page);
+    const iTwo = t.indexOf("synthetic.two@example.test");
+    const iAlice = t.indexOf("alice@example.com");
+    ok(
+      "otp: page without chip keeps order and shows no \"This account\"",
+      iAlice >= 0 && iTwo > iAlice && !/This account/.test(t),
+      `got "${t}"`,
+    );
+    await page.close();
+  }
+
   for (const name of ["pivot", "autopilot"]) {
     const page = await ctx.newPage();
     await page.goto(`${BASE}/otp-totp-pin.html`, { waitUntil: "domcontentloaded" });
