@@ -987,7 +987,12 @@ function placeFieldIcon(field) {
     e.preventDefault();
     e.stopPropagation();
     if (isOtpField(field)) buildOneTimeCodeSuggestion(field);
-    else buildOfferSuggestion(field);
+    else {
+      // focus first so its own offer is the earlier one; the icon's call below bumps offerSeq after it
+      const target = liveField(field);
+      if (target?.isConnected && target !== deepActiveElement()) target.focus({ preventScroll: true });
+      buildOfferSuggestion(target, { fromIcon: true });
+    }
   });
   shadow.appendChild(btn);
   Object.assign(host.style, {
@@ -1474,7 +1479,8 @@ function deepActiveElement() {
 let offerSeq = 0;
 
 // fetch before building so an empty result never flashes a box on then off
-async function buildOfferSuggestion(field) {
+async function buildOfferSuggestion(field, opts = {}) {
+  const { fromIcon = false } = opts;
   await resolveLocale();
   const hasGenerator = isNewPasswordField(field);
   const seq = ++offerSeq;
@@ -1485,11 +1491,21 @@ async function buildOfferSuggestion(field) {
   } catch {
     res = null;
   }
-  if (seq !== offerSeq || field !== deepActiveElement()) return;
+  if (seq !== offerSeq || (!fromIcon && field !== deepActiveElement())) return;
 
   const locked = !!(res?.ok && res.locked);
   const logins = res?.ok && !locked ? res.logins || [] : [];
-  if (!locked && !logins.length && !hasGenerator) return;
+  if (!locked && !logins.length && !hasGenerator) {
+    // an icon click always answers; focus-opened menus stay quiet
+    if (!fromIcon) return;
+    const box = buildSuggestionBox(field);
+    const note = document.createElement("div");
+    note.textContent = !res || res.unavailable ? t("helperUnreachable") : t("noLoginSite");
+    Object.assign(note.style, { padding: "8px 10px", opacity: "0.7" });
+    box.appendChild(note);
+    positionBox();
+    return;
+  }
   // the background accepts the PIN only from the top frame, so a sub-frame can't offer to unlock
   if (locked && window !== window.top) {
     if (!hasGenerator) return;

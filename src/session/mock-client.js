@@ -7,6 +7,8 @@ const FIXTURES = {
     { username: "bob@work.com", sites: [] },
   ],
   locked: [],
+  empty: [],
+  nohelper: [],
   pinflow: [{ username: "test@example.com", sites: [] }],
   otp: [{ username: "test@example.com", sites: [] }, { username: "alice@example.com", sites: [] }],
   many: [
@@ -54,8 +56,8 @@ export function createMockClient(kind) {
   const startsLocked = kind === "locked" || kind === "pinflow";
   const listeners = [];
   const client = {
-    state: startsLocked ? "needs_pin" : "unlocked",
-    ready: !startsLocked,
+    state: kind === "nohelper" ? "no_helper" : startsLocked ? "needs_pin" : "unlocked",
+    ready: !startsLocked && kind !== "nohelper",
     hasChallenge: startsLocked,
     canFillOneTimeCodes: kind === "otp",
     canOpenPasswordsAppToNewPasswordSheet: false,

@@ -1071,7 +1071,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const frameUrl = sender.url;
           if (!frameUrl) return sendResponse({ ok: false, error: "no frame" });
           await ensureConnected();
-          if (client.state === State.NoHelper) return sendResponse({ ok: true, locked: false, logins: [] });
+          if (client.state === State.NoHelper) return sendResponse({ ok: true, locked: false, logins: [], unavailable: true });
           if (!client.ready) return sendResponse({ ok: true, locked: true, logins: [] });
           try {
             const logins = await siteLogins(sender.tab?.id, frameUrl);
@@ -1081,7 +1081,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               logins: publicLogins(uniqueByUsername(orderByMru(hostnameOf(frameUrl), logins))),
             });
           } catch {
-            sendResponse({ ok: true, locked: false, logins: [] });
+            sendResponse({ ok: true, locked: false, logins: [], unavailable: true });
           }
           break;
         }

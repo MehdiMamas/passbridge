@@ -295,6 +295,7 @@
   "keyCopied": { "message": "设置密钥已复制" },
   "pasteDetail": { "message": "将其粘贴到密码中，然后清除剪贴板历史。" },
   "noLoginSite": { "message": "此网站没有已保存的登录" },
+  "helperUnreachable": { "message": "无法连接 PassBridge 助手" },
   "emptyWho": { "message": "$1。此验证码只能保存在某个登录上。", "placeholders": { "who": { "content": "$1", "example": "iCloud · ada@example.com" } } },
   "emptyDetail": { "message": "此验证码只能保存在某个登录上。" },
   "createLogin": { "message": "在密码中创建登录" },

@@ -9,7 +9,7 @@ import { buildExtension } from "../../scripts/build.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, ".builds");
 
-const KINDS = ["unlocked", "multi", "locked", "pinflow", "otp", "many"];
+const KINDS = ["unlocked", "multi", "locked", "pinflow", "otp", "many", "empty", "nohelper"];
 
 await rm(OUT, { recursive: true, force: true });
 for (const kind of KINDS) {

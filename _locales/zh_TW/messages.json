@@ -295,6 +295,7 @@
   "keyCopied": { "message": "已複製設定金鑰" },
   "pasteDetail": { "message": "將其貼上至密碼，然後清除剪貼簿記錄。" },
   "noLoginSite": { "message": "此網站沒有已儲存的登入" },
+  "helperUnreachable": { "message": "無法連線 PassBridge 助手" },
   "emptyWho": { "message": "$1。此代碼只能存在於某個登入上。", "placeholders": { "who": { "content": "$1", "example": "iCloud · ada@example.com" } } },
   "emptyDetail": { "message": "此代碼只能存在於某個登入上。" },
   "createLogin": { "message": "在密碼中建立登入" },
