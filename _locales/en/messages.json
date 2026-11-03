@@ -296,6 +296,7 @@
   "keyCopied": { "message": "Setup key copied" },
   "pasteDetail": { "message": "Paste it in Passwords, then clear your clipboard history." },
   "noLoginSite": { "message": "No saved login for this site" },
+  "helperUnreachable": { "message": "PassBridge helper not reachable" },
   "emptyWho": { "message": "$1. This code can only live on a login.", "placeholders": { "who": { "content": "$1", "example": "iCloud · ada@example.com" } } },
   "emptyDetail": { "message": "This code can only live on a login." },
   "createLogin": { "message": "Create a login in Passwords" },

@@ -26,6 +26,7 @@ const DRIVERS = [
   ["Verification codes (TOTP rows, split-box fill)", "drive-otp.mjs"],
   ["Inline menu host (closed shadow, field icon)", "drive-menu.mjs"],
   ["Icon click (unfocused, empty vault, re-rendered field)", "drive-icon-click.mjs"],
+  ["Icon click with nothing to fill says why", "drive-icon-click-empty.mjs"],
   ["Login list (search, scroll cap, keyboard)", "drive-login-list.mjs"],
   ["UI preview (popup screens and the update page)", "drive-ui-preview.mjs"],
   ["Options page (tabs, help lines, helper notices, saving)", "drive-options.mjs"],
