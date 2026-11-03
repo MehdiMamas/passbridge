@@ -47,7 +47,7 @@ Without the helper, each update asks you to pick the PassBridge folder, and on W
 
 - The 6-digit pairing code once per browser launch, and Touch ID or Windows Hello when the vault asks.
 - Matching a login to a site. The helper does that. There is no per-item "exact URL" rule.
-- Passkeys. Chrome on macOS already offers iCloud passkeys. This extension does not invent a second passkey store.
+- Passkeys. Chrome on macOS uses iCloud Keychain passkeys itself. On Windows, use your iPhone through the QR code in Chrome's passkey dialog. PassBridge stores and signs no passkeys. See [SETUP.md](SETUP.md#passkeys).
 - No Linux, and no Chrome Web Store listing. The helper only accepts Apple's extension id, so this copy is loaded unpacked. See [SETUP.md](SETUP.md).
 
 ## Credits
