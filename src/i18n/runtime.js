@@ -6,9 +6,10 @@
 
 import en from "../../_locales/en/messages.json" with { type: "json" };
 import zhCN from "../../_locales/zh_CN/messages.json" with { type: "json" };
+import zhTW from "../../_locales/zh_TW/messages.json" with { type: "json" };
 import { settingsStore } from "../settings.js";
 
-export const CATALOGS = { en, zh_CN: zhCN };
+export const CATALOGS = { en, zh_CN: zhCN, zh_TW: zhTW };
 export const SUPPORTED_LOCALES = Object.keys(CATALOGS);
 export const DEFAULT_LOCALE = "en";
 
@@ -16,6 +17,7 @@ export const DEFAULT_LOCALE = "en";
 export const LOCALE_NAMES = {
   en: "English",
   zh_CN: "简体中文",
+  zh_TW: "繁體中文",
 };
 
 /**
