@@ -366,6 +366,7 @@
   "errSaveLogin": { "message": "Couldn't save the login." },
   "loginSaved": { "message": "Login saved" },
   "errLoginNotSaved": { "message": "iCloud Passwords did not add this login. Try again, or add it in the Passwords app." },
+  "addLoginInPasswordsApp": { "message": "A login with this username already exists here. Finish adding it in the Passwords app." },
   "errTypePassword": { "message": "Type a password." },
   "errOpenSiteFirst": { "message": "Open the site first." },
   "errUnlockFirst": { "message": "Unlock PassBridge first." }

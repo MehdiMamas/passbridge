@@ -364,6 +364,7 @@
   "errSaveLogin": { "message": "無法儲存登入資訊。" },
   "loginSaved": { "message": "登入資訊已儲存" },
   "errLoginNotSaved": { "message": "iCloud 密碼未新增此登入資訊。請重試，或在「密碼」App 中新增。" },
+  "addLoginInPasswordsApp": { "message": "此處已有使用該使用者名稱的登入資訊。請在「密碼」App 中完成新增。" },
   "errTypePassword": { "message": "請輸入密碼。" },
   "errOpenSiteFirst": { "message": "請先開啟該網站。" },
   "errUnlockFirst": { "message": "請先解鎖 PassBridge。" }

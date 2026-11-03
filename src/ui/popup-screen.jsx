@@ -362,7 +362,8 @@ export function PopupScreen({
                       setLoginMsg("");
                       const res = await onAddLogin({ site: newSite.trim(), username: newUser.trim(), password: newPass });
                       setLoginBusy(false);
-                      if (res?.ok) { setLoginOpen(false); setNewPass(""); }
+                      if (res?.sheet) setLoginMsg(res.note || "");
+                      else if (res?.ok) { setLoginOpen(false); setNewPass(""); }
                       else setLoginMsg(res?.error || t("errSaveLogin"));
                     }}
                   >
