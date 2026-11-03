@@ -195,6 +195,11 @@ function PopupApp() {
         await send({ type: "openPasswordsApp", mode, url: mode === "search" ? lookupUrl || undefined : undefined });
         window.close();
       }}
+      onAddLogin={async (login) => {
+        const res = await send({ type: "popupAddLogin", ...login });
+        if (res?.ok) showNote(t("loginSent"), "ok");
+        return res;
+      }}
       onTotpScan={() => send({ type: "totpScanTab" })}
       onTotpPaste={(text) => send({ type: "totpPaste", text })}
       onTotpAdd={(username) => send({ type: "totpAdd", username })}

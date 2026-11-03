@@ -349,5 +349,14 @@
   "screenshotReadFailed": { "message": "無法讀取螢幕截圖。" },
   "website": { "message": "網站" },
   "saveAsNewLogin": { "message": "另存為新登入資訊" },
-  "errSiteInvalid": { "message": "該網站位址無效。" }
+  "errSiteInvalid": { "message": "該網站位址無效。" },
+  "addLogin": { "message": "新增登入資訊…" },
+  "usernameOrEmail": { "message": "使用者名稱或電子郵件" },
+  "saveLoginBtn": { "message": "儲存登入資訊" },
+  "savingLogin": { "message": "正在儲存…" },
+  "errSaveLogin": { "message": "無法儲存登入資訊。" },
+  "loginSent": { "message": "登入資訊已傳送到 iCloud 密碼" },
+  "errTypePassword": { "message": "請輸入密碼。" },
+  "errOpenSiteFirst": { "message": "請先開啟該網站。" },
+  "errUnlockFirst": { "message": "請先解鎖 PassBridge。" }
 }

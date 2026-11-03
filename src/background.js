@@ -1479,6 +1479,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
 
+        // popup only (not in CONTENT_ALLOWED): always a new login, never an update of an existing one
+        case "popupAddLogin": {
+          const site = typeof msg.site === "string" ? msg.site.trim() : "";
+          const full = /^[a-z][a-z0-9+.-]*:\/\//i.test(site) ? site : `https://${site}`;
+          let ok = false;
+          try { ok = !!site && !!new URL(full).hostname && (await isFillUrlAllowed(full)); } catch {}
+          if (!ok) return sendResponse({ ok: false, error: t("errSiteInvalid") });
+          if (typeof msg.password !== "string" || !msg.password) return sendResponse({ ok: false, error: t("errTypePassword") });
+          const tab = await activeTab();
+          if (tab?.id == null) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
+          await ensureConnected();
+          if (!client.ready) return sendResponse({ ok: false, error: t("errUnlockFirst") });
+          try {
+            await client.saveLogin(tab.id, full, typeof msg.username === "string" ? msg.username.trim() : "", msg.password, { asNew: true });
+          } catch (e) {
+            return sendResponse({ ok: false, error: String(e?.message || e) });
+          }
+          sendResponse({ ok: true });
+          break;
+        }
+
         case "openPasswordsApp": {
           const tab = await activeTab();
           const url = httpUrl(msg.url) || (tab?.url && /^https?:/i.test(tab.url) ? tab.url : undefined);
