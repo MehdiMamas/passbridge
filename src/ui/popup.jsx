@@ -197,7 +197,10 @@ function PopupApp() {
       }}
       onAddLogin={async (login) => {
         const res = await send({ type: "popupAddLogin", ...login });
-        if (res?.ok && res.saved) showNote(t("loginSaved"), "ok");
+        if (res?.ok && res.saved) {
+          showNote(t("loginSaved"), "ok");
+          void (lookupUrl ? runLookup(lookupUrl) : loadUnlocked());
+        }
         return res;
       }}
       onTotpScan={() => send({ type: "totpScanTab" })}

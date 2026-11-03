@@ -25,6 +25,7 @@ function SavePrompt() {
   const [shown, setShown] = useState(false);
   const [offer, setOffer] = useState({ show: false, host: "" });
   const [allowAgent, setAllowAgent] = useState(false);
+  const [canNewSheet, setCanNewSheet] = useState(false);
 
   // the captured values are read from the background, not passed in the iframe URL
   useEffect(() => {
@@ -33,6 +34,7 @@ function SavePrompt() {
         setUsername(r.username || "");
         setPassword(r.password || "");
         setSite(r.site || "");
+        setCanNewSheet(r.canNewSheet === true);
         if (r.agentOffer?.show) {
           setOffer(r.agentOffer);
           setAllowAgent(!!r.agentOffer.suggested);
@@ -113,7 +115,7 @@ function SavePrompt() {
         </button>
       </div>
       <div className="mt-1 flex justify-end gap-2">
-        {update && (
+        {update && canNewSheet && (
           <button type="button" data-action="save-new" disabled={!loaded || !password || noUser} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_25%,Canvas)] px-2.5 py-1 text-[13px] font-semibold disabled:opacity-50" onClick={() => save(true)}>
             {t("saveAsNewLogin")}
           </button>
