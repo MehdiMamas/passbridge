@@ -29,3 +29,38 @@ Meaning: option A is technically possible, but the proxy suspends all native Web
 - Unit (`npm run test:unit`): `passkeysView(true)` returns `passkeysHelpWin`, `passkeysView(false)` returns `passkeysHelpMac`, and the link ends with `SETUP.md#passkeys`.
 - Browser (`test-harness/automation/drive-options.mjs`, part of `node test-harness/automation/run-all.mjs`): the Browser tab lists the "Passkeys" row after "Hide passkey suggestions", shows the non-Windows text in the Linux test browser, and has a "How it works" button.
 - Locale check (`npm test`) requires the new keys in all three locale files.
+
+## Proof 4: Bitwarden JSON export carries passkey keys
+
+Question: does an unencrypted Bitwarden JSON export hold the passkey private keys, and in what format, so PassBridge can import them from a file?
+
+Sources (fetched 2026-11-03):
+- Bitwarden export model: https://github.com/bitwarden/clients/blob/e6789df4f6246888e99f20c601db6485ad792e5a/libs/common/src/models/export/fido2-credential.export.ts
+- It is attached to each login: https://github.com/bitwarden/clients/blob/main/libs/common/src/models/export/login.export.ts (`fido2Credentials`)
+- How the key is written: https://github.com/bitwarden/clients/blob/main/libs/common/src/platform/services/fido2/fido2-authenticator.service.ts (`pkcs8` export, `Fido2Utils.arrayToString`)
+- Credential ID forms: https://github.com/bitwarden/clients/blob/main/libs/common/src/platform/services/fido2/credential-id-utils.ts (`parseCredentialId`)
+- Sample export: https://github.com/bitwarden/clients/blob/main/libs/importer/src/importers/spec-data/bitwarden-json/account-encrypted-v2.json.ts
+- Help page: https://bitwarden.com/help/export-your-data/ ("Only .json exports include ... Stored passkeys"; passkeys created before 2024.3.1 carry a counter that rises with each use)
+- CXF 1.0 Passkey item: https://fidoalliance.org/specs/cx/cxf-v1.0-ps-errata-20260309.html#name-passkey-dictionary
+
+Result: PASS. The export holds the private key, so the file must be treated as secret.
+
+Bitwarden JSON: `items[].login.fido2Credentials[]`, each with these string fields:
+
+| Field | Value |
+|---|---|
+| `credentialId` | A GUID (`e8d88789-e916-e196-3cbd-81dafae71bbc`, 16 raw bytes in GUID order) or `b64.` followed by base64url of the raw ID |
+| `keyType` | `public-key` |
+| `keyAlgorithm` | `ECDSA` |
+| `keyCurve` | `P-256` |
+| `keyValue` | PKCS#8 DER of the private key, base64url without padding |
+| `rpId` | Relying party ID |
+| `userHandle` | base64url of the user handle (may be absent) |
+| `userName`, `userDisplayName`, `rpName` | Text (may be absent) |
+| `counter` | Decimal string |
+| `discoverable` | `"true"` or `"false"` |
+| `creationDate` | ISO 8601 |
+
+CXF 1.0: a `credentials[]` entry with `type: "passkey"` and `credentialId`, `rpId`, `username`, `userDisplayName`, `userHandle`, `key` (all base64url strings except the text ones). `key` MUST be PKCS#8 DER, base64url. Under the spec, a passkey with a non-zero counter is left out of the export and importers set the counter to zero. The envelope is `accounts[].items[].credentials[]`.
+
+PassBridge only supports P-256 (ES256) keys; other algorithms are skipped with a reason.
