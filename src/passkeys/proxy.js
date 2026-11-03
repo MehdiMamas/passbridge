@@ -5,7 +5,7 @@
 // and refresh() on wake to work out again whether to be attached.
 
 import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "./store.js";
-import { checkGet, createPasskey, requestError, signAssertion } from "./webauthn.js";
+import { allowsRecord, checkGet, createPasskey, requestError, signAssertion } from "./webauthn.js";
 
 /** chrome.storage.local key: per machine, set from the options page. */
 export const PASSKEY_SETTING = "passkeyStore";
@@ -117,12 +117,15 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
       const deadline = Date.now() + (Number(details.timeout) > 0 ? Number(details.timeout) : DEFAULT_TIMEOUT_MS);
       await ready(deadline, req.requestId);
       const allowed = (details.allowCredentials || []).map((c) => String(c.id).slice(0, 8));
-      const entry = (await names()).find((p) => p.rpId === rpId && (!allowed.length || allowed.includes(p.idPrefix)));
-      if (!entry) throw requestError("NotAllowedError", "No passkey for this site");
+      const entries = (await names()).filter((p) => p.rpId === rpId && (!allowed.length || allowed.includes(p.idPrefix)));
+      if (!entries.length) throw requestError("NotAllowedError", "No passkey for this site");
       const tab = await getTab();
-      const read = await readPasskey(client, tab?.id ?? 0, entry);
-      if (!read) throw requestError("NotAllowedError", "The stored passkey could not be read");
-      return signAssertion(details, read.record, { userVerified: read.userVerified });
+      // the name only carries an 8-character prefix: confirm the full credential id after the read
+      for (const entry of entries) {
+        const read = await readPasskey(client, tab?.id ?? 0, entry);
+        if (read && allowsRecord(details, read.record)) return signAssertion(details, read.record, { userVerified: read.userVerified });
+      }
+      throw requestError("NotAllowedError", "The stored passkey could not be read");
     });
   }
 
