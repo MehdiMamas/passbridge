@@ -26,6 +26,8 @@ import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../
 import { OPTION_TABS, helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
 import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.js";
 import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.js";
+import { createPasskeyProxy } from "../../src/passkeys/proxy.js";
+import { isPasskeyLogin } from "../../src/passkeys/record.js";
 import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "../../src/passkeys/store.js";
 import { createMockClient } from "../../src/session/mock-client.js";
 import { parseBitwarden, parseCxf, parseExport } from "../../src/passkeys/import.js";
@@ -1387,6 +1389,86 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("passkey store: a locked vault throws on list and save", (await Promise.all([listPasskeys(locked, 1).then(() => "ok", () => "throw"), savePasskey(locked, 1, a).then(() => "ok", () => "throw")])).join() === "throw,throw");
   const unreadable = { getPasswordForLoginName: async () => ({ username: "x", password: "not a record" }) };
   ok("passkey store: a password that is not a record reads as null", (await readPasskey(unreadable, 1, list[0])) === null);
+}
+{
+  // passkeys: proxy (attach rules and request handling) with a fake chrome.webAuthenticationProxy
+  const origin = "https://login.example.test";
+  const ext = { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } };
+  const getJson = (o = {}) => JSON.stringify({ rpId: "example.test", challenge: "Y2g", allowCredentials: [], extensions: ext, ...o });
+  const createJson = (o = {}) => JSON.stringify({ rp: { id: "example.test", name: "E" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2g", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: ext, ...o });
+  const setup = async ({ enabled = true, url = origin + "/", kind = "unlocked" } = {}) => {
+    const calls = [];
+    const api = {
+      attach: async () => void calls.push("attach"),
+      detach: async () => void calls.push("detach"),
+      completeGetRequest: async (d) => void calls.push({ get: d }),
+      completeCreateRequest: async (d) => void calls.push({ create: d }),
+      completeIsUvpaaRequest: async (d) => void calls.push({ uvpaa: d }),
+      onCreateRequest: { addListener: () => {} },
+      onGetRequest: { addListener: () => {} },
+      onIsUvpaaRequest: { addListener: () => {} },
+      onRequestCanceled: { addListener: () => {} },
+    };
+    const state = { url, enabled };
+    const client = createMockClient(kind);
+    const proxy = createPasskeyProxy({ api: () => api, client, ensureConnected: async () => {}, enabled: async () => state.enabled, getTab: async () => ({ id: 1, url: state.url }), sleep: async () => { await new Promise((r) => setTimeout(r, 1)); }, pollMs: 1 });
+    return { calls, api, state, client, proxy };
+  };
+  const seed = (client) => createPasskey(JSON.parse(createJson())).then(({ record }) => savePasskey(client, 1, record, { pollMs: 1 }).then(() => record));
+
+  let w = await setup();
+  await w.proxy.refresh();
+  ok("passkey proxy: no stored passkey for the site stays detached", w.calls.join() === "detach");
+  await seed(w.client);
+  w.proxy.invalidate();
+  await w.proxy.refresh();
+  ok("passkey proxy: a stored passkey for the site attaches", w.calls.join() === "detach,attach");
+  await w.proxy.refresh();
+  ok("passkey proxy: no change means no call", w.calls.length === 2);
+  w.state.url = "https://other.test/";
+  await w.proxy.refresh();
+  ok("passkey proxy: another site detaches", w.calls.join() === "detach,attach,detach");
+  w.state.url = "chrome://extensions/";
+  await w.proxy.refresh();
+  ok("passkey proxy: a non-web page stays detached", w.calls.length === 3);
+  const off = await setup({ enabled: false });
+  await seed(off.client);
+  await off.proxy.refresh();
+  ok("passkey proxy: the setting off detaches even with stored passkeys", off.calls.join() === "detach");
+
+  w = await setup();
+  const rec = await seed(w.client);
+  await w.proxy.onGet({ requestId: 1, requestDetailsJson: getJson() });
+  const g = w.calls.find((c) => c.get)?.get;
+  ok("passkey proxy: a get request is answered with a response for the stored passkey", g?.requestId === 1 && !g.error && JSON.parse(g.responseJson).id === rec.credentialId);
+  w.calls.length = 0;
+  await w.proxy.onGet({ requestId: 2, requestDetailsJson: getJson({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }) });
+  ok("passkey proxy: a get from the wrong origin is refused", w.calls[0].get.error?.name === "SecurityError" && !w.calls[0].get.responseJson);
+  w.calls.length = 0;
+  await w.proxy.onGet({ requestId: 3, requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  ok("passkey proxy: a get that allows only other credentials is refused", w.calls[0].get.error?.name === "NotAllowedError");
+  w.calls.length = 0;
+  await w.proxy.onCreate({ requestId: 4, requestDetailsJson: createJson({ user: { id: "dXNlcjI", name: "bo", displayName: "Bo" } }) });
+  const c = w.calls.find((x) => x.create)?.create;
+  ok("passkey proxy: a create request is saved to the vault, then answered", !!c?.responseJson && (await listPasskeys(w.client, 1)).length === 2);
+  w.calls.length = 0;
+  await w.proxy.onCreate({ requestId: 5, requestDetailsJson: createJson({ rp: { id: "other.test" } }) });
+  ok("passkey proxy: a create for another site's rp id is refused and nothing is saved", w.calls[0].create.error?.name === "SecurityError" && (await listPasskeys(w.client, 1)).length === 2);
+  const failing = { ...w.client, saveLogin: async () => true, getLoginNamesForURL: w.client.getLoginNamesForURL, get ready() { return true; } };
+  const p2 = createPasskeyProxy({ api: () => w.api, client: failing, ensureConnected: async () => {}, enabled: async () => true, getTab: async () => ({ id: 1, url: origin }), sleep: async () => {}, pollMs: 1 });
+  w.calls.length = 0;
+  const realNow = Date.now;
+  let tick = 0;
+  Date.now = () => realNow() + (tick += 20000);
+  await p2.onCreate({ requestId: 6, requestDetailsJson: createJson({ user: { id: "dXNlcjM", name: "cy", displayName: "Cy" } }) });
+  Date.now = realNow;
+  ok("passkey proxy: a create that never shows in the vault is reported as failed", w.calls[0].create.error?.name === "NotAllowedError" && !w.calls[0].create.responseJson);
+
+  const lk = await setup({ kind: "locked" });
+  await lk.proxy.onGet({ requestId: 7, requestDetailsJson: getJson({ timeout: 30 }) });
+  ok("passkey proxy: a locked vault waits, then ends with Chrome's normal error", lk.calls[0].get.error?.name === "NotAllowedError");
+  ok("passkey proxy: a locked vault is not attached before it can list passkeys", (await lk.proxy.refresh(), !lk.calls.includes("attach")));
+  ok("passkey login filter: passkey rows are hidden from fill lists", isPasskeyLogin({ username: "example.test · ann · AAAAAAAA", sites: [] }) && isPasskeyLogin({ username: "x", sites: ["passkeys.passbridge.invalid"] }) && !isPasskeyLogin({ username: "me@example.com", sites: ["example.com"] }));
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

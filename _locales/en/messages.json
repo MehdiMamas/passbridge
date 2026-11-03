@@ -379,5 +379,6 @@
   "addLoginInPasswordsApp": { "message": "A login with this username already exists here. Finish adding it in the Passwords app." },
   "errTypePassword": { "message": "Type a password." },
   "errOpenSiteFirst": { "message": "Open the site first." },
-  "errUnlockFirst": { "message": "Unlock PassBridge first." }
+  "errUnlockFirst": { "message": "Unlock PassBridge first." },
+  "passkeyUnlockNeeded": { "message": "Unlock PassBridge to sign in with your passkey." }
 }

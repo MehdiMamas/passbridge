@@ -24,6 +24,9 @@ import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
 import { confirmLoginAdded, countLogins, useNewLoginSheet } from "./session/add-login-check.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
+import { PASSKEY_SETTING, createPasskeyProxy } from "./passkeys/proxy.js";
+import { isPasskeyLogin } from "./passkeys/record.js";
+import { savePasskey } from "./passkeys/store.js";
 
 // menu titles and the errors sent back to the pages follow the UI language
 void resolveLocale();
@@ -35,6 +38,34 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 const client = createClient();
+
+// passkeys held in the vault, answered through chrome.webAuthenticationProxy (Windows, opt in).
+// Listeners are added here at the top level so they exist each time the worker wakes.
+const passkeyProxy = createPasskeyProxy({
+  api: () => chrome.webAuthenticationProxy,
+  client,
+  ensureConnected: () => ensureConnected(),
+  enabled: async () => (await chrome.storage.local.get({ [PASSKEY_SETTING]: false }))[PASSKEY_SETTING] === true,
+  getTab: () => focusedTab(),
+  notifyUnlock: () => chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("passkeyUnlockNeeded") }),
+});
+passkeyProxy.register();
+void passkeyProxy.refresh();
+chrome.permissions?.onAdded?.addListener(() => {
+  passkeyProxy.register();
+  void passkeyProxy.refresh();
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[PASSKEY_SETTING]) {
+    passkeyProxy.invalidate();
+    void passkeyProxy.refresh();
+  }
+});
+chrome.tabs?.onActivated.addListener(() => void passkeyProxy.refresh());
+chrome.tabs?.onUpdated.addListener((_tabId, info) => {
+  if (info.url || info.status === "complete") void passkeyProxy.refresh();
+});
+chrome.windows?.onFocusChanged.addListener(() => void passkeyProxy.refresh());
 /** @typedef {{ username: string, sites: string[], saved: string[], via: string }} SiteLogin */
 /** @typedef {{ username: string, password: string, sites?: string[] }} Cred */
 
@@ -57,6 +88,8 @@ const platformReady = new Promise((resolve) => {
 });
 
 client.onStateChange((s) => {
+  passkeyProxy.invalidate();
+  void passkeyProxy.refresh();
   if (s !== State.Unlocked) {
     pwCacheClear();
     otpByTab.clear();
@@ -209,7 +242,7 @@ async function siteLogins(tabId, url) {
       if (h === host) throw e;
       continue;
     }
-    for (const login of list || []) {
+    for (const login of (list || []).filter((l) => !isPasskeyLogin(l))) {
       const sites = Array.isArray(login.sites) ? login.sites : [];
       const seen = byName.get(normUsername(login.username));
       if (seen) {
@@ -1019,12 +1052,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const fromContent = sender.id === chrome.runtime.id && sender.tab !== undefined;
       // the update page runs in a tab, so it is told apart by its own extension URL and may only install
       const fromUpdatePage = sender.id === chrome.runtime.id && !!sender.url?.startsWith(chrome.runtime.getURL(UPDATE_PAGE));
-      if (!fromUi && !(fromContent && CONTENT_ALLOWED.has(msg?.type)) && !(fromUpdatePage && msg?.type === "installUpdate")) {
+      const fromOptionsPage = sender.id === chrome.runtime.id && !!sender.url?.startsWith(chrome.runtime.getURL("src/options.html"));
+      if (!fromUi && !(fromContent && CONTENT_ALLOWED.has(msg?.type)) && !(fromUpdatePage && msg?.type === "installUpdate") && !(fromOptionsPage && msg?.type?.startsWith("passkey"))) {
         sendResponse({ ok: false, error: "forbidden" });
         return;
       }
 
       switch (msg?.type) {
+        // options page only: save one imported passkey, and drop the proxy before the permission is removed
+        case "passkeySave": {
+          await ensureConnected();
+          if (!client.ready) return sendResponse({ ok: false, error: t("errUnlockFirst") });
+          const tab = await focusedTab();
+          const result = await savePasskey(client, tab?.id ?? 0, msg.record);
+          passkeyProxy.invalidate();
+          void passkeyProxy.refresh();
+          return sendResponse({ ok: true, result });
+        }
+        case "passkeyDetach": {
+          await passkeyProxy.detach();
+          return sendResponse({ ok: true });
+        }
         case "generatedFilled": {
           const tabId = sender.tab?.id;
           if (tabId == null || typeof msg.password !== "string" || !msg.password || msg.password.length > 256) return sendResponse({ ok: false });
@@ -1518,7 +1566,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await ensureConnected();
           if (!client.ready) return sendResponse({ ok: false, error: t("errUnlockFirst") });
           const username = typeof msg.username === "string" ? msg.username.trim() : "";
-          const lookup = () => client.getLoginNamesForURL(tab.id, full);
+          const lookup = async () => (await client.getLoginNamesForURL(tab.id, full)).filter((l) => !isPasskeyLogin(l));
           let before = 0;
           try { before = countLogins(await lookup(), username); } catch {}
           // a same-username login already matches (a sibling tenant): the Passwords new-login sheet adds it without an update prompt

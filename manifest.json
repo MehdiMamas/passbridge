@@ -85,6 +85,9 @@
     "clipboardWrite",
     "clipboardRead"
   ],
+  "optional_permissions": [
+    "webAuthenticationProxy"
+  ],
   "host_permissions": [
     "*://*/*"
   ],

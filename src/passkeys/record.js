@@ -68,3 +68,8 @@ export function isPasskeyHost(urlOrHost) {
     return false;
   }
 }
+
+/** True for a login-list row that is a stored passkey, so fill lists never offer it as a password. */
+export function isPasskeyLogin(login) {
+  return isPasskeyName(login?.username) || (Array.isArray(login?.sites) && login.sites.some(isPasskeyHost));
+}

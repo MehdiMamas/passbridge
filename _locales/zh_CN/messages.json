@@ -377,5 +377,6 @@
   "addLoginInPasswordsApp": { "message": "此处已有使用该用户名的登录信息。请在“密码”App 中完成添加。" },
   "errTypePassword": { "message": "请输入密码。" },
   "errOpenSiteFirst": { "message": "请先打开该网站。" },
-  "errUnlockFirst": { "message": "请先解锁 PassBridge。" }
+  "errUnlockFirst": { "message": "请先解锁 PassBridge。" },
+  "passkeyUnlockNeeded": { "message": "请解锁 PassBridge 以使用通行密钥登录。" }
 }

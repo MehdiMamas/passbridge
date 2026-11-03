@@ -24,6 +24,7 @@
     "src/background.js",
     "src/content.js",
     "src/apple/**/*.js",
+    "src/passkeys/**/*.js",
     "src/ui/**/*.jsx",
     "src/ui/**/*.tsx"
   ]

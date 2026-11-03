@@ -377,5 +377,6 @@
   "addLoginInPasswordsApp": { "message": "此處已有使用該使用者名稱的登入資訊。請在「密碼」App 中完成新增。" },
   "errTypePassword": { "message": "請輸入密碼。" },
   "errOpenSiteFirst": { "message": "請先開啟該網站。" },
-  "errUnlockFirst": { "message": "請先解鎖 PassBridge。" }
+  "errUnlockFirst": { "message": "請先解鎖 PassBridge。" },
+  "passkeyUnlockNeeded": { "message": "請解鎖 PassBridge 以使用通行金鑰登入。" }
 }
