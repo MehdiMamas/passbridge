@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
+import { SETTINGS_AREA, SETTINGS_DEFAULTS as DEFAULTS, settingsStore } from "../settings.js";
+import { domainLines } from "../session/agent-allow.js";
 import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
@@ -47,6 +48,14 @@ function OptionsApp() {
       if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
+    // the save bar can add a site while this page is open; take it in so a later save never writes the old list back
+    const onAllowlist = (changes, area) => {
+      if (area !== SETTINGS_AREA || !changes.agentAllowlist || isBlurListDirty.current) return;
+      const next = changes.agentAllowlist.newValue || [];
+      setSettings((s) => ({ ...s, agentAllowlist: next }));
+      setLists((l) => ({ ...l, agentAllowlist: next.join("\n") }));
+    };
+    chrome.storage.onChanged.addListener(onAllowlist);
     try {
       chrome.storage.session.get({ agentRelay: "" }, (o) => setRelay(o.agentRelay || ""));
     } catch {}
@@ -70,6 +79,7 @@ function OptionsApp() {
     addEventListener("pagehide", onPageHide);
     return () => {
       chrome.storage.onChanged.removeListener(onLog);
+      chrome.storage.onChanged.removeListener(onAllowlist);
       chrome.storage.onChanged.removeListener(onRelay);
       removeEventListener("hashchange", onHash);
       removeEventListener("pagehide", onPageHide);
@@ -142,23 +152,6 @@ function OptionsApp() {
       />
     </div>
   );
-}
-
-// hostBlocked compares bare hostnames, so https://example.com/ or *.example.com would never match
-function domainLines(value) {
-  const out = [];
-  for (const line of value.split(/[\n,]+/)) {
-    const d = line
-      .trim()
-      .toLowerCase()
-      .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
-      .replace(/[/?#].*$/, "")
-      .replace(/:\d+$/, "")
-      .replace(/^\*\./, "")
-      .replace(/^\.+|\.+$/g, "");
-    if (d && !out.includes(d)) out.push(d);
-  }
-  return out;
 }
 
 function sendPolicy(action) {

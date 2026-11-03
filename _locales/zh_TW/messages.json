@@ -349,6 +349,7 @@
   "screenshotReadFailed": { "message": "無法讀取螢幕截圖。" },
   "website": { "message": "網站" },
   "saveAsNewLogin": { "message": "另存為新登入資訊" },
+  "letAgentsSignIn": { "message": "允許代理程式在 $1 登入", "placeholders": { "host": { "content": "$1", "example": "amazon.jobs" } } },
   "errSiteInvalid": { "message": "該網站位址無效。" },
   "addLogin": { "message": "新增登入資訊…" },
   "usernameOrEmail": { "message": "使用者名稱或電子郵件" },
