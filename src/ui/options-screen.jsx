@@ -356,7 +356,47 @@ function AppearanceTab({ settings, onChange }) {
 }
 
 
-function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings, passkeys, onOpenUrl }) {
+function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note }) {
+  const pickId = useId();
+  const saved = results.filter((r) => r.status === "saved").length;
+  return (
+    <>
+      <SwitchRow label={t("passkeyStore")} help={t("passkeyStoreHelp")} note={note || undefined} checked={isOn} onChange={onToggle} />
+      {isOn && (
+        <Row label={t("passkeyImport")} help={t("passkeyImportHelp")} isLabel={false} isWide>
+          {(ids) => (
+            <div>
+              <input id={pickId} type="file" accept=".json,application/json" className="sr-only" onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ""; }} />
+              <label htmlFor={pickId} className={`${secondaryButton} inline-block`}>
+                {t("passkeyImportBtn")}
+              </label>
+              {progress && (
+                <p role="status" className={`mt-2 text-[13px] ${muted}`}>
+                  {t("passkeyImportProgress", [String(progress.done), String(progress.total)])}
+                </p>
+              )}
+              {results.length > 0 && !progress && (
+                <div data-passkey-results className="mt-3">
+                  <p className="text-[13px] font-medium">{t("passkeyImportDone", [String(saved), String(results.length)])}</p>
+                  <ul className="mt-1.5 space-y-1 text-[13px]">
+                    {results.map((r, i) => (
+                      <li key={i} data-status={r.status} className={r.status === "saved" ? "" : muted}>
+                        {r.label}: {t(`passkeyResult_${r.status}`)}{r.reason ? ` (${r.reason})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[13px] font-medium">{t("passkeyImportDelete")}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </Row>
+      )}
+    </>
+  );
+}
+
+function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings, passkeys, onOpenUrl, passkeyStore }) {
   const isShown = (p) => p.shown && !p.disabled;
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
@@ -374,6 +414,7 @@ function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPri
         button={t("passkeysBtn")}
         onClick={() => onOpenUrl(passkeys.url)}
       />
+      {passkeyStore && <PasskeyStoreRows {...passkeyStore} />}
       {isShown(privacy.address) && (
         <SwitchRow
           label={t("hideAddress")}

@@ -23,7 +23,7 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdat
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
-import { OPTION_TABS, helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { OPTION_TABS, helperView, passkeyImportSummary, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
 import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.js";
 import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.js";
 import { createPasskeyProxy } from "../../src/passkeys/proxy.js";
@@ -1185,6 +1185,8 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 {
   ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
   ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
+  const sum = passkeyImportSummary([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }]);
+  ok("options: passkey import summary counts each outcome", sum.total === 5 && sum.saved === 2 && sum.exists === 1 && sum.skipped === 1 && sum.failed === 1);
   ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));
   ok("options: tabs in order", OPTION_TABS.map((t) => t.id).join() === "autofill,appearance,browser,agents,updates");
   ok("options: hash opens its tab", tabFromHash("#updates") === "updates");

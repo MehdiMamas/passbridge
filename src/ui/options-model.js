@@ -27,6 +27,16 @@ export function passkeysView(isWindows) {
   return { helpKey: isWindows ? "passkeysHelpWin" : "passkeysHelpMac", url: `${SETUP_URL}#passkeys` };
 }
 
+/**
+ * Count the outcome of an import run. Each result is { label, status } with status
+ * "saved", "exists", "skipped" or "failed".
+ * @param {{ label: string, status: string }[]} results
+ */
+export function passkeyImportSummary(results) {
+  const count = (s) => results.filter((r) => r.status === s).length;
+  return { total: results.length, saved: count("saved"), exists: count("exists"), skipped: count("skipped"), failed: count("failed") };
+}
+
 const ROW_STATE = { checking: "checking", present: "ready", missing: "locked" };
 
 /**
