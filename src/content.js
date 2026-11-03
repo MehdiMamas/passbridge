@@ -499,7 +499,7 @@ onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
     case "generatePassword": {
       const clicked = contextField && contextField.isConnected && isPasswordField(contextField) ? contextField : null;
       const field = clicked || anchorPwField(document) || document.querySelector('input[type="password"]');
-      if (field instanceof HTMLInputElement) fillGeneratedPassword(field, generateApplePassword());
+      if (field instanceof HTMLInputElement) fillGeneratedPassword(field, msg.alnum ? generateAlphanumericPassword() : generateApplePassword());
       return false;
     }
   }
@@ -1173,8 +1173,8 @@ function liveField(field) {
   return anchorPwField(document) || field;
 }
 
-async function fillGeneratedPassword(field, pw) {
-  field = liveField(field);
+// the field plus every other empty new-password input in the same form (never a current-password one)
+function generatedTargets(field) {
   const targets = new Set([field]);
   for (const p of Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[type="password"]'))).filter(isFillable)) {
     if (p === field || p.value) continue;
@@ -1183,10 +1183,29 @@ async function fillGeneratedPassword(field, pw) {
     if ((p.getAttribute("autocomplete") || "").toLowerCase().includes("current-password")) continue;
     targets.add(p);
   }
+  return targets;
+}
+
+async function fillGeneratedPassword(field, pw) {
+  field = liveField(field);
+  const targets = generatedTargets(field);
   for (const t of targets) {
     setValue(t, pw);
     everPassword.add(t);
   }
+  // some pages clear or re-render the confirm box when the first one changes: look again and refill
+  for (const ms of [50, 400]) {
+    setTimeout(() => {
+      const f = liveField(field);
+      for (const t of new Set([...targets, ...generatedTargets(f)])) {
+        if (!t.isConnected || t.value === pw) continue;
+        setValue(t, pw);
+        everPassword.add(t);
+        targets.add(t);
+      }
+    }, ms);
+  }
+  chrome.runtime.sendMessage({ type: "generatedFilled", password: pw }).catch(() => {});
   // set before the hash resolves: a submit right after the fill used to miss it
   const passwordHash = sha256Hex(pw).catch(() => "");
   lastGenerated = { host: location.hostname, passwordHash, at: Date.now() };

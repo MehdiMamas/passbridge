@@ -19,6 +19,7 @@ const DRIVERS = [
   ["Save prompt (edit username/password before saving)", "drive-save-edit.mjs"],
   ["Save prompt: allow agent sign-in for the site", "drive-save-agent-allow.mjs"],
   ["Multi-account chooser", "drive-multi.mjs"],
+  ["Generated password reaches the confirm box (#169)", "drive-gen-confirm.mjs"],
   ["PIN flow (Enter on a short code, 6 digits submit alone)", "drive-pin.mjs"],
   ["Iframe login (same-origin frame shows dropdown)", "drive-iframe.mjs"],
   ["Cross-origin iframe shows NO offer (leak closed)", "drive-xorigin.mjs"],

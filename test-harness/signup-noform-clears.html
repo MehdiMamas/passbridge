@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Create Account (no form, confirm box cleared on change)</title>
+</head>
+<body>
+  <h1>Create Account</h1>
+  <div>
+    <label for="pw1">Password</label>
+    <input id="pw1" type="password" autocomplete="new-password">
+    <label for="pw2">Verify New Password</label>
+    <input id="pw2" type="password" autocomplete="new-password">
+  </div>
+  <script>
+    // like a framework page that re-renders the confirm box when the first one changes
+    const a = document.getElementById("pw1"), b = document.getElementById("pw2");
+    a.addEventListener("input", () => { setTimeout(() => { b.value = ""; }, 20); });
+  </script>
+</body>
+</html>
