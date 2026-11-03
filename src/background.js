@@ -25,6 +25,7 @@ import { loginAction, menuItems } from "./menu.js";
 import { confirmLoginAdded, countLogins, useNewLoginSheet } from "./session/add-login-check.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
 import { PASSKEY_SETTING, createPasskeyProxy } from "./passkeys/proxy.js";
+import { MOCK_KIND } from "./session/mock-kind.js";
 import { isPasskeyLogin } from "./passkeys/record.js";
 import { savePasskey } from "./passkeys/store.js";
 
@@ -45,7 +46,11 @@ const passkeyProxy = createPasskeyProxy({
   api: () => chrome.webAuthenticationProxy,
   client,
   ensureConnected: () => ensureConnected(),
-  enabled: async () => (await chrome.storage.local.get({ [PASSKEY_SETTING]: false }))[PASSKEY_SETTING] === true,
+  // Windows only: on macOS Chrome already uses iCloud passkeys and attaching would hide them
+  // (the passkeys test build runs on Linux CI, so it skips the check)
+  enabled: async () =>
+    (MOCK_KIND === "passkeys" || (await chrome.runtime.getPlatformInfo()).os === "win") &&
+    (await chrome.storage.local.get({ [PASSKEY_SETTING]: false }))[PASSKEY_SETTING] === true,
   getTab: () => focusedTab(),
   notifyUnlock: () => chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("passkeyUnlockNeeded") }),
 });
