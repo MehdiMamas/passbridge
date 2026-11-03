@@ -1500,7 +1500,7 @@ async function buildOfferSuggestion(field, { fromIcon = false } = {}) {
     if (!fromIcon) return;
     const box = buildSuggestionBox(field);
     const row = document.createElement("div");
-    row.textContent = t("inlineNoLogins");
+    row.textContent = !res || res.unavailable ? t("helperUnreachable") : t("inlineNoLogins");
     Object.assign(row.style, { padding: "8px 10px", opacity: "0.65" });
     box.appendChild(row);
     positionBox();
