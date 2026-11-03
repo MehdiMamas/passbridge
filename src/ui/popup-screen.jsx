@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
+import { generateApplePassword } from "../password-generate.js";
 
 function StatusDot({ state }) {
   const color =
@@ -369,6 +370,7 @@ export function PopupScreen({
                     <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
                     <span className="flex gap-1.5">
                       <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                      <button type="button" className="text-xs opacity-80" onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>{t("generate")}</button>
                       <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? t("hide") : t("show")}</button>
                     </span>
                     {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}

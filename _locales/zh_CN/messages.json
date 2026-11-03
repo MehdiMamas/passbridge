@@ -276,6 +276,7 @@
   "noUserFound": { "message": "未找到用户名，请输入一个" },
   "show": { "message": "显示" },
   "hide": { "message": "隐藏" },
+  "generate": { "message": "生成" },
   "neverSite": { "message": "永不在此网站保存" },
   "notNow": { "message": "暂不" },
   "save": { "message": "保存" },
