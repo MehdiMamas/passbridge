@@ -362,7 +362,8 @@
   "saveLoginBtn": { "message": "保存登录信息" },
   "savingLogin": { "message": "正在保存…" },
   "errSaveLogin": { "message": "无法保存登录信息。" },
-  "loginSent": { "message": "登录信息已发送到 iCloud 密码" },
+  "loginSaved": { "message": "登录信息已保存" },
+  "errLoginNotSaved": { "message": "iCloud 密码未添加此登录信息。请重试，或在“密码”App 中添加。" },
   "errTypePassword": { "message": "请输入密码。" },
   "errOpenSiteFirst": { "message": "请先打开该网站。" },
   "errUnlockFirst": { "message": "请先解锁 PassBridge。" }

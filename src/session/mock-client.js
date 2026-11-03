@@ -55,6 +55,7 @@ const otpRowsFor = (frameUrls) => {
 export function createMockClient(kind) {
   const startsLocked = kind === "locked" || kind === "pinflow";
   const listeners = [];
+  const added = [];
   const client = {
     state: kind === "nohelper" ? "no_helper" : startsLocked ? "needs_pin" : "unlocked",
     ready: !startsLocked && kind !== "nohelper",
@@ -79,7 +80,7 @@ export function createMockClient(kind) {
     },
     async getLoginNamesForURL() {
       if (!client.ready) throw new Error("locked");
-      return FIXTURES[kind] || [];
+      return [...(FIXTURES[kind] || []), ...added];
     },
     async getPasswordForLoginName(_tabId, _url, login) {
       return { username: login?.username || "test@example.com", password: "TestPass123" };
@@ -114,6 +115,7 @@ export function createMockClient(kind) {
     async saveLogin(tabId, url, username, password, opts = {}) {
       // lets a driver read what would have gone to Apple's sheet
       (globalThis.__mockSaved ||= []).push({ url, username, password, asNew: opts.asNew === true });
+      added.push({ username, sites: [] });
     },
     launchPasswordsApp() {},
   };

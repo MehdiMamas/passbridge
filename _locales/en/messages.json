@@ -364,7 +364,8 @@
   "saveLoginBtn": { "message": "Save login" },
   "savingLogin": { "message": "Saving…" },
   "errSaveLogin": { "message": "Couldn't save the login." },
-  "loginSent": { "message": "Login sent to iCloud Passwords" },
+  "loginSaved": { "message": "Login saved" },
+  "errLoginNotSaved": { "message": "iCloud Passwords did not add this login. Try again, or add it in the Passwords app." },
   "errTypePassword": { "message": "Type a password." },
   "errOpenSiteFirst": { "message": "Open the site first." },
   "errUnlockFirst": { "message": "Unlock PassBridge first." }
