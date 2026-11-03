@@ -24,6 +24,9 @@ import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
 import { OPTION_TABS, helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.js";
+import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.js";
+import { parseBitwarden, parseCxf, parseExport } from "../../src/passkeys/import.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -1248,6 +1251,118 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("add login: an old entry that stays is not saved", (await run([[me]], { before: 1 })) === "timeout");
   let calls = 0;
   ok("add login: locked mid-check stops", (await run([[]], { ready: () => ++calls < 3 })) === "locked");
+}
+{
+  // passkeys: record, webauthn, import (synthetic keys only)
+  const rec = makeRecord({ rpId: "example.test", credentialId: "AbCdEfGh1234", userHandle: "dXNlcg", userName: "ann · test", key: "a2V5" });
+  ok("passkey record: encode then decode round-trips", JSON.stringify(decodeRecord(encodeRecord(rec))) === JSON.stringify(rec));
+  ok("passkey record: a newer version is refused", decodeRecord(pkB64u(new TextEncoder().encode(JSON.stringify({ ...rec, v: 2 })))) === null);
+  ok("passkey record: garbage and missing fields are refused", decodeRecord("!!") === null && decodeRecord(pkB64u(new TextEncoder().encode('{"v":1}'))) === null);
+  ok("passkey record: username holds site, user and 8 chars of the id", recordUsername(rec) === "example.test · ann · test · AbCdEfGh");
+  const parsed = parseUsername(recordUsername(rec));
+  ok("passkey record: username parses back", parsed.rpId === "example.test" && parsed.userName === "ann · test" && parsed.idPrefix === "AbCdEfGh");
+  ok("passkey record: a normal login name is not a passkey", !isPasskeyName("me@example.com") && !isPasskeyName("a · b") && isPasskeyName(recordUsername(rec)));
+  ok("passkey record: the dedicated host is recognised", isPasskeyHost(`https://${PASSKEY_HOST}/`) && isPasskeyHost(PASSKEY_HOST) && !isPasskeyHost("https://example.com"));
+
+  const origin = "https://login.example.test";
+  const getDetails = (over = {}) => ({ rpId: "example.test", challenge: "Y2hhbGxlbmdl", allowCredentials: [], userVerification: "preferred", extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
+  const createDetails = (over = {}) => ({ rp: { id: "example.test", name: "Example" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2hhbGxlbmdl", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
+  const derToRaw = (der) => {
+    let i = 3;
+    const rl = der[i++];
+    let r = der.slice(i, i + rl);
+    i += rl + 1;
+    const sl = der[i++];
+    let s = der.slice(i, i + sl);
+    const fix = (x) => (x.length > 32 ? x.slice(x.length - 32) : Uint8Array.from([...new Array(32 - x.length).fill(0), ...x]));
+    return Uint8Array.from([...fix(r), ...fix(s)]);
+  };
+  const sha = async (d) => new Uint8Array(await crypto.subtle.digest("SHA-256", d));
+  const verifyWith = async (spki, authData, cdj, derSig) => {
+    const pub = await crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const msg = new Uint8Array([...authData, ...(await sha(cdj))]);
+    return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, derToRaw(derSig), msg);
+  };
+
+  const made = await createPasskey(createDetails());
+  const cr = JSON.parse(made.responseJson);
+  const crAd = pkUnb64u(cr.response.authenticatorData);
+  const crCdj = JSON.parse(new TextDecoder().decode(pkUnb64u(cr.response.clientDataJSON)));
+  const rpHash = await sha(new TextEncoder().encode("example.test"));
+  ok("passkey create: clientDataJSON has type, challenge and the page origin", crCdj.type === "webauthn.create" && crCdj.challenge === "Y2hhbGxlbmdl" && crCdj.origin === origin);
+  ok("passkey create: rpIdHash, flags UP+BE+BS+AT without UV, counter 0", Buffer.from(crAd.slice(0, 32)).equals(Buffer.from(rpHash)) && crAd[32] === 0x59 && crAd.slice(33, 37).every((b) => b === 0));
+  const idLen = (crAd[53] << 8) | crAd[54];
+  ok("passkey create: attested data carries the credential id and an ES256 COSE key", pkB64u(crAd.slice(55, 55 + idLen)) === cr.id && crAd.slice(55 + idLen).length === 77 && crAd[55 + idLen] === 0xa5);
+  ok("passkey create: the stored record matches the answer", made.record.credentialId === cr.rawId && made.record.rpId === "example.test" && made.record.userName === "ann" && made.record.userHandle === "dXNlcjE");
+  ok("passkey create: UV flag set only when asked", ((await createPasskey(createDetails(), { userVerified: true }).then((m) => pkUnb64u(JSON.parse(m.responseJson).response.authenticatorData)))[32] & 0x04) === 0x04 && (crAd[32] & 0x04) === 0);
+  ok("passkey create: the attestation object is CBOR with fmt none", Buffer.from(pkUnb64u(cr.response.attestationObject)).toString("latin1").includes("fmtdnone"));
+
+  const spki = pkUnb64u(cr.response.publicKey);
+  const sign = async (opts) => {
+    const g = JSON.parse(await signAssertion(getDetails(), made.record, opts));
+    return { g, ad: pkUnb64u(g.response.authenticatorData), cdj: pkUnb64u(g.response.clientDataJSON), sig: pkUnb64u(g.response.signature) };
+  };
+  const got = await sign();
+  ok("passkey get: the signature verifies with the public key from create", await verifyWith(spki, got.ad, got.cdj, got.sig));
+  ok("passkey get: flags UP+BE+BS without UV, counter 0", got.ad[32] === 0x19 && got.ad.length === 37 && got.ad.slice(33).every((b) => b === 0));
+  ok("passkey get: UV flag set when the vault read verified the user", (await sign({ userVerified: true })).ad[32] === 0x1d);
+  ok("passkey get: a signature over other data does not verify", !(await verifyWith(spki, got.ad, new TextEncoder().encode("{}"), got.sig)));
+  ok("passkey get: answer carries id, user handle and clientDataJSON origin", got.g.id === made.record.credentialId && got.g.response.userHandle === "dXNlcjE" && JSON.parse(new TextDecoder().decode(got.cdj)).origin === origin);
+  const refused = async (fn) => {
+    try {
+      await fn();
+      return null;
+    } catch (e) {
+      return e.name;
+    }
+  };
+  ok("passkey get: another site's origin is refused", (await refused(() => signAssertion(getDetails({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }), made.record))) === "SecurityError");
+  ok("passkey get: a missing origin is refused", (await refused(() => signAssertion(getDetails({ extensions: {} }), made.record))) === "SecurityError");
+  ok("passkey get: a credential not on the allow list is refused", (await refused(() => signAssertion(getDetails({ allowCredentials: [{ type: "public-key", id: "b3RoZXI" }] }), made.record))) === "NotAllowedError");
+  ok("passkey get: a listed credential is allowed", !!(await signAssertion(getDetails({ allowCredentials: [{ type: "public-key", id: made.record.credentialId }] }), made.record)));
+  ok("passkey create: an rp id that is not the page's site is refused", (await refused(() => createPasskey(createDetails({ rp: { id: "other.test" } })))) === "SecurityError");
+  ok("passkey create: no ES256 offered is refused", (await refused(() => createPasskey(createDetails({ pubKeyCredParams: [{ type: "public-key", alg: -257 }] })))) === "NotSupportedError");
+
+  // import
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const k256 = pkB64u(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+  const kp384 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-384" }, true, ["sign", "verify"]);
+  const k384 = pkB64u(await crypto.subtle.exportKey("pkcs8", kp384.privateKey));
+  const guid = "e8d88789-e916-e196-3cbd-81dafae71bbc";
+  const bw = {
+    encrypted: false,
+    items: [
+      { login: { username: "x", fido2Credentials: [
+        { credentialId: guid, keyType: "public-key", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "example.test", userHandle: "dXNlcjE", userName: "ann", counter: "0", discoverable: "true" },
+        { credentialId: "b64.AAECAwQFBgcICQoLDA0ODw", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "two.example.test", userName: "bob", counter: "0" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-384", keyValue: k384, rpId: "p384.example.test", userName: "cy", counter: "0" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: "", rpId: "nokey.example.test", userName: "di" },
+        { credentialId: "not-a-guid", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "badid.example.test" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: "AAECAwQFBg", rpId: "badkey.example.test" },
+      ] } },
+      { login: { username: "plain" } },
+      { card: {} },
+    ],
+  };
+  const bwOut = await parseBitwarden(bw);
+  ok("import bitwarden: the two good P-256 passkeys are kept", bwOut.records.length === 2 && bwOut.records[0].rpId === "example.test" && bwOut.records[1].rpId === "two.example.test");
+  ok("import bitwarden: a GUID credential id becomes the raw id in base64url", bwOut.records[0].credentialId === "6NiHiekW4ZY8vYHa-ucbvA" && bwOut.records[1].credentialId === "AAECAwQFBgcICQoLDA0ODw");
+  ok("import bitwarden: fields map to the record", bwOut.records[0].userName === "ann" && bwOut.records[0].userHandle === "dXNlcjE" && bwOut.records[0].v === 1 && bwOut.records[1].userHandle === "");
+  ok("import bitwarden: four skipped, each with a reason", bwOut.skipped.length === 4 && bwOut.skipped.every((s) => s.label && s.reason) && bwOut.skipped[0].reason.includes("P-256") && bwOut.skipped[1].reason.includes("key") && bwOut.skipped[2].reason.includes("credential id"));
+  const imported = bwOut.records[0];
+  const sigRec = JSON.parse(await signAssertion(getDetails(), imported));
+  const importedPub = await crypto.subtle.importKey("jwk", { ...(await crypto.subtle.exportKey("jwk", kp.publicKey)) }, { name: "ECDSA", namedCurve: "P-256" }, true, ["verify"]);
+  ok("import bitwarden: an imported key signs and verifies against its public key", await verifyWith(new Uint8Array(await crypto.subtle.exportKey("spki", importedPub)), pkUnb64u(sigRec.response.authenticatorData), pkUnb64u(sigRec.response.clientDataJSON), pkUnb64u(sigRec.response.signature)));
+  ok("import bitwarden: an encrypted export is refused with a reason", (await parseBitwarden({ encrypted: true, items: [] })).skipped[0].reason.includes("encrypted"));
+  const cxf = { version: { major: 1, minor: 0 }, accounts: [{ id: "a", items: [{ id: "i", title: "Ex", credentials: [
+    { type: "basic-auth", username: { fieldType: "string", value: "x" } },
+    { type: "passkey", credentialId: "AAECAwQFBgcICQoLDA0ODw", rpId: "example.test", username: "ann", userDisplayName: "Ann", userHandle: "dXNlcjE", key: k256 },
+    { type: "passkey", credentialId: "AAECAwQFBgcICQoLDA0ODw", rpId: "p384.example.test", username: "cy", userDisplayName: "Cy", userHandle: "dXNlcjE", key: k384 },
+  ] }] }] };
+  const cxfOut = await parseCxf(cxf);
+  ok("import cxf: the P-256 passkey is kept, the P-384 one skipped with a reason", cxfOut.records.length === 1 && cxfOut.records[0].userName === "ann" && cxfOut.skipped.length === 1 && cxfOut.skipped[0].reason.includes("P-256"));
+  ok("import: parseExport picks the format", (await parseExport(JSON.stringify(cxf))).records.length === 1 && (await parseExport(JSON.stringify(bw))).records.length === 2);
+  ok("import: not JSON and unknown JSON give a plain error", (await refused(() => parseExport("nope"))) === "Error" && (await refused(() => parseExport("{}"))) === "Error");
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
