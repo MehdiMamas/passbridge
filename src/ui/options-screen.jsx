@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
+import { RECEIVER_READY } from "../passkeys/receiver.js";
 import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
 
 
@@ -356,12 +357,32 @@ function AppearanceTab({ settings, onChange }) {
 }
 
 
-function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note }) {
+function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note, allSites, onAllSites, stayUnlocked, onStayUnlocked, syncSteps, onSyncAll }) {
   const pickId = useId();
   const saved = results.filter((r) => r.status === "saved").length;
   return (
     <>
       <SwitchRow label={t("passkeyStore")} help={t("passkeyStoreHelp")} note={note || undefined} checked={isOn} onChange={onToggle} />
+      {isOn && <SwitchRow label={t("passkeysAllSites")} help={t("passkeysAllSitesHelp")} checked={allSites} onChange={onAllSites} />}
+      {isOn && <SwitchRow label={t("passkeysStayUnlocked")} help={t("passkeysStayUnlockedHelp")} checked={stayUnlocked} onChange={onStayUnlocked} />}
+      {isOn && RECEIVER_READY && (
+        <Row label={t("syncAll")} help={t("syncAllHelp")} isLabel={false} isWide>
+          {() => (
+            <div>
+              <button type="button" className={secondaryButton} onClick={onSyncAll}>
+                {t("syncAllBtn")}
+              </button>
+              {syncSteps.length > 0 && (
+                <ol data-sync-steps className="mt-2 list-decimal pl-5 text-[13px]">
+                  {syncSteps.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+        </Row>
+      )}
       {isOn && (
         <Row label={t("passkeyImport")} help={t("passkeyImportHelp")} isLabel={false} isWide>
           {(ids) => (

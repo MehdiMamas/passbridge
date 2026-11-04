@@ -24,7 +24,7 @@ import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
 import { confirmLoginAdded, countLogins, useNewLoginSheet } from "./session/add-login-check.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
-import { PASSKEY_SETTING, createPasskeyProxy } from "./passkeys/proxy.js";
+import { ALL_SITES_SETTING, PASSKEY_SETTING, STAY_UNLOCKED_SETTING, createPasskeyProxy } from "./passkeys/proxy.js";
 import { MOCK_KIND } from "./session/mock-kind.js";
 import { isPasskeyLogin } from "./passkeys/record.js";
 import { savePasskey } from "./passkeys/store.js";
@@ -52,6 +52,10 @@ const passkeyProxy = createPasskeyProxy({
     (MOCK_KIND === "passkeys" || (await chrome.runtime.getPlatformInfo()).os === "win") &&
     (await chrome.storage.local.get({ [PASSKEY_SETTING]: false }))[PASSKEY_SETTING] === true,
   getTab: () => focusedTab(),
+  settings: async () => {
+    const o = await chrome.storage.local.get({ [ALL_SITES_SETTING]: true, [STAY_UNLOCKED_SETTING]: false });
+    return { allSites: o[ALL_SITES_SETTING] !== false, stayUnlocked: o[STAY_UNLOCKED_SETTING] === true };
+  },
   notifyUnlock: () => chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("passkeyUnlockNeeded") }),
 });
 passkeyProxy.register();
@@ -61,9 +65,14 @@ chrome.permissions?.onAdded?.addListener(() => {
   void passkeyProxy.refresh();
 });
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes[PASSKEY_SETTING]) {
+  if (area !== "local") return;
+  if (changes[PASSKEY_SETTING] || changes[ALL_SITES_SETTING]) {
     passkeyProxy.invalidate();
     void passkeyProxy.refresh();
+  }
+  // kept passkeys are dropped as soon as the setting that keeps them goes off
+  if ((changes[STAY_UNLOCKED_SETTING] && changes[STAY_UNLOCKED_SETTING].newValue !== true) || (changes[PASSKEY_SETTING] && changes[PASSKEY_SETTING].newValue !== true)) {
+    void passkeyProxy.clearCache();
   }
 });
 chrome.tabs?.onActivated.addListener(() => void passkeyProxy.refresh());
@@ -1073,6 +1082,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           passkeyProxy.invalidate();
           void passkeyProxy.refresh();
           return sendResponse({ ok: true, result });
+        }
+        // popup and options page: open Passwords on a Mac, and give the steps for Sync all either way
+        case "passkeySyncAll": {
+          let launched = false;
+          if ((await platformReady) === "mac") {
+            await ensureConnected();
+            if (client.ready) {
+              client.launchPasswordsApp({});
+              launched = true;
+            }
+          }
+          return sendResponse({ ok: true, launched, steps: [t("syncAllStep1"), t("syncAllStep2"), t("syncAllStep3"), t("syncAllOutside")] });
         }
         case "passkeyDetach": {
           await passkeyProxy.detach();

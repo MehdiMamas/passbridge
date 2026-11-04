@@ -14,6 +14,7 @@ async function helperReady(tries = 3) {
 import { PopupScreen } from "./popup-screen.jsx";
 import { UPDATE_PAGE } from "../update/check.js";
 import { followTheme } from "./page-theme.js";
+import { RECEIVER_READY } from "../passkeys/receiver.js";
 
 function PopupApp() {
   const locale = useLocale();
@@ -34,6 +35,8 @@ function PopupApp() {
   const [installing, setInstalling] = useState(false);
   const [canCheckUpdate, setCanCheckUpdate] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [nudge, setNudge] = useState(false);
+  const [syncSteps, setSyncSteps] = useState([]);
   const lookupGen = useRef(0);
   const lookupTimer = useRef(0);
 
@@ -104,6 +107,18 @@ function PopupApp() {
     await applyState(next, res.caps);
   }
 
+  // a site asked for a passkey the vault does not hold: the proxy left its rp id here
+  useEffect(() => {
+    (async () => {
+      try {
+        const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const host = new URL(active?.url || "").hostname;
+        const { passkeyNudge } = await chrome.storage.session.get({ passkeyNudge: null });
+        if (passkeyNudge?.rpId && (host === passkeyNudge.rpId || host.endsWith("." + passkeyNudge.rpId))) setNudge(true);
+      } catch {}
+    })();
+  }, []);
+
   useEffect(() => {
     let dead = false;
     (async () => {
@@ -143,6 +158,12 @@ function PopupApp() {
       caps={caps}
       note={note}
       noteTone={noteTone}
+      nudge={RECEIVER_READY && nudge}
+      syncSteps={syncSteps}
+      onSyncAll={async () => {
+        const res = await send({ type: "passkeySyncAll" });
+        setSyncSteps(res?.steps || []);
+      }}
       pinError={pinError}
       showFavicons={showFavicons}
       update={update}

@@ -26,6 +26,9 @@ function OptionsApp() {
   const [relay, setRelay] = useState("");
   const [passkeyOn, setPasskeyOn] = useState(false);
   const [passkeyNote, setPasskeyNote] = useState("");
+  const [allSites, setAllSites] = useState(true);
+  const [stayUnlocked, setStayUnlocked] = useState(false);
+  const [syncSteps, setSyncSteps] = useState([]);
   const [passkeyProgress, setPasskeyProgress] = useState(null);
   const [passkeyResults, setPasskeyResults] = useState([]);
   const [tab, setTab] = useState(() => tabFromHash(location.hash));
@@ -113,7 +116,11 @@ function OptionsApp() {
 
   function readPasskeySetting() {
     try {
-      chrome.storage.local.get({ passkeyStore: false }, (o) => setPasskeyOn(o.passkeyStore === true));
+      chrome.storage.local.get({ passkeyStore: false, passkeysAllSites: true, passkeysStayUnlocked: false }, (o) => {
+        setPasskeyOn(o.passkeyStore === true);
+        setAllSites(o.passkeysAllSites !== false);
+        setStayUnlocked(o.passkeysStayUnlocked === true);
+      });
     } catch {}
   }
 
@@ -135,6 +142,21 @@ function OptionsApp() {
       await chrome.runtime.sendMessage({ type: "passkeyDetach" });
       await chrome.permissions.remove({ permissions: ["webAuthenticationProxy"] });
     } catch {}
+  }
+
+  async function onAllSites(on) {
+    setAllSites(on);
+    await chrome.storage.local.set({ passkeysAllSites: on });
+  }
+
+  async function onStayUnlocked(on) {
+    setStayUnlocked(on);
+    await chrome.storage.local.set({ passkeysStayUnlocked: on });
+  }
+
+  async function onSyncAll() {
+    const res = await chrome.runtime.sendMessage({ type: "passkeySyncAll" });
+    setSyncSteps(res?.steps || []);
   }
 
   async function onPasskeyPick(file) {
@@ -230,7 +252,7 @@ function OptionsApp() {
         agentLog={agentLog}
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
         passkeys={passkeysView(IS_WINDOWS)}
-        passkeyStore={IS_WINDOWS ? { isOn: passkeyOn, onToggle: onPasskeyToggle, onPick: onPasskeyPick, progress: passkeyProgress, results: passkeyResults, note: passkeyNote } : null}
+        passkeyStore={IS_WINDOWS ? { isOn: passkeyOn, onToggle: onPasskeyToggle, onPick: onPasskeyPick, progress: passkeyProgress, results: passkeyResults, note: passkeyNote, allSites, onAllSites, stayUnlocked, onStayUnlocked, syncSteps, onSyncAll } : null}
         onOpenUrl={(url) => chrome.tabs.create({ url })}
         onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
         onPasswordSettings={IS_EDGE ? null : () => chrome.tabs.create({ url: "chrome://password-manager/settings" })}

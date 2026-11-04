@@ -124,6 +124,9 @@ export function PopupScreen({
   caps,
   note,
   noteTone,
+  nudge,
+  syncSteps,
+  onSyncAll,
   pinError,
   showFavicons,
   update,
@@ -522,6 +525,21 @@ export function PopupScreen({
             )}
             {note && (
               <p className={`text-xs ${noteTone === "danger" ? "text-danger" : noteTone === "ok" ? "text-ok" : "opacity-70"}`}>{note}</p>
+            )}
+            {nudge && (
+              <div data-passkey-nudge className="text-xs">
+                <p className="opacity-80">{t("passkeyNudge")}</p>
+                <button type="button" className="py-1 text-accent" onClick={onSyncAll}>
+                  {t("syncAllLink")}
+                </button>
+                {syncSteps.length > 0 && (
+                  <ol data-sync-steps className="list-decimal pl-4 opacity-80">
+                    {syncSteps.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             )}
           </>
         )}
