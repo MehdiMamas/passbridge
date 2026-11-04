@@ -28,6 +28,7 @@ function OptionsApp() {
   const [policy, setPolicy] = useState({ hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
+  const [isMruCleared, setIsMruCleared] = useState(false);
   const listsRef = useRef(lists);
   const isBlurListDirty = useRef(false);
   listsRef.current = lists;
@@ -120,6 +121,10 @@ function OptionsApp() {
     setLists((l) => ({ ...l, [key]: domainLines(l[key]).join("\n") }));
   }
 
+  function onClearMru() {
+    chrome.storage.local.remove("mru:v1").then(() => setIsMruCleared(true), () => {});
+  }
+
   async function onPolicy(isOn) {
     const r = await sendPolicy(isOn ? "set" : "clear");
     applyPolicy(r, policyMessage(r, true));
@@ -140,6 +145,8 @@ function OptionsApp() {
         lists={lists}
         onListChange={onListChange}
         onListBlur={onListBlur}
+        isMruCleared={isMruCleared}
+        onClearMru={onClearMru}
         view={helperView({ helpers, isWindows: IS_WINDOWS, canCheckForUpdates: settings.canCheckForUpdates, relay })}
         policy={policy}
         onPolicy={onPolicy}

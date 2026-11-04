@@ -11,6 +11,7 @@ import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
 import { listOtpEntries } from "./session/otp-list.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
+import { orderByUse, recordUse } from "./session/mru.js";
 import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
@@ -110,33 +111,15 @@ function broadcast(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
-const mruByHost = new Map();
-function recordMru(host, username) {
-  if (!host || !username) return;
-  const u = username.toLowerCase();
-  const arr = (mruByHost.get(host) || []).filter((x) => x !== u);
-  arr.unshift(u);
-  mruByHost.set(host, arr.slice(0, 10));
-}
-function orderByMru(host, logins) {
-  const order = mruByHost.get(host);
-  if (!order || !order.length) return logins;
-  const rank = (u) => {
-    const i = order.indexOf((u || "").toLowerCase());
-    return i === -1 ? Infinity : i;
-  };
-  return [...logins].sort((a, b) => rank(a.username) - rank(b.username));
-}
-
 // "" lets the native sheet ask, null saves nothing
-function pickSaveTarget({ host, existing, detected, generated, newPwCtx }) {
+async function pickSaveTarget({ host, existing, detected, generated, newPwCtx }) {
   const matched = detected && existing.find((u) => u.toLowerCase() === detected.toLowerCase());
   // update only on a new password, stay quiet on a plain re-login
   if (matched) return generated || newPwCtx ? matched : null;
   if (detected) return detected;
   // attach to the MRU account, apple's sheet lets the user re-pick
   if (newPwCtx && existing.length) {
-    return orderByMru(host, existing.map((u) => ({ username: u })))[0].username;
+    return (await orderByUse(host, existing.map((u) => ({ username: u }))))[0].username;
   }
   if (generated) return "";
   return null;
@@ -165,7 +148,7 @@ async function flushPendingSaves() {
           .map((l) => l.username)
           .filter(Boolean);
       } catch {}
-      const target = pickSaveTarget({ ...s, existing });
+      const target = await pickSaveTarget({ ...s, existing });
       if (target === null) continue;
       const isUpdate = existing.some((u) => u.toLowerCase() === String(target).toLowerCase());
       if ((isUpdate && settings.askToUpdate === false) || (!isUpdate && settings.askToSave === false)) continue;
@@ -555,7 +538,7 @@ async function fillLoginOnTab(tab, username, opts) {
     // stable order: re-sorting by MRU after each fill made the shortcut repeat one login
     const last = cycleByTab.get(tab.id);
     const at = last == null ? -1 : logins.findIndex((l) => (l.username || "") === last);
-    username = at < 0 ? orderByMru(host, logins)[0].username : logins[(at + 1) % logins.length].username;
+    username = at < 0 ? (await orderByUse(host, logins))[0].username : logins[(at + 1) % logins.length].username;
   }
   // every-site agent fill: no cache, and the record read must itself be saved for this host
   let cred = opts?.savedOnly ? null : pwCacheGet(host, username);
@@ -574,7 +557,7 @@ async function fillLoginOnTab(tab, username, opts) {
     ...(opts?.savedOnly ? { expectedOrigin: new URL(tab.url).origin } : {}),
   });
   if (resp?.filled) {
-    recordMru(host, cred.username);
+    recordUse(host, cred.username).catch(() => {});
     lastFillByTab.set(tab.id, { host, username: cred.username });
     return { filled: true, username: cred.username };
   }
@@ -596,7 +579,7 @@ async function fillLoginOnTab(tab, username, opts) {
         );
       } catch {}
       if (r?.filled) {
-        recordMru(host, cred.username);
+        recordUse(host, cred.username).catch(() => {});
         lastFillByTab.set(tab.id, { host, username: cred.username });
         return { filled: true, username: cred.username };
       }
@@ -804,7 +787,7 @@ async function refreshTab(tab) {
   let logins = [];
   if (url && tab.id != null && client.ready && (settings.enableBadge || settings.enableContextMenu)) {
     try {
-      logins = uniqueByUsername(orderByMru(hostnameOf(url), await siteLogins(tab.id, url)));
+      logins = uniqueByUsername(await orderByUse(hostnameOf(url), await siteLogins(tab.id, url)));
     } catch {}
   }
   if (tab?.id != null) setCountBadge(tab.id, settings.enableBadge ? logins.length : 0);
@@ -1062,7 +1045,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({
               ok: true,
               locked: false,
-              logins: publicLogins(uniqueByUsername(orderByMru(hostnameOf(frameUrl), logins))),
+              logins: publicLogins(uniqueByUsername(await orderByUse(hostnameOf(frameUrl), logins))),
             });
           } catch {
             sendResponse({ ok: true, locked: false, logins: [], unavailable: true });
@@ -1158,7 +1141,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           const filled = !!resp?.filled;
           if (filled) {
-            recordMru(host, cred.username);
+            recordUse(host, cred.username).catch(() => {});
             lastFillByTab.set(sender.tab.id, { host, username: cred.username });
             sendResponse({ ok: true, filled: true });
             break;
@@ -1211,7 +1194,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               .map((l) => l.username)
               .filter(Boolean);
           } catch {}
-          const target = pickSaveTarget({ host, existing, detected, generated, newPwCtx });
+          const target = await pickSaveTarget({ host, existing, detected, generated, newPwCtx });
           console.debug("[PassBridge] resolveSave", {
             host,
             detected: detected || "(none)",
@@ -1424,7 +1407,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           if (!tab?.id) return sendResponse({ ok: false, error: "no tab" });
           if (!client.ready) return sendResponse({ ok: false, error: t("locked") });
-          const logins = uniqueByUsername(await siteLogins(tab.id, url));
+          const logins = uniqueByUsername(await orderByUse(hostnameOf(url), await siteLogins(tab.id, url)));
           sendResponse({ ok: true, host: hostnameOf(url), logins: publicLogins(logins) });
           break;
         }
@@ -1626,7 +1609,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
           const logins = await siteLogins(tab.id, tab.url);
-          const ordered = publicLogins(uniqueByUsername(orderByMru(hostnameOf(tab.url), logins)));
+          const ordered = publicLogins(uniqueByUsername(await orderByUse(hostnameOf(tab.url), logins)));
           // the page may already name the account (Gmail's password page), that login goes first
           let pageName = "";
           try {
@@ -1664,7 +1647,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           });
           const filled = !!resp?.filled;
           if (filled && sameSite) {
-            recordMru(pageHost, cred.username);
+            recordUse(pageHost, cred.username).catch(() => {});
             lastFillByTab.set(tab.id, { host: pageHost, username: cred.username });
           }
           sendResponse(filled

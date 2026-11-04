@@ -269,7 +269,7 @@ function ActivityTable({ log }) {
 
 const toggleProps = (settings, onChange, key) => ({ checked: settings[key], onChange: (on) => onChange({ [key]: on }) });
 
-function AutofillTab({ settings, onChange, lists, onListChange, onListBlur }) {
+function AutofillTab({ settings, onChange, lists, onListChange, onListBlur, isMruCleared, onClearMru }) {
   const list = (key) => ({ value: lists[key], onChange: (text) => onListChange(key, text), onBlur: () => onListBlur(key) });
   const toggle = (key) => toggleProps(settings, onChange, key);
   const clearOptions = [
@@ -312,6 +312,7 @@ function AutofillTab({ settings, onChange, lists, onListChange, onListBlur }) {
           <Select ids={ids} value={String(settings.clipboardClearMs)} disabled={isDisabled} options={clearOptions} onChange={(v) => onChange({ clipboardClearMs: Number(v) })} />
         )}
       </Row>
+      <ButtonRow label={t("clearMru")} button={isMruCleared ? t("clearMruDone") : t("clearMru")} onClick={onClearMru} />
     </>
   );
 }
