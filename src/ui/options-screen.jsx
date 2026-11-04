@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
+import { RECEIVER_READY } from "../passkeys/receiver.js";
 import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
 
 
@@ -364,7 +365,7 @@ function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note, all
       <SwitchRow label={t("passkeyStore")} help={t("passkeyStoreHelp")} note={note || undefined} checked={isOn} onChange={onToggle} />
       {isOn && <SwitchRow label={t("passkeysAllSites")} help={t("passkeysAllSitesHelp")} checked={allSites} onChange={onAllSites} />}
       {isOn && <SwitchRow label={t("passkeysStayUnlocked")} help={t("passkeysStayUnlockedHelp")} checked={stayUnlocked} onChange={onStayUnlocked} />}
-      {isOn && (
+      {isOn && RECEIVER_READY && (
         <Row label={t("syncAll")} help={t("syncAllHelp")} isLabel={false} isWide>
           {() => (
             <div>

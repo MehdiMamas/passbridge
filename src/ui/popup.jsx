@@ -14,6 +14,7 @@ async function helperReady(tries = 3) {
 import { PopupScreen } from "./popup-screen.jsx";
 import { UPDATE_PAGE } from "../update/check.js";
 import { followTheme } from "./page-theme.js";
+import { RECEIVER_READY } from "../passkeys/receiver.js";
 
 function PopupApp() {
   const locale = useLocale();
@@ -157,7 +158,7 @@ function PopupApp() {
       caps={caps}
       note={note}
       noteTone={noteTone}
-      nudge={nudge}
+      nudge={RECEIVER_READY && nudge}
       syncSteps={syncSteps}
       onSyncAll={async () => {
         const res = await send({ type: "passkeySyncAll" });

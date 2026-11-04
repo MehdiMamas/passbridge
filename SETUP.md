@@ -177,7 +177,7 @@ This stores copies of your passkeys in your iCloud Passwords vault and signs sig
 5. Sign in on a site you imported a passkey for.
 6. Optional: turn on "Sign in without Touch ID". It keeps your passkeys unlocked in this Chrome until you quit it, so sign-ins need no verification. Anyone using this Chrome profile can sign in with them. Turning it off clears them.
 
-Sync all: when a site asks for a passkey PassBridge does not have, the popup says so and offers Sync all (also in Options). On your Mac, open Passwords, choose File > Export All Items to App… > PassBridge, then confirm with Touch ID. Passkeys made outside Chrome (iPhone, Safari) come over on your next Sync all.
+Sync all (comes with the PassBridge Mac app, not released yet): when a site asks for a passkey PassBridge does not have, the popup says so and offers Sync all (also in Options). On your Mac, open Passwords, choose File > Export All Items to App… > PassBridge, then confirm with Touch ID. Passkeys made outside Chrome (iPhone, Safari) come over on your next Sync all.
 
 "Hide passkey suggestions" also hides conditional passkey prompts; leave it off if you want them. Turning the switch off removes the permission.
 
