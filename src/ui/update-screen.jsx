@@ -125,7 +125,7 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
             <ol className="ml-5 flex list-decimal flex-col gap-1">
               <li>{t("helperStep1")}</li>
               <li>
-                {t("helperStep2Run")} <code className="font-mono">powershell -ExecutionPolicy Bypass -File .\install.ps1</code>
+                {t("helperStep2Run")} <code className="font-mono">install.cmd</code>
               </li>
               <li>{t("helperStep3")}</li>
               <li>{t("helperStep4")}</li>

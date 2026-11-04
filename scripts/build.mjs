@@ -110,7 +110,7 @@ export function buildStamp(cwd = REPO) {
   try {
     const run = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     const sha = run("rev-parse", "--short", "HEAD");
-    return run("status", "--porcelain") ? `${sha}-dirty` : sha;
+    return run("status", "--porcelain", "--untracked-files=no") ? `${sha}-dirty` : sha;
   } catch {
     return "";
   }

@@ -59,3 +59,8 @@ export function helperView({ helpers, isWindows, canCheckForUpdates, relay }) {
     },
   };
 }
+
+/** True when enough time has passed since the last helper check to run another. */
+export function shouldRecheck(lastMs, nowMs, minGapMs = 5000) {
+  return nowMs - lastMs >= minGapMs;
+}
