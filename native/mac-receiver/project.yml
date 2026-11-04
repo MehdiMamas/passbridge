@@ -1,0 +1,80 @@
+name: PassBridgeReceiver
+options:
+  bundleIdPrefix: com.passbridge
+  deploymentTarget:
+    macOS: "26.0"
+configFiles:
+  Debug: Local.xcconfig
+  Release: Local.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
+targets:
+  PassBridgeReceiver:
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    dependencies:
+      - target: PassBridgeReceiverExtension
+        embed: true
+    entitlements:
+      path: App/PassBridgeReceiver.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.developer.authentication-services.autofill-credential-provider: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: PassBridge Receiver
+        LSMinimumSystemVersion: "26.0"
+        NSUserActivityTypes: [ASCredentialExchangeActivity]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.passbridge.receiver
+        GENERATE_INFOPLIST_FILE: NO
+  PassBridgeReceiverExtension:
+    type: app-extension
+    platform: macOS
+    sources: [Extension]
+    entitlements:
+      path: Extension/PassBridgeReceiverExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.developer.authentication-services.autofill-credential-provider: true
+    info:
+      path: Extension/Info.plist
+      properties:
+        CFBundleDisplayName: PassBridge Receiver
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.authentication-services-credential-provider-ui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CredentialProviderViewController
+          NSExtensionAttributes:
+            ASCredentialProviderExtensionCapabilities:
+              ProvidesPasskeys: true
+              SupportsCredentialExchange: true
+              SupportedCredentialExchangeVersions: ["1.0"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.passbridge.receiver.extension
+        GENERATE_INFOPLIST_FILE: NO
+  PassBridgeReceiverTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests, Shared/CredentialSummary.swift]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.passbridge.receiver.tests
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+schemes:
+  PassBridgeReceiver:
+    build:
+      targets:
+        PassBridgeReceiver: all
+        PassBridgeReceiverExtension: all
+    test:
+      targets: [PassBridgeReceiverTests]

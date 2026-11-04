@@ -19,3 +19,7 @@ test-harness/automation/.builds/
 .worktrees/
 
 .idea/
+# mac-receiver (generated project, local signing config)
+native/mac-receiver/*.xcodeproj/
+native/mac-receiver/Local.xcconfig
+native/mac-receiver/build/
