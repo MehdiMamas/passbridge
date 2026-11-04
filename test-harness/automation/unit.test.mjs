@@ -1367,7 +1367,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ] }] }] };
   const cxfOut = await parseCxf(cxf);
   ok("import cxf: the P-256 passkey is kept, the P-384 one skipped with a reason", cxfOut.records.length === 1 && cxfOut.records[0].userName === "ann" && cxfOut.skipped.length === 1 && cxfOut.skipped[0].reason.includes("P-256"));
-  ok("import: parseExport picks the format", (await parseExport(JSON.stringify(cxf))).records.length === 1 && (await parseExport(JSON.stringify(bw))).records.length === 2);
+  ok("import: parseExport reads a Credential Exchange file only", (await parseExport(JSON.stringify(cxf))).records.length === 1 && (await refused(() => parseExport(JSON.stringify(bw)))) === "Error");
   ok("import: not JSON and unknown JSON give a plain error", (await refused(() => parseExport("nope"))) === "Error" && (await refused(() => parseExport("{}"))) === "Error");
 }
 {

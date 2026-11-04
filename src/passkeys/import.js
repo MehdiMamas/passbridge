@@ -76,6 +76,5 @@ export async function parseExport(text) {
     throw new Error("This file is not JSON.");
   }
   if (Array.isArray(data?.accounts)) return parseCxf(data);
-  if (Array.isArray(data?.items) || data?.encrypted) return parseBitwarden(data);
-  throw new Error("This is not a Bitwarden or Credential Exchange export.");
+  throw new Error("This is not a Credential Exchange export.");
 }

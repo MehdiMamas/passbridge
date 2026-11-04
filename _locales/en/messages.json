@@ -167,7 +167,7 @@
   "passkeyStoreHelp": { "message": "Lets PassBridge sign in with passkeys stored in your iCloud Keychain, only on sites where you have imported one. Needs a permission and the iCloud Passwords vault unlocked." },
   "passkeyNoPermission": { "message": "The permission was not granted, so passkeys stay off." },
   "passkeyImport": { "message": "Import passkeys" },
-  "passkeyImportHelp": { "message": "Choose an unencrypted export file (Bitwarden JSON or a Credential Exchange file). Each passkey is saved to your iCloud Passwords vault." },
+  "passkeyImportHelp": { "message": "Choose an unencrypted export file (a Credential Exchange file). Each passkey is saved to your iCloud Passwords vault." },
   "passkeyImportBtn": { "message": "Choose file" },
   "passkeyImportProgress": { "message": "Saved $1 of $2" },
   "passkeyImportDone": { "message": "Saved $1 of $2 passkeys" },

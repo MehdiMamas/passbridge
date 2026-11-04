@@ -71,6 +71,6 @@ Generally available with the November 2025 security update, "starting with 1Pass
 
 - Chrome with `chrome.webAuthenticationProxy` (the API Proof 2 used); other Chromium browsers: UNCONFIRMED.
 - Passkeys with an ES256 (P-256) key only. Others are skipped on import.
-- Import from an unencrypted Bitwarden JSON export or a Credential Exchange (CXF 1.0) file ([Proof 4](TESTING.md)).
+- Import from an unencrypted Credential Exchange (CXF 1.0) file ([Proof 4](TESTING.md)).
 - Only one extension can hold the proxy at a time. If another passkey manager holds it, PassBridge cannot attach.
 - Needs the iCloud Passwords vault unlocked; a request waits for the unlock.

@@ -168,7 +168,7 @@
   "passkeyStoreHelp": { "message": "讓 PassBridge 使用存放在 iCloud 鑰匙圈中的密碼金鑰登入，僅限已匯入密碼金鑰的網站。需要授予權限，並解鎖 iCloud 密碼庫。" },
   "passkeyNoPermission": { "message": "未授予權限，密碼金鑰保持關閉。" },
   "passkeyImport": { "message": "匯入密碼金鑰" },
-  "passkeyImportHelp": { "message": "選擇未加密的匯出檔案（Bitwarden JSON 或憑證交換檔案）。每個密碼金鑰都會儲存到 iCloud 密碼庫。" },
+  "passkeyImportHelp": { "message": "選擇未加密的匯出檔案（憑證交換檔案）。每個密碼金鑰都會儲存到 iCloud 密碼庫。" },
   "passkeyImportBtn": { "message": "選擇檔案" },
   "passkeyImportProgress": { "message": "已儲存 $1 / $2" },
   "passkeyImportDone": { "message": "已儲存 $1 / $2 個密碼金鑰" },

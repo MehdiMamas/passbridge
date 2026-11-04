@@ -170,7 +170,7 @@ Your iPhone keeps the passkey. Chrome on Windows reaches it over a phone connect
 
 This stores copies of your passkeys in your iCloud Passwords vault and signs sign-ins on this PC without a phone scan. It works only on sites you imported a passkey for.
 
-1. Export your passkeys from another manager as an unencrypted file (Bitwarden JSON, or a Credential Exchange file).
+1. Export your passkeys from another manager as an unencrypted Credential Exchange file.
 2. In Options, Browser, turn on "Use passkeys on this PC" and allow the permission Chrome asks for.
 3. Unlock the iCloud Passwords vault, choose "Import passkeys" and pick the file. Wait for the list of saved and skipped passkeys; only ES256 (P-256) passkeys are kept.
 4. Delete the export file now. It holds your passkeys unprotected.

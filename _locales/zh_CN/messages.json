@@ -168,7 +168,7 @@
   "passkeyStoreHelp": { "message": "让 PassBridge 使用存放在 iCloud 钥匙串中的通行密钥登录，仅限已导入通行密钥的网站。需要授予权限，并解锁 iCloud 密码库。" },
   "passkeyNoPermission": { "message": "未授予权限，通行密钥保持关闭。" },
   "passkeyImport": { "message": "导入通行密钥" },
-  "passkeyImportHelp": { "message": "选择未加密的导出文件（Bitwarden JSON 或凭据交换文件）。每个通行密钥都会保存到 iCloud 密码库。" },
+  "passkeyImportHelp": { "message": "选择未加密的导出文件（凭据交换文件）。每个通行密钥都会保存到 iCloud 密码库。" },
   "passkeyImportBtn": { "message": "选择文件" },
   "passkeyImportProgress": { "message": "已保存 $1 / $2" },
   "passkeyImportDone": { "message": "已保存 $1 / $2 个通行密钥" },
