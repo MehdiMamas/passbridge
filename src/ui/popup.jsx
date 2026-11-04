@@ -207,6 +207,11 @@ function PopupApp() {
       onTotpPaste={(text) => send({ type: "totpPaste", text })}
       onTotpAdd={(username) => send({ type: "totpAdd", username })}
       onTotpCopyKey={() => send({ type: "totpCopyKey" })}
+      onCheckCodes={async () => {
+        const res = await send({ type: "getOneTimeCodes", listOnly: true });
+        if (res?.ok) setCodes(res.rows || []);
+        return res?.rows || [];
+      }}
       onLock={async () => {
         await send({ type: "disconnect" });
         setState("connecting");
@@ -223,7 +228,10 @@ function PopupApp() {
         const res = await send({ type: "refreshAndRefill" });
         await loadUnlocked();
         if (res?.refilled) showNote(t("refilled", [res.username]), "ok");
-        else if (res?.reason === "none") showNote(t("nothingToRefill"), "muted");
+        else if (res?.reason === "none") {
+          const count = (await send({ type: "getOneTimeCodes" }))?.rows?.length || 0;
+          showNote(count ? t("codesForSite", [String(count)]) : t("nothingToRefill"), "muted");
+        }
         else showNote(res?.error || t("couldntRefill"), "danger");
       }}
       onSettings={() => chrome.runtime.openOptionsPage()}

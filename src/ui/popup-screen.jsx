@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
+import { TOTP_WATCH_EVERY_MS, watchState } from "./totp-watch.js";
 
 function StatusDot({ state }) {
   const color =
@@ -139,6 +140,7 @@ export function PopupScreen({
   onTotpPaste,
   onTotpAdd,
   onTotpCopyKey,
+  onCheckCodes,
   onLock,
   onRefresh,
   onSettings,
@@ -158,6 +160,32 @@ export function PopupScreen({
   const [target, setTarget] = useState("");
   const [addMsg, setAddMsg] = useState("");
   const [added, setAdded] = useState(false);
+  const [watch, setWatch] = useState("waiting");
+  const [polled, setPolled] = useState(false);
+
+  // after the hand-off, re-check the code list while the popup is open (list only, no code reads)
+  useEffect(() => {
+    if (!added) return undefined;
+    let dead = false;
+    const startedAt = Date.now();
+    setWatch("waiting");
+    setPolled(false);
+    const timer = setInterval(async () => {
+      let rows = [];
+      try {
+        rows = await onCheckCodes();
+      } catch (_) {}
+      if (dead) return;
+      setPolled(true);
+      const next = watchState(rows, { target, elapsedMs: Date.now() - startedAt });
+      setWatch(next);
+      if (next !== "waiting") clearInterval(timer);
+    }, TOTP_WATCH_EVERY_MS);
+    return () => {
+      dead = true;
+      clearInterval(timer);
+    };
+  }, [added]);
   const [loginOpen, setLoginOpen] = useState(false);
   const [newSite, setNewSite] = useState("");
   const [newUser, setNewUser] = useState("");
@@ -455,7 +483,15 @@ export function PopupScreen({
                     {added && (
                       <>
                         <p className="text-[12px]">
-                          {target ? t("passwordsOpenNoteWith", [target]) : t("passwordsOpenNote")}
+                          {watch === "saved"
+                            ? t("totpSavedCheck")
+                            : watch === "timeout"
+                              ? t("totpNotSavedYet")
+                              : polled
+                                ? t("totpCheckRefresh")
+                                : target
+                                  ? t("passwordsOpenNoteWith", [target])
+                                  : t("passwordsOpenNote")}
                         </p>
                         <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
                           {t("copySetupKey")}
