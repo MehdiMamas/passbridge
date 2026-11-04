@@ -105,7 +105,18 @@ async function verify(out) {
   }
 }
 
-export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "" } = {}) {
+// Short commit sha, plus -dirty when the tree has uncommitted changes; "" when git is unavailable (zip download).
+export function buildStamp(cwd = REPO) {
+  try {
+    const run = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const sha = run("rev-parse", "--short", "HEAD");
+    return run("status", "--porcelain") ? `${sha}-dirty` : sha;
+  } catch {
+    return "";
+  }
+}
+
+export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "", stamp = !process.env.PASSBRIDGE_RELEASE } = {}) {
   if ((releaseSource || version) && !mockKind) throw new Error("releaseSource and version are for test builds (mockKind) only");
   await clean(out);
   const dst = (...p) => join(out, ...p);
@@ -119,6 +130,12 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   if (version) {
     const manifest = JSON.parse(await readFile(dst("manifest.json"), "utf8"));
     await writeFile(dst("manifest.json"), `${JSON.stringify({ ...manifest, version }, null, 2)}\n`);
+  }
+  const sha = stamp ? buildStamp() : "";
+  if (sha) {
+    const manifest = JSON.parse(await readFile(dst("manifest.json"), "utf8"));
+    await writeFile(dst("manifest.json"), `${JSON.stringify({ ...manifest, version_name: `${manifest.version}+${sha}` }, null, 2)}
+`);
   }
   for (const page of ["popup.html", "options.html", "offscreen.html", "report.html", "update.html"]) {
     await cp(at("src", page), dst("src", page));

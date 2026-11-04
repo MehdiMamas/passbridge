@@ -3,6 +3,11 @@ import { OPTION_TABS } from "./options-model.js";
 import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
 
 
+function buildVersion() {
+  const m = globalThis.chrome?.runtime?.getManifest?.();
+  return m ? m.version_name || m.version : "";
+}
+
 const muted = "text-[color-mix(in_srgb,CanvasText_62%,Canvas)]";
 const hairline = "border-[color-mix(in_srgb,CanvasText_10%,Canvas)]";
 const focusRing = "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -499,6 +504,7 @@ export function OptionsScreen(props) {
                 })}
               </ul>
             </nav>
+            <p className={`px-5 pt-1 pb-4 text-xs ${muted}`}>{buildVersion()}</p>
           </div>
         </aside>
         <main className="min-w-0 flex-1 px-5 py-6 @2xl:px-10 @2xl:py-8">
