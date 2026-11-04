@@ -61,7 +61,7 @@ export async function launchExtension(ext) {
 
 async function cleanup() {
   for (const { ctx, profile } of open.splice(0)) {
-    await ctx?.close().catch(() => {});
+    await Promise.race([ctx?.close().catch(() => {}), new Promise((r) => setTimeout(r, 20000))]);
     await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch((e) => {
       console.error(`could not remove profile ${profile}: ${e.message}`);
     });

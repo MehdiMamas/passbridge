@@ -23,7 +23,14 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdat
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
-import { OPTION_TABS, helperView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { OPTION_TABS, helperView, passkeyImportSummary, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.js";
+import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.js";
+import { createPasskeyProxy } from "../../src/passkeys/proxy.js";
+import { isPasskeyLogin } from "../../src/passkeys/record.js";
+import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "../../src/passkeys/store.js";
+import { createMockClient } from "../../src/session/mock-client.js";
+import { parseBitwarden, parseCxf, parseExport } from "../../src/passkeys/import.js";
 import { codesForLogins, filterByUsername } from "../../src/ui/username-filter.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
@@ -1177,6 +1184,11 @@ ok("a zip code field on a verification form is not a one-time code", !isBareCode
 ok("a big page around a bare code field is not used as context", !isBareCodeOtp(["code"], backblazeForm + " x".repeat(400)));
 
 {
+  ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
+  ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
+  const sum = passkeyImportSummary([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }]);
+  ok("options: passkey import summary counts each outcome", sum.total === 5 && sum.saved === 2 && sum.exists === 1 && sum.skipped === 1 && sum.failed === 1);
+  ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));
   ok("options: tabs in order", OPTION_TABS.map((t) => t.id).join() === "autofill,appearance,browser,agents,updates");
   ok("options: hash opens its tab", tabFromHash("#updates") === "updates");
   ok("options: odd hashes open autofill", ["", "#", "#AGENTS", "#agents?x", "#%E2"].every((h) => tabFromHash(h) === "autofill"));
@@ -1248,6 +1260,218 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("add login: locked mid-check stops", (await run([[]], { ready: () => ++calls < 3 })) === "locked");
 }
 {
+  // passkeys: record, webauthn, import (synthetic keys only)
+  const rec = makeRecord({ rpId: "example.test", credentialId: "AbCdEfGh1234", userHandle: "dXNlcg", userName: "ann · test", key: "a2V5" });
+  ok("passkey record: encode then decode round-trips", JSON.stringify(decodeRecord(encodeRecord(rec))) === JSON.stringify(rec));
+  ok("passkey record: a newer version is refused", decodeRecord(pkB64u(new TextEncoder().encode(JSON.stringify({ ...rec, v: 2 })))) === null);
+  ok("passkey record: garbage and missing fields are refused", decodeRecord("!!") === null && decodeRecord(pkB64u(new TextEncoder().encode('{"v":1}'))) === null);
+  ok("passkey record: username holds site, user and 8 chars of the id", recordUsername(rec) === "example.test · ann · test · AbCdEfGh");
+  const parsed = parseUsername(recordUsername(rec));
+  ok("passkey record: username parses back", parsed.rpId === "example.test" && parsed.userName === "ann · test" && parsed.idPrefix === "AbCdEfGh");
+  ok("passkey record: a normal login name is not a passkey", !isPasskeyName("me@example.com") && !isPasskeyName("a · b") && isPasskeyName(recordUsername(rec)));
+  ok("passkey record: the dedicated host is recognised", isPasskeyHost(`https://${PASSKEY_HOST}/`) && isPasskeyHost(PASSKEY_HOST) && !isPasskeyHost("https://example.com"));
+
+  const origin = "https://login.example.test";
+  const getDetails = (over = {}) => ({ rpId: "example.test", challenge: "Y2hhbGxlbmdl", allowCredentials: [], userVerification: "preferred", extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
+  const createDetails = (over = {}) => ({ rp: { id: "example.test", name: "Example" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2hhbGxlbmdl", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
+  const derToRaw = (der) => {
+    let i = 3;
+    const rl = der[i++];
+    let r = der.slice(i, i + rl);
+    i += rl + 1;
+    const sl = der[i++];
+    let s = der.slice(i, i + sl);
+    const fix = (x) => (x.length > 32 ? x.slice(x.length - 32) : Uint8Array.from([...new Array(32 - x.length).fill(0), ...x]));
+    return Uint8Array.from([...fix(r), ...fix(s)]);
+  };
+  const sha = async (d) => new Uint8Array(await crypto.subtle.digest("SHA-256", d));
+  const verifyWith = async (spki, authData, cdj, derSig) => {
+    const pub = await crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const msg = new Uint8Array([...authData, ...(await sha(cdj))]);
+    return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, derToRaw(derSig), msg);
+  };
+
+  const made = await createPasskey(createDetails());
+  const cr = JSON.parse(made.responseJson);
+  const crAd = pkUnb64u(cr.response.authenticatorData);
+  const crCdj = JSON.parse(new TextDecoder().decode(pkUnb64u(cr.response.clientDataJSON)));
+  const rpHash = await sha(new TextEncoder().encode("example.test"));
+  ok("passkey create: clientDataJSON has type, challenge and the page origin", crCdj.type === "webauthn.create" && crCdj.challenge === "Y2hhbGxlbmdl" && crCdj.origin === origin);
+  ok("passkey create: rpIdHash, flags UP+BE+BS+AT without UV, counter 0", Buffer.from(crAd.slice(0, 32)).equals(Buffer.from(rpHash)) && crAd[32] === 0x59 && crAd.slice(33, 37).every((b) => b === 0));
+  const idLen = (crAd[53] << 8) | crAd[54];
+  ok("passkey create: attested data carries the credential id and an ES256 COSE key", pkB64u(crAd.slice(55, 55 + idLen)) === cr.id && crAd.slice(55 + idLen).length === 77 && crAd[55 + idLen] === 0xa5);
+  ok("passkey create: the stored record matches the answer", made.record.credentialId === cr.rawId && made.record.rpId === "example.test" && made.record.userName === "ann" && made.record.userHandle === "dXNlcjE");
+  ok("passkey create: UV flag set only when asked", ((await createPasskey(createDetails(), { userVerified: true }).then((m) => pkUnb64u(JSON.parse(m.responseJson).response.authenticatorData)))[32] & 0x04) === 0x04 && (crAd[32] & 0x04) === 0);
+  ok("passkey create: the attestation object is CBOR with fmt none", Buffer.from(pkUnb64u(cr.response.attestationObject)).toString("latin1").includes("fmtdnone"));
+
+  const spki = pkUnb64u(cr.response.publicKey);
+  const sign = async (opts) => {
+    const g = JSON.parse(await signAssertion(getDetails(), made.record, opts));
+    return { g, ad: pkUnb64u(g.response.authenticatorData), cdj: pkUnb64u(g.response.clientDataJSON), sig: pkUnb64u(g.response.signature) };
+  };
+  const got = await sign();
+  ok("passkey get: the signature verifies with the public key from create", await verifyWith(spki, got.ad, got.cdj, got.sig));
+  ok("passkey get: flags UP+BE+BS without UV, counter 0", got.ad[32] === 0x19 && got.ad.length === 37 && got.ad.slice(33).every((b) => b === 0));
+  ok("passkey get: UV flag set when the vault read verified the user", (await sign({ userVerified: true })).ad[32] === 0x1d);
+  ok("passkey get: a signature over other data does not verify", !(await verifyWith(spki, got.ad, new TextEncoder().encode("{}"), got.sig)));
+  ok("passkey get: answer carries id, user handle and clientDataJSON origin", got.g.id === made.record.credentialId && got.g.response.userHandle === "dXNlcjE" && JSON.parse(new TextDecoder().decode(got.cdj)).origin === origin);
+  const refused = async (fn) => {
+    try {
+      await fn();
+      return null;
+    } catch (e) {
+      return e.name;
+    }
+  };
+  ok("passkey get: another site's origin is refused", (await refused(() => signAssertion(getDetails({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }), made.record))) === "SecurityError");
+  ok("passkey get: a missing origin is refused", (await refused(() => signAssertion(getDetails({ extensions: {} }), made.record))) === "SecurityError");
+  ok("passkey get: a credential not on the allow list is refused", (await refused(() => signAssertion(getDetails({ allowCredentials: [{ type: "public-key", id: "b3RoZXI" }] }), made.record))) === "NotAllowedError");
+  ok("passkey get: a listed credential is allowed", !!(await signAssertion(getDetails({ allowCredentials: [{ type: "public-key", id: made.record.credentialId }] }), made.record)));
+  ok("passkey create: an rp id that is not the page's site is refused", (await refused(() => createPasskey(createDetails({ rp: { id: "other.test" } })))) === "SecurityError");
+  ok("passkey create: no ES256 offered is refused", (await refused(() => createPasskey(createDetails({ pubKeyCredParams: [{ type: "public-key", alg: -257 }] })))) === "NotSupportedError");
+
+  // import
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const k256 = pkB64u(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+  const kp384 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-384" }, true, ["sign", "verify"]);
+  const k384 = pkB64u(await crypto.subtle.exportKey("pkcs8", kp384.privateKey));
+  const guid = "e8d88789-e916-e196-3cbd-81dafae71bbc";
+  const bw = {
+    encrypted: false,
+    items: [
+      { login: { username: "x", fido2Credentials: [
+        { credentialId: guid, keyType: "public-key", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "example.test", userHandle: "dXNlcjE", userName: "ann", counter: "0", discoverable: "true" },
+        { credentialId: "b64.AAECAwQFBgcICQoLDA0ODw", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "two.example.test", userName: "bob", counter: "0" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-384", keyValue: k384, rpId: "p384.example.test", userName: "cy", counter: "0" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: "", rpId: "nokey.example.test", userName: "di" },
+        { credentialId: "not-a-guid", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "badid.example.test" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: "AAECAwQFBg", rpId: "badkey.example.test" },
+      ] } },
+      { login: { username: "plain" } },
+      { card: {} },
+    ],
+  };
+  const bwOut = await parseBitwarden(bw);
+  ok("import bitwarden: the two good P-256 passkeys are kept", bwOut.records.length === 2 && bwOut.records[0].rpId === "example.test" && bwOut.records[1].rpId === "two.example.test");
+  ok("import bitwarden: a GUID credential id becomes the raw id in base64url", bwOut.records[0].credentialId === "6NiHiekW4ZY8vYHa-ucbvA" && bwOut.records[1].credentialId === "AAECAwQFBgcICQoLDA0ODw");
+  ok("import bitwarden: fields map to the record", bwOut.records[0].userName === "ann" && bwOut.records[0].userHandle === "dXNlcjE" && bwOut.records[0].v === 1 && bwOut.records[1].userHandle === "");
+  ok("import bitwarden: four skipped, each with a reason", bwOut.skipped.length === 4 && bwOut.skipped.every((s) => s.label && s.reason) && bwOut.skipped[0].reason.includes("P-256") && bwOut.skipped[1].reason.includes("key") && bwOut.skipped[2].reason.includes("credential id"));
+  const imported = bwOut.records[0];
+  const sigRec = JSON.parse(await signAssertion(getDetails(), imported));
+  const importedPub = await crypto.subtle.importKey("jwk", { ...(await crypto.subtle.exportKey("jwk", kp.publicKey)) }, { name: "ECDSA", namedCurve: "P-256" }, true, ["verify"]);
+  ok("import bitwarden: an imported key signs and verifies against its public key", await verifyWith(new Uint8Array(await crypto.subtle.exportKey("spki", importedPub)), pkUnb64u(sigRec.response.authenticatorData), pkUnb64u(sigRec.response.clientDataJSON), pkUnb64u(sigRec.response.signature)));
+  ok("import bitwarden: an encrypted export is refused with a reason", (await parseBitwarden({ encrypted: true, items: [] })).skipped[0].reason.includes("encrypted"));
+  const cxf = { version: { major: 1, minor: 0 }, accounts: [{ id: "a", items: [{ id: "i", title: "Ex", credentials: [
+    { type: "basic-auth", username: { fieldType: "string", value: "x" } },
+    { type: "passkey", credentialId: "AAECAwQFBgcICQoLDA0ODw", rpId: "example.test", username: "ann", userDisplayName: "Ann", userHandle: "dXNlcjE", key: k256 },
+    { type: "passkey", credentialId: "AAECAwQFBgcICQoLDA0ODw", rpId: "p384.example.test", username: "cy", userDisplayName: "Cy", userHandle: "dXNlcjE", key: k384 },
+  ] }] }] };
+  const cxfOut = await parseCxf(cxf);
+  ok("import cxf: the P-256 passkey is kept, the P-384 one skipped with a reason", cxfOut.records.length === 1 && cxfOut.records[0].userName === "ann" && cxfOut.skipped.length === 1 && cxfOut.skipped[0].reason.includes("P-256"));
+  ok("import: parseExport reads a Credential Exchange file only", (await parseExport(JSON.stringify(cxf))).records.length === 1 && (await refused(() => parseExport(JSON.stringify(bw)))) === "Error");
+  ok("import: not JSON and unknown JSON give a plain error", (await refused(() => parseExport("nope"))) === "Error" && (await refused(() => parseExport("{}"))) === "Error");
+}
+{
+  // passkeys: store over the mock client
+  const client = createMockClient("unlocked");
+  const rec = (rpId, id, name = "ann") => makeRecord({ rpId, credentialId: id, userHandle: "dXNlcjE", userName: name, key: "a2V5" });
+  const a = rec("example.test", "AAAAAAAAAAAA");
+  ok("passkey store: nothing listed at first", (await listPasskeys(client, 1)).length === 0);
+  ok("passkey store: save is confirmed from the vault", (await savePasskey(client, 1, a, { pollMs: 1 })) === "saved");
+  ok("passkey store: saving the same passkey again writes nothing", (await savePasskey(client, 1, a, { pollMs: 1 })) === "exists" && (await listPasskeys(client, 1)).length === 1);
+  await savePasskey(client, 1, rec("other.test", "BBBBBBBBBBBB", "bo"), { pollMs: 1 });
+  const list = await listPasskeys(client, 1);
+  ok("passkey store: list parses the names", list.length === 2 && list[0].rpId === "example.test" && list[0].userName === "ann");
+  ok("passkey store: a site sees its own passkeys and its parent domain's", passkeysForHost(list, "login.example.test").length === 1 && passkeysForHost(list, "example.test").length === 1 && passkeysForHost(list, "badexample.test").length === 0 && passkeysForHost(list, "none.test").length === 0);
+  const read = await readPasskey(client, 1, list[0]);
+  ok("passkey store: read returns the saved record, UV off by default", JSON.stringify(read.record) === JSON.stringify(a) && read.userVerified === false);
+  globalThis.__mockVerified = true;
+  ok("passkey store: UV is reported only when the client says it verified", (await readPasskey(client, 1, list[0])).userVerified === true);
+  delete globalThis.__mockVerified;
+  const locked = createMockClient("locked");
+  ok("passkey store: a locked vault throws on list and save", (await Promise.all([listPasskeys(locked, 1).then(() => "ok", () => "throw"), savePasskey(locked, 1, a).then(() => "ok", () => "throw")])).join() === "throw,throw");
+  const unreadable = { getPasswordForLoginName: async () => ({ username: "x", password: "not a record" }) };
+  ok("passkey store: a password that is not a record reads as null", (await readPasskey(unreadable, 1, list[0])) === null);
+}
+{
+  // passkeys: proxy (attach rules and request handling) with a fake chrome.webAuthenticationProxy
+  const origin = "https://login.example.test";
+  const ext = { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } };
+  const getJson = (o = {}) => JSON.stringify({ rpId: "example.test", challenge: "Y2g", allowCredentials: [], extensions: ext, ...o });
+  const createJson = (o = {}) => JSON.stringify({ rp: { id: "example.test", name: "E" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2g", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: ext, ...o });
+  const setup = async ({ enabled = true, url = origin + "/", kind = "unlocked" } = {}) => {
+    const calls = [];
+    const api = {
+      attach: async () => void calls.push("attach"),
+      detach: async () => void calls.push("detach"),
+      completeGetRequest: async (d) => void calls.push({ get: d }),
+      completeCreateRequest: async (d) => void calls.push({ create: d }),
+      completeIsUvpaaRequest: async (d) => void calls.push({ uvpaa: d }),
+      onCreateRequest: { addListener: () => {} },
+      onGetRequest: { addListener: () => {} },
+      onIsUvpaaRequest: { addListener: () => {} },
+      onRequestCanceled: { addListener: () => {} },
+    };
+    const state = { url, enabled };
+    const client = createMockClient(kind);
+    const proxy = createPasskeyProxy({ api: () => api, client, ensureConnected: async () => {}, enabled: async () => state.enabled, getTab: async () => ({ id: 1, url: state.url }), sleep: async () => { await new Promise((r) => setTimeout(r, 1)); }, pollMs: 1 });
+    return { calls, api, state, client, proxy };
+  };
+  const seed = (client) => createPasskey(JSON.parse(createJson())).then(({ record }) => savePasskey(client, 1, record, { pollMs: 1 }).then(() => record));
+
+  let w = await setup();
+  await w.proxy.refresh();
+  ok("passkey proxy: no stored passkey for the site stays detached", w.calls.join() === "detach");
+  await seed(w.client);
+  w.proxy.invalidate();
+  await w.proxy.refresh();
+  ok("passkey proxy: a stored passkey for the site attaches", w.calls.join() === "detach,attach");
+  await w.proxy.refresh();
+  ok("passkey proxy: no change means no call", w.calls.length === 2);
+  w.state.url = "https://other.test/";
+  await w.proxy.refresh();
+  ok("passkey proxy: another site detaches", w.calls.join() === "detach,attach,detach");
+  w.state.url = "chrome://extensions/";
+  await w.proxy.refresh();
+  ok("passkey proxy: a non-web page stays detached", w.calls.length === 3);
+  const off = await setup({ enabled: false });
+  await seed(off.client);
+  await off.proxy.refresh();
+  ok("passkey proxy: the setting off detaches even with stored passkeys", off.calls.join() === "detach");
+
+  w = await setup();
+  const rec = await seed(w.client);
+  await w.proxy.onGet({ requestId: 1, requestDetailsJson: getJson() });
+  const g = w.calls.find((c) => c.get)?.get;
+  ok("passkey proxy: a get request is answered with a response for the stored passkey", g?.requestId === 1 && !g.error && JSON.parse(g.responseJson).id === rec.credentialId);
+  w.calls.length = 0;
+  await w.proxy.onGet({ requestId: 2, requestDetailsJson: getJson({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }) });
+  ok("passkey proxy: a get from the wrong origin is refused", w.calls[0].get.error?.name === "SecurityError" && !w.calls[0].get.responseJson);
+  w.calls.length = 0;
+  await w.proxy.onGet({ requestId: 3, requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  ok("passkey proxy: a get that allows only other credentials is refused", w.calls[0].get.error?.name === "NotAllowedError");
+  w.calls.length = 0;
+  await w.proxy.onCreate({ requestId: 4, requestDetailsJson: createJson({ user: { id: "dXNlcjI", name: "bo", displayName: "Bo" } }) });
+  const c = w.calls.find((x) => x.create)?.create;
+  ok("passkey proxy: a create request is saved to the vault, then answered", !!c?.responseJson && (await listPasskeys(w.client, 1)).length === 2);
+  w.calls.length = 0;
+  await w.proxy.onCreate({ requestId: 5, requestDetailsJson: createJson({ rp: { id: "other.test" } }) });
+  ok("passkey proxy: a create for another site's rp id is refused and nothing is saved", w.calls[0].create.error?.name === "SecurityError" && (await listPasskeys(w.client, 1)).length === 2);
+  const failing = { ...w.client, saveLogin: async () => true, getLoginNamesForURL: w.client.getLoginNamesForURL, get ready() { return true; } };
+  const p2 = createPasskeyProxy({ api: () => w.api, client: failing, ensureConnected: async () => {}, enabled: async () => true, getTab: async () => ({ id: 1, url: origin }), sleep: async () => {}, pollMs: 1 });
+  w.calls.length = 0;
+  const realNow = Date.now;
+  let tick = 0;
+  Date.now = () => realNow() + (tick += 20000);
+  await p2.onCreate({ requestId: 6, requestDetailsJson: createJson({ user: { id: "dXNlcjM", name: "cy", displayName: "Cy" } }) });
+  Date.now = realNow;
+  ok("passkey proxy: a create that never shows in the vault is reported as failed", w.calls[0].create.error?.name === "NotAllowedError" && !w.calls[0].create.responseJson);
+
+  const lk = await setup({ kind: "locked" });
+  await lk.proxy.onGet({ requestId: 7, requestDetailsJson: getJson({ timeout: 30 }) });
+  ok("passkey proxy: a locked vault waits, then ends with Chrome's normal error", lk.calls[0].get.error?.name === "NotAllowedError");
+  ok("passkey proxy: a locked vault is not attached before it can list passkeys", (await lk.proxy.refresh(), !lk.calls.includes("attach")));
+  ok("passkey login filter: passkey rows are hidden from fill lists", isPasskeyLogin({ username: "example.test · ann · AAAAAAAA", sites: [] }) && isPasskeyLogin({ username: "x", sites: ["passkeys.passbridge.invalid"] }) && !isPasskeyLogin({ username: "me@example.com", sites: ["example.com"] }));
   const logins = [{ username: "Alex@Mail.com" }, { username: "sam" }, { username: "" }];
   const names = (q) => filterByUsername(logins, q).map((l) => l.username);
   ok("username filter: case is ignored", names("ALEX").join() === "Alex@Mail.com");

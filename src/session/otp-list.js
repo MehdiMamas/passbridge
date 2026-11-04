@@ -1,4 +1,5 @@
 import { siteLookupHosts } from "./site-domain.js";
+import { isPasskeyLogin } from "../passkeys/record.js";
 
 // iCloud for Windows 15.10 lists only codes set up on Windows, so a synced TOTP needs a per-login read
 export const OTP_FALLBACK_MAX_LOGINS = 8;
@@ -40,7 +41,7 @@ async function loginNamesFor(client, tabId, url) {
   const seen = new Set();
   const usernames = [];
   for (const h of siteLookupHosts(host)) {
-    const names = await client.getLoginNamesForURL(tabId, `https://${h}/`).catch(() => []);
+    const names = (await client.getLoginNamesForURL(tabId, `https://${h}/`).catch(() => [])).filter((l) => !isPasskeyLogin(l));
     for (const n of names) {
       const k = lc(n.username);
       if (!k || seen.has(k)) continue;

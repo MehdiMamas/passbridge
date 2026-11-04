@@ -6,6 +6,7 @@ const FIXTURES = {
     { username: "alice@example.com", sites: [] },
     { username: "bob@work.com", sites: [] },
   ],
+  passkeys: [{ username: "test@example.com", sites: [] }],
   locked: [],
   empty: [],
   nohelper: [],
@@ -53,10 +54,14 @@ const otpRowsFor = (frameUrls) => {
   return OTP_ROWS.filter((row) => !row.domain || hosts.some((h) => h === row.domain || h.endsWith("." + row.domain)));
 };
 
+// saved logins per host, so a login saved for one site is read back for that site (passkey records need their own password)
+const hostKey = (u) => hostOf(/^[a-z][a-z0-9+.-]*:\/\//i.test(String(u)) ? u : `https://${u}`);
+
 export function createMockClient(kind) {
   const startsLocked = kind === "locked" || kind === "pinflow";
   const listeners = [];
   const added = [];
+  const byHost = new Map();
   const client = {
     state: kind === "nohelper" ? "no_helper" : startsLocked ? "needs_pin" : "unlocked",
     ready: !startsLocked && kind !== "nohelper",
@@ -79,11 +84,14 @@ export function createMockClient(kind) {
       client.state = "disconnected";
       client.ready = false;
     },
-    async getLoginNamesForURL() {
+    async getLoginNamesForURL(_tabId, url) {
       if (!client.ready) throw new Error("locked");
+      if (url && /(^|\/\/)passkeys\.passbridge\.invalid/.test(String(url))) return (byHost.get(hostKey(url)) || []).map((e) => ({ username: e.username, sites: [] }));
       return [...(FIXTURES[kind] || []), ...added];
     },
-    async getPasswordForLoginName(_tabId, _url, login) {
+    async getPasswordForLoginName(_tabId, url, login, queryUrl) {
+      const saved = (byHost.get(hostKey(queryUrl || url)) || []).find((e) => e.username === login?.username);
+      if (saved) return { username: saved.username, password: saved.password, ...(globalThis.__mockVerified ? { verified: true } : {}) };
       return { username: login?.username || "test@example.com", password: "TestPass123" };
     },
     async getOneTimeCodes(_tabId, _frameId, frameUrls) {
@@ -117,6 +125,8 @@ export function createMockClient(kind) {
       // lets a driver read what would have gone to Apple's sheet
       (globalThis.__mockSaved ||= []).push({ url, username, password });
       added.push({ username, sites: [] });
+      const key = hostKey(url);
+      byHost.set(key, [...(byHost.get(key) || []).filter((e) => e.username !== username), { username, password }]);
     },
     launchPasswordsApp(args) {
       (globalThis.__mockLaunched ||= []).push(args);

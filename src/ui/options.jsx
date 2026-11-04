@@ -5,8 +5,9 @@ import { domainLines } from "../session/agent-allow.js";
 import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
-import { helperView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
-import { applyDocumentLanguage } from "../i18n/runtime.js";
+import { parseExport } from "../passkeys/import.js";
+import { helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
+import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
 import { followTheme } from "./page-theme.js";
@@ -23,6 +24,10 @@ function OptionsApp() {
   const [lists, setLists] = useState(() => Object.fromEntries(LIST_KEYS.map((k) => [k, ""])));
   const [agentLog, setAgentLog] = useState([]);
   const [relay, setRelay] = useState("");
+  const [passkeyOn, setPasskeyOn] = useState(false);
+  const [passkeyNote, setPasskeyNote] = useState("");
+  const [passkeyProgress, setPasskeyProgress] = useState(null);
+  const [passkeyResults, setPasskeyResults] = useState([]);
   const [tab, setTab] = useState(() => tabFromHash(location.hash));
   const [helpers, setHelpers] = useState({ policy: "checking", updater: "checking" });
   const [policy, setPolicy] = useState({ hidden: false, message: "" });
@@ -64,6 +69,7 @@ function OptionsApp() {
       if (area === "session" && changes.agentRelay) setRelay(changes.agentRelay.newValue || "");
     };
     chrome.storage.onChanged.addListener(onRelay);
+    readPasskeySetting();
     sendPolicy("get").then((r) => applyPolicy(r, policyMessage(r, false)));
     updaterAvailable().then((has) => setHelpers((h) => ({ ...h, updater: has ? "present" : "missing" })));
     readPrivacy("passwordSavingEnabled", setBubble);
@@ -104,6 +110,58 @@ function OptionsApp() {
       removeEventListener("focus", recheck);
     };
   }, []);
+
+  function readPasskeySetting() {
+    try {
+      chrome.storage.local.get({ passkeyStore: false }, (o) => setPasskeyOn(o.passkeyStore === true));
+    } catch {}
+  }
+
+  async function onPasskeyToggle(on) {
+    setPasskeyNote("");
+    if (on) {
+      let granted = false;
+      try {
+        granted = await chrome.permissions.request({ permissions: ["webAuthenticationProxy"] });
+      } catch {}
+      if (!granted) return setPasskeyNote(t("passkeyNoPermission"));
+      await chrome.storage.local.set({ passkeyStore: true });
+      setPasskeyOn(true);
+      return;
+    }
+    await chrome.storage.local.set({ passkeyStore: false });
+    setPasskeyOn(false);
+    try {
+      await chrome.runtime.sendMessage({ type: "passkeyDetach" });
+      await chrome.permissions.remove({ permissions: ["webAuthenticationProxy"] });
+    } catch {}
+  }
+
+  async function onPasskeyPick(file) {
+    if (!file) return;
+    setPasskeyResults([]);
+    let parsed;
+    try {
+      parsed = parseExport(await file.text());
+    } catch (e) {
+      return setPasskeyResults([{ label: file.name, status: "failed", reason: e?.message || "" }]);
+    }
+    const results = parsed.skipped.map((s) => ({ label: s.label, status: "skipped", reason: s.reason }));
+    const total = parsed.records.length;
+    for (let i = 0; i < total; i++) {
+      setPasskeyProgress({ done: i, total });
+      const rec = parsed.records[i];
+      const label = `${rec.rpId} / ${rec.userName}`;
+      let res = null;
+      try {
+        res = await chrome.runtime.sendMessage({ type: "passkeySave", record: rec });
+      } catch {}
+      if (res?.ok && (res.result === "saved" || res.result === "exists")) results.push({ label, status: res.result });
+      else results.push({ label, status: "failed", reason: res?.error || res?.result || "" });
+    }
+    setPasskeyProgress(null);
+    setPasskeyResults(results);
+  }
 
   function saveBlurList() {
     if (!isBlurListDirty.current) return;
@@ -171,6 +229,9 @@ function OptionsApp() {
         onPrivacy={onPrivacy}
         agentLog={agentLog}
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
+        passkeys={passkeysView(IS_WINDOWS)}
+        passkeyStore={IS_WINDOWS ? { isOn: passkeyOn, onToggle: onPasskeyToggle, onPick: onPasskeyPick, progress: passkeyProgress, results: passkeyResults, note: passkeyNote } : null}
+        onOpenUrl={(url) => chrome.tabs.create({ url })}
         onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
         onPasswordSettings={IS_EDGE ? null : () => chrome.tabs.create({ url: "chrome://password-manager/settings" })}
       />

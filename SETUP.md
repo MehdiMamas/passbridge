@@ -145,6 +145,39 @@ Python is needed for automatic updates, agent sign-in and the "Hide the browser'
 
 On some PCs `HKCU\Software\Policies` is locked. Then the setting asks for a UAC approval and imports the policy into your own user hive, even when a different administrator account approves it.
 
+## Passkeys
+
+On macOS PassBridge does not store or sign passkeys. Apple's helper has no passkey command, so passkeys stay with Chrome and your devices. On Windows you can opt in to a PassBridge passkey store (below). Details and sources are in [docs/passkeys](docs/passkeys/RESEARCH.md).
+
+### macOS
+
+1. Use Chrome 118 or newer on macOS 13.5 or newer.
+2. Sign in to a site that has a passkey. Chrome asks once for access to your iCloud Keychain; allow it.
+3. Pick the passkey in Chrome's prompt.
+
+PassBridge leaves this alone. The option "Hide passkey suggestions" (Options, Browser) also hides Chrome's own passkey prompts, so leave it off if you want them.
+
+### Windows
+
+Your iPhone keeps the passkey. Chrome on Windows reaches it over a phone connection.
+
+1. Turn Bluetooth on, on the PC and on the iPhone, and make sure both are online.
+2. On the sign-in page, choose the passkey option. In Chrome's passkey dialog choose "Use a phone or tablet".
+3. Scan the QR code with the iPhone camera and approve on the phone.
+4. Every sign-in needs a new scan. iPhone does not support remembering the PC.
+
+#### Optional: keep passkeys in PassBridge (Windows)
+
+This stores copies of your passkeys in your iCloud Passwords vault and signs sign-ins on this PC without a phone scan. It works only on sites you imported a passkey for.
+
+1. Export your passkeys from another manager as an unencrypted Credential Exchange file.
+2. In Options, Browser, turn on "Use passkeys on this PC" and allow the permission Chrome asks for.
+3. Unlock the iCloud Passwords vault, choose "Import passkeys" and pick the file. Wait for the list of saved and skipped passkeys; only ES256 (P-256) passkeys are kept.
+4. Delete the export file now. It holds your passkeys unprotected.
+5. Sign in on a site you imported a passkey for. On other sites Chrome's own passkey dialog works as before.
+
+"Hide passkey suggestions" also hides conditional passkey prompts; leave it off if you want them. Turning the switch off removes the permission.
+
 ## Is it working?
 
 1. The toolbar icon opens a popup that says Connecting, then asks for a code, then lists logins for the current site.

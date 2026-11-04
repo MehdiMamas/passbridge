@@ -17,6 +17,7 @@ const BROWSER_ROWS = [
   "Right-click menu",
   "Keyboard shortcuts",
   "Hide passkey suggestions",
+  "Passkeys",
   "Hide the browser's address suggestions",
   "Hide the browser's save-password prompt",
   "Hide the browser's password manager",
@@ -123,6 +124,9 @@ await main(async () => {
   ok("options: no policy host greys the password manager", await row("Hide the browser's password manager").locator('[role="switch"]').isDisabled());
   const browserRows = await page.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
   ok("options: browser rows in order", browserRows.join("|") === BROWSER_ROWS.join("|"), browserRows.join("|"));
+  const passkeysText = await row("Passkeys").innerText();
+  ok("options: passkeys row shows the text for this platform", /Chrome uses your iCloud Keychain passkeys directly/.test(passkeysText) && !/QR code/.test(passkeysText), passkeysText);
+  ok("options: passkeys row has a How it works button", (await row("Passkeys").getByRole("button", { name: /How it works/ }).count()) === 1);
   const [passwordSettings] = await Promise.all([ctx.waitForEvent("page"), row("The browser's saved passwords").getByRole("button", { name: /Open password settings/ }).click()]);
   ok("options: Open password settings opens the browser's password settings", passwordSettings.url() === "chrome://password-manager/settings", passwordSettings.url());
   await passwordSettings.close();
