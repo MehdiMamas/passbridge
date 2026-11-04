@@ -70,10 +70,10 @@ await main(async () => {
       return;
     }
 
-    // a fresh synthetic key stored for localhost, so the proxy attaches there
+    // a fresh synthetic key stored for seed.localhost (*.localhost is a secure origin in Chrome), so the proxy attaches there
     const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
     const key = b64u(new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey)));
-    const seed = makeRecord({ rpId: "localhost", credentialId: b64u(crypto.getRandomValues(new Uint8Array(16))), userHandle: "AQID", userName: "seed", key });
+    const seed = makeRecord({ rpId: "seed.localhost", credentialId: b64u(crypto.getRandomValues(new Uint8Array(16))), userHandle: "AQID", userName: "seed", key });
 
     const options = await within("open options page", ctx.newPage());
     await within("load options page", options.goto(new URL("options.html", sw.url()).href));
@@ -84,38 +84,38 @@ await main(async () => {
 
     // a site with nothing stored: the proxy must stay detached, so the request is not answered by PassBridge
     const other = await within("open site without a passkey", ctx.newPage());
-    await within("load site without a passkey", other.goto(`http://openpw.test:${port}/`));
+    await within("load site without a passkey", other.goto(`http://new.localhost:${port}/`));
     await other.bringToFront();
     await other.waitForTimeout(1500);
-    const idle = await within("request on site without a passkey", other.evaluate(() => window.run("openpw.test")), 40000);
-    ok("passkeys: no stored passkey for the site, PassBridge does not answer", idle.create !== "ok", JSON.stringify(idle));
+    const idle = await within("request on site without a passkey", other.evaluate(() => window.run("new.localhost")), 40000);
+    ok("passkeys: no stored passkey for the site, PassBridge does not answer", idle.create !== "ok" && /Error/.test(idle.error || "") && !/TypeError/.test(idle.error || ""), JSON.stringify(idle));
 
     // all sites on: the same site now gets the create, and the next sign-in uses it
     await within("turn all sites on", sw.evaluate(() => chrome.storage.local.set({ passkeysAllSites: true })));
     await other.bringToFront();
     await other.reload();
     await other.waitForTimeout(1500);
-    const fresh = await within("create and two gets on a site with no passkey", other.evaluate(() => window.run("openpw.test")), 60000);
+    const fresh = await within("create and two gets on a site with no passkey", other.evaluate(() => window.run("new.localhost")), 60000);
     ok("passkeys: all sites on, a create on a site with no passkey is stored and its gets verify", fresh.create === "ok" && fresh.createOrigin === true && fresh.gets?.length === 2 && fresh.gets.every(Boolean), JSON.stringify(fresh));
-    const dup = await within("create with a matching excludeCredentials", other.evaluate(() => window.createExcluding("openpw.test")), 20000);
+    const dup = await within("create with a matching excludeCredentials", other.evaluate(() => window.createExcluding("new.localhost")), 20000);
     ok("passkeys: a create whose excludeCredentials matches a stored passkey is InvalidStateError", dup === "InvalidStateError", dup);
     await within("close that tab", other.close());
 
     // a get on a site with no passkey leaves the nudge for the popup
     const bare = await within("open site the vault has nothing for", ctx.newPage());
-    await within("load that site", bare.goto(`http://nopk.test:${port}/`));
+    await within("load that site", bare.goto(`http://nopk.localhost:${port}/`));
     await bare.bringToFront();
     await bare.waitForTimeout(1500);
-    const none = await within("get on a site with no passkey", bare.evaluate(() => window.getOnly("nopk.test")), 20000);
+    const none = await within("get on a site with no passkey", bare.evaluate(() => window.getOnly("nopk.localhost")), 20000);
     const nudge = await within("read the nudge", sw.evaluate(() => chrome.storage.session.get("passkeyNudge")));
-    ok("passkeys: a get on a site with no passkey ends with a normal error and saves the nudge", /NotAllowedError/.test(none) && nudge.passkeyNudge?.rpId === "nopk.test", `${none} ${JSON.stringify(nudge)}`);
+    ok("passkeys: a get on a site with no passkey ends with a normal error and saves the nudge", /NotAllowedError/.test(none) && nudge.passkeyNudge?.rpId === "nopk.localhost", `${none} ${JSON.stringify(nudge)}`);
     await within("close that tab", bare.close());
 
     const page = await within("open site with a passkey", ctx.newPage());
-    await within("load site with a passkey", page.goto(`http://localhost:${port}/`));
+    await within("load site with a passkey", page.goto(`http://seed.localhost:${port}/`));
     await page.bringToFront();
     await page.waitForTimeout(2000);
-    const r = await within("create and two gets", page.evaluate(() => window.run("localhost")), 60000);
+    const r = await within("create and two gets", page.evaluate(() => window.run("seed.localhost")), 60000);
     ok("passkeys: create is answered with the page's origin in clientDataJSON", r.create === "ok" && r.createOrigin === true, JSON.stringify(r));
     ok("passkeys: two gets return signatures that verify with the public key from create", r.gets?.length === 2 && r.gets.every(Boolean), JSON.stringify(r));
     const wrong = await within("other site rp id", page.evaluate(() => window.wrongOrigin()), 20000);
