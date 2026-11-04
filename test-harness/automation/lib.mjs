@@ -52,7 +52,7 @@ export async function launchExtension(ext) {
       `--load-extension=${ext}`,
       "--headless=new",
       "--no-first-run",
-      "--host-resolver-rules=MAP openpw.test 127.0.0.1",
+      "--host-resolver-rules=MAP openpw.test 127.0.0.1, MAP nopk.test 127.0.0.1",
     ],
   });
   entry.ctx.serviceWorkers()[0] || (await entry.ctx.waitForEvent("serviceworker", { timeout: 10000 }).catch(() => null));

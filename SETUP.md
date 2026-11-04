@@ -168,13 +168,16 @@ Your iPhone keeps the passkey. Chrome on Windows reaches it over a phone connect
 
 #### Optional: keep passkeys in PassBridge (Windows)
 
-This stores copies of your passkeys in your iCloud Passwords vault and signs sign-ins on this PC without a phone scan. It works only on sites you imported a passkey for.
+This stores copies of your passkeys in your iCloud Passwords vault and signs sign-ins on this PC without a phone scan. With "Catch new passkeys on every site" on (the default), a passkey you create on any site in this Chrome is saved to the vault too. While it is on, Chrome uses PassBridge for every passkey: security keys, Windows Hello and phone sign-in are paused in this browser. Turn it off to use PassBridge only on sites where a passkey is already stored.
 
 1. Export your passkeys from another manager as an unencrypted Credential Exchange file.
 2. In Options, Browser, turn on "Use passkeys on this PC" and allow the permission Chrome asks for.
 3. Unlock the iCloud Passwords vault, choose "Import passkeys" and pick the file. Wait for the list of saved and skipped passkeys; only ES256 (P-256) passkeys are kept.
 4. Delete the export file now. It holds your passkeys unprotected.
-5. Sign in on a site you imported a passkey for. On other sites Chrome's own passkey dialog works as before.
+5. Sign in on a site you imported a passkey for.
+6. Optional: turn on "Sign in without Touch ID". It keeps your passkeys unlocked in this Chrome until you quit it, so sign-ins need no verification. Anyone using this Chrome profile can sign in with them. Turning it off clears them.
+
+Sync all: when a site asks for a passkey PassBridge does not have, the popup says so and offers Sync all (also in Options). On your Mac, open Passwords, choose File > Export All Items to App… > PassBridge, then confirm with Touch ID. Passkeys made outside Chrome (iPhone, Safari) come over on your next Sync all.
 
 "Hide passkey suggestions" also hides conditional passkey prompts; leave it off if you want them. Turning the switch off removes the permission.
 

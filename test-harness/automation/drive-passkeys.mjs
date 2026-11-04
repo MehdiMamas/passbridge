@@ -22,7 +22,7 @@ window.run=async function(rpId){
   const r={};
   try{
     const c=await timed(navigator.credentials.create({publicKey:{rp:{id:rpId,name:'t'},user:{id:new Uint8Array([1,2,3]),name:'u',displayName:'u'},challenge:crypto.getRandomValues(new Uint8Array(32)),pubKeyCredParams:[{type:'public-key',alg:-7}],attestation:'none'}}),6000);
-    r.create='ok';
+    r.create='ok';window.lastRaw=c.rawId;
     const cd=JSON.parse(new TextDecoder().decode(c.response.clientDataJSON));
     r.createOrigin=cd.type==='webauthn.create'&&cd.origin===location.origin;
     const pub=await crypto.subtle.importKey('spki',c.response.getPublicKey(),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
@@ -33,6 +33,14 @@ window.run=async function(rpId){
     }
   }catch(e){r.error=e.name+': '+e.message;}
   return r;
+};
+window.createExcluding=async function(rpId){
+  try{await timed(navigator.credentials.create({publicKey:{rp:{id:rpId,name:'t'},user:{id:new Uint8Array([4,5,6]),name:'u2',displayName:'u2'},challenge:crypto.getRandomValues(new Uint8Array(32)),pubKeyCredParams:[{type:'public-key',alg:-7}],excludeCredentials:[{type:'public-key',id:window.lastRaw}],attestation:'none'}}),6000);return 'UNEXPECTED SUCCESS';}
+  catch(e){return e.name;}
+};
+window.getOnly=async function(rpId){
+  try{await timed(navigator.credentials.get({publicKey:{rpId,challenge:crypto.getRandomValues(new Uint8Array(32))}}),6000);return 'UNEXPECTED SUCCESS';}
+  catch(e){return e.name;}
 };
 window.wrongOrigin=async function(){
   try{await timed(navigator.credentials.get({publicKey:{rpId:'example.com',challenge:new Uint8Array(32)}}),6000);return 'UNEXPECTED SUCCESS';}
@@ -69,7 +77,8 @@ await main(async () => {
 
     const options = await within("open options page", ctx.newPage());
     await within("load options page", options.goto(new URL("options.html", sw.url()).href));
-    await within("turn the setting on", sw.evaluate(() => chrome.storage.local.set({ passkeyStore: true })));
+    // all sites off first: the old rule, attached only where a passkey is stored
+    await within("turn the setting on", sw.evaluate(() => chrome.storage.local.set({ passkeyStore: true, passkeysAllSites: false })));
     const saved = await within("store a passkey", options.evaluate((record) => chrome.runtime.sendMessage({ type: "passkeySave", record }), seed), 40000);
     ok("passkeys: the options page can store a passkey in the vault", saved?.ok && saved.result === "saved", JSON.stringify(saved));
 
@@ -80,7 +89,27 @@ await main(async () => {
     await other.waitForTimeout(1500);
     const idle = await within("request on site without a passkey", other.evaluate(() => window.run("openpw.test")), 40000);
     ok("passkeys: no stored passkey for the site, PassBridge does not answer", idle.create !== "ok", JSON.stringify(idle));
+
+    // all sites on: the same site now gets the create, and the next sign-in uses it
+    await within("turn all sites on", sw.evaluate(() => chrome.storage.local.set({ passkeysAllSites: true })));
+    await other.bringToFront();
+    await other.reload();
+    await other.waitForTimeout(1500);
+    const fresh = await within("create and two gets on a site with no passkey", other.evaluate(() => window.run("openpw.test")), 60000);
+    ok("passkeys: all sites on, a create on a site with no passkey is stored and its gets verify", fresh.create === "ok" && fresh.createOrigin === true && fresh.gets?.length === 2 && fresh.gets.every(Boolean), JSON.stringify(fresh));
+    const dup = await within("create with a matching excludeCredentials", other.evaluate(() => window.createExcluding("openpw.test")), 20000);
+    ok("passkeys: a create whose excludeCredentials matches a stored passkey is InvalidStateError", dup === "InvalidStateError", dup);
     await within("close that tab", other.close());
+
+    // a get on a site with no passkey leaves the nudge for the popup
+    const bare = await within("open site the vault has nothing for", ctx.newPage());
+    await within("load that site", bare.goto(`http://nopk.test:${port}/`));
+    await bare.bringToFront();
+    await bare.waitForTimeout(1500);
+    const none = await within("get on a site with no passkey", bare.evaluate(() => window.getOnly("nopk.test")), 20000);
+    const nudge = await within("read the nudge", sw.evaluate(() => chrome.storage.session.get("passkeyNudge")));
+    ok("passkeys: a get on a site with no passkey ends with a normal error and saves the nudge", /NotAllowedError/.test(none) && nudge.passkeyNudge?.rpId === "nopk.test", `${none} ${JSON.stringify(nudge)}`);
+    await within("close that tab", bare.close());
 
     const page = await within("open site with a passkey", ctx.newPage());
     await within("load site with a passkey", page.goto(`http://localhost:${port}/`));
