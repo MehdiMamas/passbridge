@@ -24,6 +24,7 @@ import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
 import { OPTION_TABS, helperView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { codesForLogins, filterByUsername } from "../../src/ui/username-filter.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -1245,6 +1246,21 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("add login: an old entry that stays is not saved", (await run([[me]], { before: 1 })) === "timeout");
   let calls = 0;
   ok("add login: locked mid-check stops", (await run([[]], { ready: () => ++calls < 3 })) === "locked");
+}
+{
+  const logins = [{ username: "Alex@Mail.com" }, { username: "sam" }, { username: "" }];
+  const names = (q) => filterByUsername(logins, q).map((l) => l.username);
+  ok("username filter: case is ignored", names("ALEX").join() === "Alex@Mail.com");
+  ok("username filter: outer spaces are ignored", names("  sam ").join() === "sam");
+  ok("username filter: part of a name matches", names("mail").join() === "Alex@Mail.com");
+  ok("username filter: empty query keeps all", names("").length === 3 && names("   ").length === 3);
+  ok("username filter: no match gives an empty list", names("zzz").length === 0);
+  const codes = [{ id: 1, username: "sam" }, { id: 2, username: "alex@mail.com" }, { id: 3, username: "bob" }, { id: 4 }];
+  const ids = (q) => codesForLogins(codes, filterByUsername(logins, q), q).map((c) => c.id).join();
+  ok("codes: grouped codes follow their kept login", ids("sam") === "1");
+  ok("codes: an ungrouped code stays when its username matches", ids("bo") === "3");
+  ok("codes: empty query keeps every code", ids("") === "1,2,3,4");
+  ok("codes: an ungrouped code without a username is hidden by a query", !ids("sam").includes("4"));
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);
