@@ -132,6 +132,8 @@
   "copyCodesHelp": { "message": "當 PassBridge 填寫代碼時，也將其複製到剪貼簿。" },
   "clipboardClear": { "message": "自動清除剪貼簿" },
   "clipboardHelp": { "message": "在此時間後清除 PassBridge 複製的任何內容（密碼、使用者名稱、代碼）。Windows 剪貼簿記錄和剪貼簿應用程式會保留它們自己的副本。" },
+  "clearMru": { "message": "清除最近使用的順序" },
+  "clearMruDone": { "message": "已清除" },
   "clear10s": { "message": "10 秒" },
   "clear20s": { "message": "20 秒" },
   "clear30s": { "message": "30 秒" },

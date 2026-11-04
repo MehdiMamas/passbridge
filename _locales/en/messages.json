@@ -131,6 +131,8 @@
   "copyCodesHelp": { "message": "Also copies a verification code to the clipboard when PassBridge fills it." },
   "clipboardClear": { "message": "Clear clipboard after" },
   "clipboardHelp": { "message": "Clears anything PassBridge copies (passwords, usernames, codes) after this time. Windows clipboard history and clipboard apps keep their own copy." },
+  "clearMru": { "message": "Clear recently used order" },
+  "clearMruDone": { "message": "Cleared" },
   "clear10s": { "message": "10 seconds" },
   "clear20s": { "message": "20 seconds" },
   "clear30s": { "message": "30 seconds" },
