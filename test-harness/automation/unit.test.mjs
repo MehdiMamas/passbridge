@@ -24,7 +24,7 @@ import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
 import { OPTION_TABS, helperView, policyMessage, tabFromHash } from "../../src/ui/options-model.js";
-import { buildExtension } from "../../scripts/build.mjs";
+import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
 let failed = 0;
@@ -1063,6 +1063,36 @@ globalThis.fetch = realFetch;
   ok("build: a release build refuses a test version", (await settles(buildExtension({ out, version: "9.9.9.1" }))).startsWith("rejected"));
   ok("build: a refused build writes nothing", readdirSync(out).length === 0);
   rmSync(out, { recursive: true, force: true });
+}
+{
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { execFileSync } = await import("node:child_process");
+  const repo = mkdtempSync(join(tmpdir(), "pb-stamp-repo-"));
+  const git = (...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd: repo, stdio: "ignore" });
+  git("init", "-q");
+  writeFileSync(join(repo, "a.txt"), "a");
+  git("add", ".");
+  git("commit", "-qm", "init");
+  ok("build stamp: a clean repo gives the short sha", /^[0-9a-f]{7,}$/.test(buildStamp(repo)));
+  writeFileSync(join(repo, "a.txt"), "b");
+  ok("build stamp: uncommitted changes add -dirty", /^[0-9a-f]{7,}-dirty$/.test(buildStamp(repo)));
+  rmSync(repo, { recursive: true, force: true });
+  const plain = mkdtempSync(join(tmpdir(), "pb-stamp-plain-"));
+  ok("build stamp: a folder without git gives an empty stamp", buildStamp(plain) === "");
+  rmSync(plain, { recursive: true, force: true });
+  // each build runs tailwind and esbuild, so these two take a few seconds
+  const manifestOf = (dir) => JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
+  const off = mkdtempSync(join(tmpdir(), "pb-stamp-off-"));
+  await buildExtension({ out: off, quiet: true, stamp: false });
+  ok("build stamp: stamp false leaves version_name out", !("version_name" in manifestOf(off)));
+  rmSync(off, { recursive: true, force: true });
+  const on = mkdtempSync(join(tmpdir(), "pb-stamp-on-"));
+  await buildExtension({ out: on, quiet: true, stamp: true });
+  const m = manifestOf(on);
+  ok("build stamp: stamp true sets version_name to version+sha", /^\d+\.\d+\.\d+\+[0-9a-f]{7,}/.test(m.version_name) && m.version_name.startsWith(`${m.version}+`));
+  rmSync(on, { recursive: true, force: true });
 }
 {
   ok("upstream: a short pin matches the full latest sha", samePin("fc5de86", "fc5de86abc1234") === true);

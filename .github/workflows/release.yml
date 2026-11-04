@@ -19,6 +19,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          PASSBRIDGE_RELEASE: "1"
       - run: cd dist && zip -r ../passbridge.zip .
       # the helper install and uninstall scripts, each next to the policy, agent and updater helpers it copies
       - run: |
