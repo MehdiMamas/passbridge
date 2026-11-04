@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
 import { TOTP_WATCH_EVERY_MS, watchState } from "./totp-watch.js";
+import { codesForLogins, filterByUsername } from "./username-filter.js";
 
 function StatusDot({ state }) {
   const color =
@@ -189,6 +190,7 @@ export function PopupScreen({
   const [newPass, setNewPass] = useState("");
   const [newShown, setNewShown] = useState(false);
   const [loginMsg, setLoginMsg] = useState("");
+  const [userQuery, setUserQuery] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const win = os === "win";
   const unlocked = state === "unlocked";
@@ -203,12 +205,15 @@ export function PopupScreen({
   }, []);
 
   const isSameUser = (a, b) => (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
-  const groups = logins.map((login) => ({
+  const shownLogins = filterByUsername(logins, userQuery);
+  const shownCodes = codesForLogins(codes, shownLogins, userQuery);
+  const groups = shownLogins.map((login) => ({
     login,
-    codes: codes.filter((row) => row.username && isSameUser(row.username, login.username)),
+    codes: shownCodes.filter((row) => row.username && isSameUser(row.username, login.username)),
   }));
   const groupedCodes = new Set(groups.flatMap((g) => g.codes));
-  const ungroupedCodes = codes.filter((row) => !groupedCodes.has(row));
+  const ungroupedCodes = shownCodes.filter((row) => !groupedCodes.has(row));
+  const noMatch = logins.length > 0 && !!userQuery.trim() && shownLogins.length === 0;
 
   async function submitPin(value) {
     const ok = await onVerify(value);
@@ -287,6 +292,15 @@ export function PopupScreen({
             spellCheck={false}
             className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1.5 text-[13px]"
           />
+          <input
+            value={userQuery}
+            onChange={(e) => setUserQuery(e.target.value)}
+            placeholder={t("lookupUserPlaceholder")}
+            aria-label={t("lookupUserPlaceholder")}
+            autoComplete="off"
+            spellCheck={false}
+            className="mt-2 w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1.5 text-[13px]"
+          />
           {site && <p className="mt-2 truncate text-[13px] font-semibold">{site}</p>}
         </div>
       )}
@@ -335,6 +349,12 @@ export function PopupScreen({
         {unlocked && (
           <>
             {logins.length === 0 && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">{t("noSavedPasswords")}</p>}
+            {noMatch && <p className="text-[13px] text-[color-mix(in_srgb,CanvasText_60%,Canvas)]">{t("noLoginMatch", [userQuery.trim(), site])}</p>}
+            {userQuery.trim() && (logins.length === 0 || noMatch) && (
+              <button type="button" className="self-start py-1 text-xs text-accent" onClick={() => onOpenApp("search", userQuery.trim())}>
+                {t("searchUserInPasswords")}
+              </button>
+            )}
             <ul className="flex flex-col gap-1">
               {groups.map(({ login, codes: ownCodes }) => (
                 <Fragment key={login.username}>
@@ -509,7 +529,7 @@ export function PopupScreen({
       <footer className="flex shrink-0 flex-col border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2">
         {unlocked && (
           <div className="flex flex-col items-start pb-1">
-            <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search")}>
+            <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search", userQuery.trim() || undefined)}>
               {t("openInPasswords")}
             </button>
             {caps?.newPasswordSheet && (

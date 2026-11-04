@@ -192,9 +192,10 @@ function PopupApp() {
           void runLookup(raw);
         }, 300);
       }}
-      onOpenApp={async (mode) => {
-        await send({ type: "openPasswordsApp", mode, url: mode === "search" ? lookupUrl || undefined : undefined });
-        window.close();
+      onOpenApp={async (mode, query) => {
+        const res = await send({ type: "openPasswordsApp", mode, url: mode === "search" ? lookupUrl || undefined : undefined, query });
+        if (res?.copied) showNote(t("usernameCopied"), "ok");
+        else window.close();
       }}
       onAddLogin={async (login) => {
         const res = await send({ type: "popupAddLogin", ...login });
