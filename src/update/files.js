@@ -175,14 +175,17 @@ export async function hasInterruptedUpdate() {
   return found;
 }
 
-// only a PassBridge source folder is ever written to: its manifest.json names the extension
+// only a PassBridge source folder is ever written to: its manifest.json carries this extension's key
+// (the key fixes the id, whatever the name), or the legacy name "PassBridge" used before 1.4.18
 /**
  * @param {FileSystemDirectoryHandle} root
  * @returns {Promise<boolean>}
  */
 export async function looksLikeSource(root) {
   try {
-    return JSON.parse((await readText(root, "manifest.json")) || "null")?.name === "PassBridge";
+    const manifest = JSON.parse((await readText(root, "manifest.json")) || "null");
+    const key = globalThis.chrome?.runtime?.getManifest?.()?.key;
+    return (!!key && manifest?.key === key) || manifest?.name === "PassBridge";
   } catch {
     return false;
   }

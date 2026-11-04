@@ -58,9 +58,18 @@ window.runUpdateFsChecks = async (zipBytes) => {
   const probe = await (await fresh(opfs, "probe")).getFileHandle("f", { create: true });
   check("files can be moved in place", typeof probe.move === "function");
 
+  // the real manifest, so the fixture cannot drift from what releases ship
+  const real = await (await fetch("../manifest.json")).json();
+  if (!globalThis.chrome?.runtime) globalThis.chrome = { ...globalThis.chrome, runtime: { getManifest: () => real } };
+  const current = await fresh(opfs, "current");
+  await put(current, "manifest.json", JSON.stringify(real));
+  check("a folder with the current manifest is accepted", (await looksLikeSource(current)) === true);
   const named = await fresh(opfs, "named");
   await put(named, "manifest.json", '{"name":"PassBridge","version":"1.4.1"}');
-  check("a folder with the PassBridge manifest is accepted", (await looksLikeSource(named)) === true);
+  check("a folder with the legacy PassBridge name is accepted", (await looksLikeSource(named)) === true);
+  const otherKey = await fresh(opfs, "otherkey");
+  await put(otherKey, "manifest.json", JSON.stringify({ ...real, key: "OTHERKEY" }));
+  check("a folder with another key is refused", (await looksLikeSource(otherKey)) === false);
   const other = await fresh(opfs, "other");
   await put(other, "manifest.json", '{"name":"Something Else"}');
   check("a folder with another extension's manifest is refused", (await looksLikeSource(other)) === false);
