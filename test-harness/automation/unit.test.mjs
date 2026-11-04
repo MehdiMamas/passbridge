@@ -31,6 +31,7 @@ import { isPasskeyLogin } from "../../src/passkeys/record.js";
 import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "../../src/passkeys/store.js";
 import { createMockClient } from "../../src/session/mock-client.js";
 import { parseBitwarden, parseCxf, parseExport } from "../../src/passkeys/import.js";
+import { codesForLogins, filterByUsername } from "../../src/ui/username-filter.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -1553,6 +1554,19 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   await nd.proxy.onGet({ requestId: 40, requestDetailsJson: getJson() });
   ok("passkey proxy: a get with no passkey saves the nudge and ends with Chrome's normal error", nd.session.data.passkeyNudge?.rpId === "example.test" && nd.calls.find((x) => x.get).get.error?.name === "NotAllowedError");
   ok("passkey login filter: passkey rows are hidden from fill lists", isPasskeyLogin({ username: "example.test · ann · AAAAAAAA", sites: [] }) && isPasskeyLogin({ username: "x", sites: ["passkeys.passbridge.invalid"] }) && !isPasskeyLogin({ username: "me@example.com", sites: ["example.com"] }));
+  const logins = [{ username: "Alex@Mail.com" }, { username: "sam" }, { username: "" }];
+  const names = (q) => filterByUsername(logins, q).map((l) => l.username);
+  ok("username filter: case is ignored", names("ALEX").join() === "Alex@Mail.com");
+  ok("username filter: outer spaces are ignored", names("  sam ").join() === "sam");
+  ok("username filter: part of a name matches", names("mail").join() === "Alex@Mail.com");
+  ok("username filter: empty query keeps all", names("").length === 3 && names("   ").length === 3);
+  ok("username filter: no match gives an empty list", names("zzz").length === 0);
+  const codes = [{ id: 1, username: "sam" }, { id: 2, username: "alex@mail.com" }, { id: 3, username: "bob" }, { id: 4 }];
+  const ids = (q) => codesForLogins(codes, filterByUsername(logins, q), q).map((c) => c.id).join();
+  ok("codes: grouped codes follow their kept login", ids("sam") === "1");
+  ok("codes: an ungrouped code stays when its username matches", ids("bo") === "3");
+  ok("codes: empty query keeps every code", ids("") === "1,2,3,4");
+  ok("codes: an ungrouped code without a username is hidden by a query", !ids("sam").includes("4"));
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");
 process.exit(failed ? 1 : 0);

@@ -1616,8 +1616,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const tab = await activeTab();
           const url = httpUrl(msg.url) || (tab?.url && /^https?:/i.test(tab.url) ? tab.url : undefined);
           await ensureConnected();
+          const query = typeof msg.query === "string" ? msg.query.trim().slice(0, 200) : "";
           if (msg.mode === "new") {
             client.launchPasswordsApp({ newPasswordUrl: url });
+          } else if (query) {
+            // plain-text search; when the app ignores it, copy the text and open the app without a search
+            const { passwordsSearchByText = true } = await chrome.storage.local.get("passwordsSearchByText");
+            if (passwordsSearchByText === false) {
+              await copyText(query);
+              client.launchPasswordsApp({});
+              return sendResponse({ ok: true, copied: true });
+            }
+            client.launchPasswordsApp({ searchUrl: query });
           } else {
             client.launchPasswordsApp({ searchUrl: url });
           }
