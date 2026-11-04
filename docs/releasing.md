@@ -12,6 +12,8 @@
    done
    ```
 
+   Over ssh the login Keychain refuses access ("User interaction is not allowed", exit 36). Run the signing as a one-shot LaunchAgent in the logged-in GUI session instead: write a plist whose `ProgramArguments` run the `sign-release.mjs sign` loop on zips copied to the Mac, then `launchctl bootstrap gui/$(id -u) <plist>`, wait for it to finish, `launchctl bootout gui/$(id -u)/<label>`, and copy the `.sig` files back. This needs no password and opens no window.
+
 4. Smoke test on Windows before publishing. On a Windows PC with iCloud for Windows signed in, download the draft's `passbridge.zip` and `passbridge-windows-helper.zip`, install the helper from its zip, and load the extension unpacked from `chrome://extensions`. Then:
    - unlock with a verification code (a wrong code first should say "Incorrect code"),
    - fill one saved login on a sign-in page,
