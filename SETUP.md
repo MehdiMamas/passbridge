@@ -97,7 +97,7 @@ Install the helper once and every later update installs by itself, with no folde
 
 1. Install [Python](https://www.python.org/downloads/) and tick "Add python.exe to PATH".
 2. Download `passbridge-windows-helper.zip` from the [latest release](https://github.com/MehdiMamas/passbridge/releases/latest) and unzip it.
-3. In that folder run `powershell -ExecutionPolicy Bypass -File ./install.ps1`. It should end with "Updates now install by themselves". If it says Python was not found, fix step 1 and run it again.
+3. In that folder double-click `install.cmd`. It should end with "If an Options page is open, it picks up the helper by itself". If it says Python was not found, fix step 1 and run it again.
 4. Fully quit Chrome (check the tray) and reopen it.
 
 ### Update without the helper

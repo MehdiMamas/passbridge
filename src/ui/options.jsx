@@ -5,7 +5,7 @@ import { domainLines } from "../session/agent-allow.js";
 import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
-import { helperView, policyMessage, tabFromHash } from "./options-model.js";
+import { helperView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
 import { applyDocumentLanguage } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
@@ -85,6 +85,23 @@ function OptionsApp() {
       removeEventListener("hashchange", onHash);
       removeEventListener("pagehide", onPageHide);
       onPageHide();
+    };
+  }, []);
+
+  // recheck the helpers when the user comes back to this page, e.g. after running install.cmd
+  const lastCheck = useRef(Date.now());
+  useEffect(() => {
+    const recheck = () => {
+      if (document.visibilityState !== "visible" || !shouldRecheck(lastCheck.current, Date.now())) return;
+      lastCheck.current = Date.now();
+      sendPolicy("get").then((r) => applyPolicy(r, policyMessage(r, false)));
+      updaterAvailable().then((has) => setHelpers((h) => ({ ...h, updater: has ? "present" : "missing" })));
+    };
+    document.addEventListener("visibilitychange", recheck);
+    addEventListener("focus", recheck);
+    return () => {
+      document.removeEventListener("visibilitychange", recheck);
+      removeEventListener("focus", recheck);
     };
   }, []);
 

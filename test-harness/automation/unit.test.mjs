@@ -23,7 +23,7 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdat
 import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
-import { OPTION_TABS, helperView, policyMessage, tabFromHash } from "../../src/ui/options-model.js";
+import { OPTION_TABS, helperView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
 import { buildExtension, buildStamp } from "../../scripts/build.mjs";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.mjs";
 
@@ -1076,6 +1076,8 @@ globalThis.fetch = realFetch;
   git("add", ".");
   git("commit", "-qm", "init");
   ok("build stamp: a clean repo gives the short sha", /^[0-9a-f]{7,}$/.test(buildStamp(repo)));
+  writeFileSync(join(repo, "new.txt"), "n");
+  ok("build stamp: an untracked file alone stays clean", /^[0-9a-f]{7,}$/.test(buildStamp(repo)));
   writeFileSync(join(repo, "a.txt"), "b");
   ok("build stamp: uncommitted changes add -dirty", /^[0-9a-f]{7,}-dirty$/.test(buildStamp(repo)));
   rmSync(repo, { recursive: true, force: true });
@@ -1194,6 +1196,17 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("options: active relay shows no agents notice", helperView({ helpers: { policy: "present", updater: "present" }, isWindows: false, canCheckForUpdates: true, relay: "active" }).notices.agents === null);
   ok("options: windows updater notice links the windows setup", win.rows.autoInstall === "locked" && !!win.notices.updates?.href?.endsWith("#automatic-updates-windows"));
   ok("options: windows policy notice links the windows setup", !!view("missing", "present", true).notices.browser?.href?.endsWith("#windows"));
+  ok("options: recheck waits for the 5 s gap", !shouldRecheck(1000, 5999) && shouldRecheck(1000, 6000));
+  ok("options: a recheck that finds the helper clears the notice", view("missing", "missing").notices.browser !== null && view("present", "present").notices.browser === null && view("present", "present").notices.updates === null);
+  {
+    const { readFileSync, existsSync } = await import("node:fs");
+    const rel = readFileSync(new URL("../../.github/workflows/release.yml", import.meta.url), "utf8");
+    ok("release: windows helper zip gets the .cmd files", rel.includes("native/windows/install.cmd") && rel.includes("native/windows/uninstall.cmd"));
+    for (const n of ["install", "uninstall"]) {
+      const u = new URL(`../../native/windows/${n}.cmd`, import.meta.url);
+      ok(`windows: ${n}.cmd runs ${n}.ps1`, existsSync(u) && readFileSync(u, "utf8").includes(`%~dp0${n}.ps1`));
+    }
+  }
   ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);
   ok("options: a toggle with no helper note still says to restart", policyMessage({ ok: true, hidden: false, needsApproval: true }, true) === "Fully quit and reopen the browser to apply this.");
   ok("options: a toggle shows the helper's own note", policyMessage({ ok: true, hidden: true, note: "Approve it in Windows." }, true) === "Approve it in Windows.");
