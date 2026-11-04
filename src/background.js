@@ -9,6 +9,7 @@ import { generateAlphanumericPassword, generateApplePassword } from "./password-
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
+import { listOtpEntries } from "./session/otp-list.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
@@ -84,26 +85,8 @@ function otpRow(e, i) {
   return { id: i, source: e.source, username: e.username, domain: e.domain };
 }
 
-// iCloud for Windows 15.10 lists only codes set up on Windows, so a synced TOTP needs a per-login read
-const OTP_FALLBACK_MAX_LOGINS = 8;
-
-async function syncedTotpEntries(tabId, frameId, frameUrls) {
-  const url = frameUrls[0];
-  if (!url) return [];
-  const names = await client.getLoginNamesForURL(tabId, url).catch(() => []);
-  const usernames = [...new Set(names.map((n) => n.username).filter(Boolean))].slice(0, OTP_FALLBACK_MAX_LOGINS);
-  const entries = [];
-  for (const username of usernames) {
-    const found = await client.readOneTimeCode(tabId, frameId, frameUrls, username).catch(() => []);
-    const hit = found.find((e) => e.source === "totp" && e.username === username);
-    if (hit) entries.push(hit);
-  }
-  return entries;
-}
-
-async function listOneTimeCodes(tabId, frameId, frameUrls) {
-  let { entries, requiresAuth } = await client.getOneTimeCodes(tabId, frameId, frameUrls);
-  if (!entries.length && (await platformReady) === "win") entries = await syncedTotpEntries(tabId, frameId, frameUrls);
+async function listOneTimeCodes(tabId, frameId, frameUrls, { listOnly = false } = {}) {
+  const { entries, requiresAuth } = await listOtpEntries(client, { tabId, frameId, frameUrls, platform: await platformReady, listOnly });
   otpByTab.set(tabId, { at: Date.now(), entries, frameId, frameUrls });
   return { rows: entries.map(otpRow), requiresAuth };
 }
@@ -1509,7 +1492,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!tab?.id || !url) return sendResponse({ ok: false, error: "no active tab" });
           if (!client.ready) return sendResponse({ ok: true, rows: [] });
           if (!client.canFillOneTimeCodes) return sendResponse({ ok: true, supported: false, rows: [] });
-          const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url }));
+          const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url }), { listOnly: !!msg.listOnly });
           sendResponse({ ok: true, supported: true, rows, requiresAuth });
           break;
         }

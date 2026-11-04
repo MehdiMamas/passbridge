@@ -55,6 +55,7 @@ function PopupApp() {
     const codeRes = await send({ type: "getOneTimeCodes" });
     if (gen !== lookupGen.current) return;
     setCodes(codeRes?.rows || []);
+    return codeRes?.rows?.length || 0;
   }
 
   async function runLookup(raw) {
@@ -207,6 +208,11 @@ function PopupApp() {
       onTotpPaste={(text) => send({ type: "totpPaste", text })}
       onTotpAdd={(username) => send({ type: "totpAdd", username })}
       onTotpCopyKey={() => send({ type: "totpCopyKey" })}
+      onCheckCodes={async () => {
+        const res = await send({ type: "getOneTimeCodes", listOnly: true });
+        if (res?.ok) setCodes(res.rows || []);
+        return res?.rows || [];
+      }}
       onLock={async () => {
         await send({ type: "disconnect" });
         setState("connecting");
@@ -221,9 +227,11 @@ function PopupApp() {
           return;
         }
         const res = await send({ type: "refreshAndRefill" });
-        await loadUnlocked();
+        const count = await loadUnlocked();
         if (res?.refilled) showNote(t("refilled", [res.username]), "ok");
-        else if (res?.reason === "none") showNote(t("nothingToRefill"), "muted");
+        else if (res?.reason === "none") {
+          showNote(count ? t("codesForSite", [String(count)]) : t("nothingToRefill"), "muted");
+        }
         else showNote(res?.error || t("couldntRefill"), "danger");
       }}
       onSettings={() => chrome.runtime.openOptionsPage()}
