@@ -12,6 +12,7 @@ import { passwordSearchSteps } from "./session/password-search.js";
 import { listOtpEntries } from "./session/otp-list.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { orderByUse, recordUse } from "./session/mru.js";
+import { pickSaveTarget } from "./save-target.js";
 import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
@@ -158,18 +159,10 @@ function broadcast(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
-// "" lets the native sheet ask, null saves nothing
-async function pickSaveTarget({ host, existing, detected, generated, newPwCtx }) {
-  const matched = detected && existing.find((u) => u.toLowerCase() === detected.toLowerCase());
-  // update only on a new password, stay quiet on a plain re-login
-  if (matched) return generated || newPwCtx ? matched : null;
-  if (detected) return detected;
-  // attach to the MRU account, apple's sheet lets the user re-pick
-  if (newPwCtx && existing.length) {
-    return (await orderByUse(host, existing.map((u) => ({ username: u }))))[0].username;
-  }
-  if (generated) return "";
-  return null;
+// the MRU lookup needs storage, so the rest of the decision lives in save-target.js
+async function saveTargetFor({ host, existing, detected, generated, newPwCtx }) {
+  const recent = existing.length ? (await orderByUse(host, existing.map((u) => ({ username: u }))))[0].username : "";
+  return pickSaveTarget({ existing, detected, generated, newPwCtx, recent });
 }
 
 // a reset can navigate away, so stash saves that arrived while locked and flush on unlock
@@ -195,7 +188,7 @@ async function flushPendingSaves() {
           .map((l) => l.username)
           .filter(Boolean);
       } catch {}
-      const target = await pickSaveTarget({ ...s, existing });
+      const target = await saveTargetFor({ ...s, existing });
       if (target === null) continue;
       const isUpdate = existing.some((u) => u.toLowerCase() === String(target).toLowerCase());
       if ((isUpdate && settings.askToUpdate === false) || (!isUpdate && settings.askToSave === false)) continue;
@@ -1268,7 +1261,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               .map((l) => l.username)
               .filter(Boolean);
           } catch {}
-          const target = await pickSaveTarget({ host, existing, detected, generated, newPwCtx });
+          const target = await saveTargetFor({ host, existing, detected, generated, newPwCtx });
           console.debug("[PassBridge] resolveSave", {
             host,
             detected: detected || "(none)",
