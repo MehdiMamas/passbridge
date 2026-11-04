@@ -161,7 +161,6 @@ export function PopupScreen({
   const [addMsg, setAddMsg] = useState("");
   const [added, setAdded] = useState(false);
   const [watch, setWatch] = useState("waiting");
-  const [polled, setPolled] = useState(false);
 
   // after the hand-off, re-check the code list while the popup is open (list only, no code reads)
   useEffect(() => {
@@ -169,15 +168,13 @@ export function PopupScreen({
     let dead = false;
     const startedAt = Date.now();
     setWatch("waiting");
-    setPolled(false);
     const timer = setInterval(async () => {
       let rows = [];
       try {
         rows = await onCheckCodes();
       } catch (_) {}
       if (dead) return;
-      setPolled(true);
-      const next = watchState(rows, { target, elapsedMs: Date.now() - startedAt });
+      const next = watchState(rows, { target, elapsedMs: Date.now() - startedAt, windows: os === "win" });
       setWatch(next);
       if (next !== "waiting") clearInterval(timer);
     }, TOTP_WATCH_EVERY_MS);
@@ -487,7 +484,7 @@ export function PopupScreen({
                             ? t("totpSavedCheck")
                             : watch === "timeout"
                               ? t("totpNotSavedYet")
-                              : polled
+                              : watch === "check"
                                 ? t("totpCheckRefresh")
                                 : target
                                   ? t("passwordsOpenNoteWith", [target])

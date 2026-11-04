@@ -55,6 +55,7 @@ function PopupApp() {
     const codeRes = await send({ type: "getOneTimeCodes" });
     if (gen !== lookupGen.current) return;
     setCodes(codeRes?.rows || []);
+    return codeRes?.rows?.length || 0;
   }
 
   async function runLookup(raw) {
@@ -226,10 +227,9 @@ function PopupApp() {
           return;
         }
         const res = await send({ type: "refreshAndRefill" });
-        await loadUnlocked();
+        const count = await loadUnlocked();
         if (res?.refilled) showNote(t("refilled", [res.username]), "ok");
         else if (res?.reason === "none") {
-          const count = (await send({ type: "getOneTimeCodes" }))?.rows?.length || 0;
           showNote(count ? t("codesForSite", [String(count)]) : t("nothingToRefill"), "muted");
         }
         else showNote(res?.error || t("couldntRefill"), "danger");

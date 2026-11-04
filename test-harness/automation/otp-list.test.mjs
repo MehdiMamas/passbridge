@@ -84,6 +84,8 @@ const args = (extra = {}) => ({ tabId: 1, frameId: 0, frameUrls: ["https://accou
   ok("watch: saved for target", watchState(rows, { target: "me@x.com", elapsedMs: 3000 }) === "saved");
   ok("watch: saved without target", watchState(rows, { target: "", elapsedMs: 3000 }) === "saved");
   ok("watch: other account keeps waiting", watchState([totp("other@x.com")], { target: "me@x.com", elapsedMs: 3000 }) === "waiting");
+  ok("watch: Windows empty poll ends in check, never timeout", watchState([], { target: "me@x.com", elapsedMs: 3000, windows: true }) === "check" && watchState([], { target: "me@x.com", elapsedMs: 999999, windows: true }) === "check");
+  ok("watch: Windows still saves when the row shows", watchState(rows, { target: "me@x.com", elapsedMs: 3000, windows: true }) === "saved");
   ok("watch: timeout", watchState([], { target: "me@x.com", elapsedMs: 120000 }) === "timeout");
   ok("watch: saved wins at the limit", watchState(rows, { target: "me@x.com", elapsedMs: 120000 }) === "saved");
 }
