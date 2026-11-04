@@ -1398,7 +1398,12 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   const ext = { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } };
   const getJson = (o = {}) => JSON.stringify({ rpId: "example.test", challenge: "Y2g", allowCredentials: [], extensions: ext, ...o });
   const createJson = (o = {}) => JSON.stringify({ rp: { id: "example.test", name: "E" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2g", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: ext, ...o });
-  const setup = async ({ enabled = true, url = origin + "/", kind = "unlocked" } = {}) => {
+  // a stand-in for chrome.storage.session
+  const memory = () => {
+    const data = {};
+    return { data, get: async (d) => ({ ...d, ...Object.fromEntries(Object.keys(d).filter((k) => k in data).map((k) => [k, structuredClone(data[k])])) }), set: async (o) => void Object.assign(data, structuredClone(o)), remove: async (k) => void delete data[k] };
+  };
+  const setup = async ({ enabled = true, url = origin + "/", kind = "unlocked", allSites = false, stayUnlocked = false } = {}) => {
     const calls = [];
     const api = {
       attach: async () => void calls.push("attach"),
@@ -1411,10 +1416,11 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
       onIsUvpaaRequest: { addListener: () => {} },
       onRequestCanceled: { addListener: () => {} },
     };
-    const state = { url, enabled };
+    const state = { url, enabled, allSites, stayUnlocked };
     const client = createMockClient(kind);
-    const proxy = createPasskeyProxy({ api: () => api, client, ensureConnected: async () => {}, enabled: async () => state.enabled, getTab: async () => ({ id: 1, url: state.url }), sleep: async () => { await new Promise((r) => setTimeout(r, 1)); }, pollMs: 1 });
-    return { calls, api, state, client, proxy };
+    const session = memory();
+    const proxy = createPasskeyProxy({ api: () => api, client, ensureConnected: async () => {}, enabled: async () => state.enabled, settings: async () => ({ allSites: state.allSites, stayUnlocked: state.stayUnlocked }), session: () => session, getTab: async () => ({ id: 1, url: state.url }), sleep: async () => { await new Promise((r) => setTimeout(r, 1)); }, pollMs: 1 });
+    return { calls, api, state, client, proxy, session };
   };
   const seed = (client) => createPasskey(JSON.parse(createJson())).then(({ record }) => savePasskey(client, 1, record, { pollMs: 1 }).then(() => record));
 
@@ -1470,6 +1476,82 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   await lk.proxy.onGet({ requestId: 7, requestDetailsJson: getJson({ timeout: 30 }) });
   ok("passkey proxy: a locked vault waits, then ends with Chrome's normal error", lk.calls[0].get.error?.name === "NotAllowedError");
   ok("passkey proxy: a locked vault is not attached before it can list passkeys", (await lk.proxy.refresh(), !lk.calls.includes("attach")));
+
+  // all sites on: attached on any web page, even with nothing stored
+  const all = await setup({ allSites: true, url: "https://new-site.test/" });
+  await all.proxy.refresh();
+  ok("passkey proxy: all sites on attaches on a site with no passkey", all.calls.join() === "attach");
+  all.state.allSites = false;
+  all.proxy.invalidate();
+  await all.proxy.refresh();
+  ok("passkey proxy: all sites off goes back to attaching only where a passkey is stored", all.calls.join() === "attach,detach");
+  all.state.url = "chrome://extensions/";
+  all.state.allSites = true;
+  await all.proxy.refresh();
+  ok("passkey proxy: all sites on still stays detached on a non-web page", all.calls.join() === "attach,detach");
+
+  // create, then get: the assertion verifies with the public key returned at registration
+  const cr = await setup({ allSites: true });
+  await cr.proxy.onCreate({ requestId: 20, requestDetailsJson: createJson() });
+  const created = JSON.parse(cr.calls.find((x) => x.create).create.responseJson);
+  ok("passkey proxy: create on a site with no passkey stores it", (await listPasskeys(cr.client, 1)).length === 1 && !!created.id);
+  await cr.proxy.onGet({ requestId: 21, requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: created.rawId }] }) });
+  const got = JSON.parse(cr.calls.find((x) => x.get).get.responseJson);
+  const pub = await crypto.subtle.importKey("spki", pkUnb64u(created.response.publicKey), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+  const der = pkUnb64u(got.response.signature);
+  const derInt = (at) => { const l = der[at + 1]; let x = der.slice(at + 2, at + 2 + l); while (x.length > 32) x = x.slice(1); const o = new Uint8Array(32); o.set(x, 32 - x.length); return [o, at + 2 + l]; };
+  const [r1, next] = derInt(2);
+  const [r2] = derInt(next);
+  const sigRaw = new Uint8Array(64);
+  sigRaw.set(r1);
+  sigRaw.set(r2, 32);
+  const adBytes = pkUnb64u(got.response.authenticatorData);
+  const cdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", pkUnb64u(got.response.clientDataJSON)));
+  const signed = new Uint8Array(adBytes.length + 32);
+  signed.set(adBytes);
+  signed.set(cdHash, adBytes.length);
+  ok("passkey proxy: a get after a create verifies with the public key from the create", await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, sigRaw, signed));
+
+  // excludeCredentials that matches a stored passkey
+  cr.calls.length = 0;
+  await cr.proxy.onCreate({ requestId: 22, requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: created.rawId }] }) });
+  ok("passkey proxy: excludeCredentials matching a stored passkey gives InvalidStateError and saves nothing", cr.calls[0].create.error?.name === "InvalidStateError" && (await listPasskeys(cr.client, 1)).length === 1);
+  cr.calls.length = 0;
+  await cr.proxy.onCreate({ requestId: 23, requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  ok("passkey proxy: excludeCredentials that match nothing still creates", !!cr.calls[0].create.responseJson);
+
+  // two passkeys of one user on one site both exist; the same credential id is skipped
+  ok("passkey store: a second passkey for the same user and site is saved", (await listPasskeys(cr.client, 1)).length === 2);
+  const again = await listPasskeys(cr.client, 1);
+  const rd = await readPasskey(cr.client, 1, again[0]);
+  ok("passkey store: a record with an existing credential id is skipped", (await savePasskey(cr.client, 1, rd.record, { pollMs: 1 })) === "exists" && (await listPasskeys(cr.client, 1)).length === 2);
+
+  // stay-unlocked cache: off keeps nothing, on keeps the read passkey, a locked helper still signs, clearing drops it
+  const stay = await setup();
+  const kept = await seed(stay.client);
+  await stay.proxy.onGet({ requestId: 30, requestDetailsJson: getJson() });
+  ok("passkey proxy: stay unlocked off keeps nothing in the session cache", !("passkeyCache" in stay.session.data));
+  stay.state.stayUnlocked = true;
+  await stay.proxy.onGet({ requestId: 31, requestDetailsJson: getJson() });
+  ok("passkey proxy: stay unlocked on keeps the passkey after a read", !!stay.session.data.passkeyCache?.["example.test"]?.[kept.credentialId]);
+  const reads = { n: 0 };
+  const realRead = stay.client.getPasswordForLoginName;
+  stay.client.getPasswordForLoginName = async (...a) => (reads.n++, realRead(...a));
+  stay.calls.length = 0;
+  await stay.proxy.onGet({ requestId: 32, requestDetailsJson: getJson() });
+  ok("passkey proxy: a cached passkey signs without reading through the helper", reads.n === 0 && !!stay.calls[0].get.responseJson);
+  stay.client.state = "locked";
+  Object.defineProperty(stay.client, "ready", { get: () => false, configurable: true });
+  stay.calls.length = 0;
+  await stay.proxy.onGet({ requestId: 33, requestDetailsJson: getJson() });
+  ok("passkey proxy: a cached passkey signs while the helper is locked", !!stay.calls[0].get.responseJson);
+  await stay.proxy.clearCache();
+  ok("passkey proxy: clearing the cache drops the kept passkeys", !("passkeyCache" in stay.session.data));
+
+  // nudge: a get with no passkey for the site leaves its rp id for the popup
+  const nd = await setup({ allSites: true });
+  await nd.proxy.onGet({ requestId: 40, requestDetailsJson: getJson() });
+  ok("passkey proxy: a get with no passkey saves the nudge and ends with Chrome's normal error", nd.session.data.passkeyNudge?.rpId === "example.test" && nd.calls.find((x) => x.get).get.error?.name === "NotAllowedError");
   ok("passkey login filter: passkey rows are hidden from fill lists", isPasskeyLogin({ username: "example.test · ann · AAAAAAAA", sites: [] }) && isPasskeyLogin({ username: "x", sites: ["passkeys.passbridge.invalid"] }) && !isPasskeyLogin({ username: "me@example.com", sites: ["example.com"] }));
 }
 console.log(failed ? `\n${failed} failed` : "\nunit ok");

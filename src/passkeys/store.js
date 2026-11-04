@@ -39,8 +39,15 @@ export async function readPasskey(client, tabId, entry) {
 export async function savePasskey(client, tabId, record, opts = {}) {
   const username = recordUsername(record);
   const lookup = () => client.getLoginNamesForURL(tabId, PASSKEY_URL);
-  const before = countLogins(await lookup(), username);
-  if (before > 0) return "exists";
+  // the same credential id is the same passkey; two passkeys of one user on one site are two logins
+  const names = await lookup();
+  const prefix = record.credentialId.slice(0, 8);
+  for (const n of (names || []).map((n) => ({ username: n.username, sites: n.sites || [], ...parseUsername(n.username) }))) {
+    if (n.rpId !== record.rpId || n.idPrefix !== prefix) continue;
+    const read = await readPasskey(client, tabId, n);
+    if (read?.record.credentialId === record.credentialId) return "exists";
+  }
+  const before = countLogins(names, username);
   await client.saveLogin(tabId, PASSKEY_URL, username, encodeRecord(record));
   return confirmLoginAdded({ lookup, username, before, isReady: () => client.ready, ...opts });
 }
