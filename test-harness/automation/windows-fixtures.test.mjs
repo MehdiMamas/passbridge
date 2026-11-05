@@ -4,9 +4,11 @@
 import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 
-if (!globalThis.crypto) globalThis.crypto = webcrypto;
+if (!globalThis.crypto) globalThis.crypto = /** @type {any} */ (webcrypto);
 
+/** @type {{ name: string, cond: unknown }[]} */
 const results = [];
+/** @param {string} name @param {unknown} cond @param {string} [detail] */
 const ok = (name, cond, detail = "") => {
   results.push({ name, cond });
   console.log(`${cond ? "PASS" : "FAIL"} ${name}${cond ? "" : " -> " + detail}`);
@@ -14,18 +16,24 @@ const ok = (name, cond, detail = "") => {
 
 const SRC = new URL("../../src/apple/", import.meta.url);
 const FIX = new URL("../fixtures/windows/", import.meta.url);
+/** @param {string} name */
 const fixture = (name) => JSON.parse(readFileSync(new URL(`${name}.json`, FIX), "utf8"));
+/** @param {object} o */
 const b64 = (o) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
+/** @param {string} s */
 const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
 
 // answers each command with its fixture; TID (and the dummy B and salt) are swapped for values
 // this session can use, everything else is the captured shape
+/** @param {string} verifyName */
 function replayHost(verifyName) {
   const port = {
-    onMessage: { addListener: (fn) => port._listeners.push(fn) },
+    onMessage: { addListener: (/** @type {(msg: any) => void} */ fn) => port._listeners.push(fn) },
     onDisconnect: { addListener: () => {} },
+    /** @type {((msg: any) => void)[]} */
     _listeners: [],
     disconnect() {},
+    /** @param {any} msg */
     postMessage(msg) {
       setTimeout(() => {
         let out;
@@ -45,27 +53,30 @@ function replayHost(verifyName) {
       }, 0);
     },
   };
-  globalThis.chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  globalThis.chrome = /** @type {any} */ ({ runtime: { connectNative: () => port, lastError: undefined } });
 }
 
+/** @param {string} verifyName */
 async function challenged(verifyName) {
   replayHost(verifyName);
-  const { ApplePasswords } = await import(new URL(`protocol.ts?fixtures=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?fixtures=${Math.random()}`, SRC)));
   const client = new ApplePasswords();
   await client.connect();
   await client.requestChallenge();
   return client;
 }
 
+/** @param {any} reply */
 async function unlockedWith(reply) {
   const client = await challenged("verify-ok");
-  const { State } = await import(new URL("protocol.ts", SRC));
+  const { State } = await import(/** @type {any} */ (new URL("protocol.ts", SRC)));
   client.state = State.Unlocked;
   client.session.sharedKey = new Uint8Array(32);
   client._encryptedQuery = async () => reply;
   return client;
 }
 
+/** @param {() => unknown} fn @returns {Promise<{ value?: any, err?: any }>} */
 async function attempt(fn) {
   try {
     return { value: await fn() };
