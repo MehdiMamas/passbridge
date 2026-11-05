@@ -17,9 +17,14 @@ export const GROUP_3072 = {
   g: 5n,
 };
 
+/** @param {Uint8Array} buf */
 export const big = (buf) => (buf.length ? BigInt("0x" + Buffer.from(buf).toString("hex")) : 0n);
 
 // minimal big-endian, or left-padded with zeros to len
+/**
+ * @param {bigint} n
+ * @param {number} [len]
+ */
 export function bytes(n, len = 0) {
   let h = n.toString(16);
   if (h.length % 2) h = "0" + h;
@@ -28,6 +33,7 @@ export function bytes(n, len = 0) {
   return len ? Buffer.concat([Buffer.alloc(len - b.length), b]) : b;
 }
 
+/** @param {bigint} base @param {bigint} exp @param {bigint} m */
 export function modPow(base, exp, m) {
   let r = 1n;
   base %= m;
@@ -40,11 +46,18 @@ export function modPow(base, exp, m) {
   return r;
 }
 
+/**
+ * @param {{ N: bigint, g: bigint }} grp
+ * @param {string} hash
+ */
 export function group({ N, g }, hash) {
   const NB = bytes(N).length;
+  /** @param {...(Uint8Array | string)} parts */
   const H = (...parts) => createHash(hash).update(Buffer.concat(parts.map((p) => Buffer.from(p)))).digest();
+  /** @param {bigint} n */
   const PAD = (n) => bytes(n, NB);
   const k = big(H(bytes(N), PAD(g)));
+  /** @type {(I: string, P: string, s: Uint8Array) => bigint} */
   const x = (I, P, s) => big(H(s, H(Buffer.from(`${I}:${P}`, "utf8"))));
   return {
     N,
@@ -53,17 +66,24 @@ export function group({ N, g }, hash) {
     PAD,
     k,
     x,
+    /** @type {(I: string, P: string, s: Uint8Array) => bigint} */
     verifier: (I, P, s) => modPow(g, x(I, P, s), N),
+    /** @type {(a: bigint) => bigint} */
     publicA: (a) => modPow(g, a, N),
+    /** @type {(b: bigint, v: bigint) => bigint} */
     publicB: (b, v) => (k * v + modPow(g, b, N)) % N,
+    /** @type {(A: bigint, B: bigint) => bigint} */
     u: (A, B) => big(H(PAD(A), PAD(B))),
+    /** @type {(a: bigint, B: bigint, xv: bigint, u: bigint) => bigint} */
     clientS: (a, B, xv, u) => modPow((((B - k * modPow(g, xv, N)) % N) + N) % N, a + u * xv, N),
+    /** @type {(A: bigint, v: bigint, u: bigint, b: bigint) => bigint} */
     serverS: (A, v, u, b) => modPow((A * modPow(v, u, N)) % N, b, N),
   };
 }
 
 // Apple's variant over the 3072-bit group: K = H(S) as a 32-byte digest,
 // M = H(H(N) xor H(PAD(g)) | H(I) | s | A | B | K), HAMK = H(A | M | K), A and B minimal bytes.
+/** @param {{ username: string, pin: string, salt: Uint8Array, A: bigint, b: bigint }} opts */
 export function appleServer({ username, pin, salt, A, b }) {
   const G = group(GROUP_3072, "sha256");
   const v = G.verifier(username, pin, salt);
