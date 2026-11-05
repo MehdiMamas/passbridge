@@ -37,7 +37,7 @@ import { buildExtension, buildStamp } from "../../scripts/build.ts";
 import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.ts";
 
 let failed = 0;
-function ok(/** @type {any} */ name, /** @type {any} */ cond) {
+function ok(name: any, cond: any) {
   console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
   if (!cond) failed++;
 }
@@ -45,7 +45,7 @@ function ok(/** @type {any} */ name, /** @type {any} */ cond) {
 {
   const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
   const other = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-  const b64 = async (/** @type {any} */ k) => Buffer.from(await crypto.subtle.exportKey("raw", k.publicKey)).toString("base64");
+  const b64 = async (k: any) => Buffer.from(await crypto.subtle.exportKey("raw", k.publicKey)).toString("base64");
   const zip = new TextEncoder().encode("pretend zip bytes");
   const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
   const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
@@ -116,21 +116,21 @@ ok(
     viaSteps[1].search === "apple.com" && viaSteps[1].envelope === "account.apple.com",
 );
 
-const otp = /** @type {any} */ (parseOtpAuth("otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"));
+const otp = (parseOtpAuth("otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub") as any);
 ok("otpauth keeps issuer and account and hides the secret from the label", otp?.issuer === "GitHub" && otp?.account === "alice@example.com" && !("secret" in otp));
 ok("setup key is the base32 secret without padding", otpAuthSecret(otp.uri) === "JBSWY3DPEHPK3PXP" && otpAuthSecret("otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP====") === "JBSWY3DPEHPK3PXP");
 ok("a non-setup link has no setup key", otpAuthSecret("https://example.com/?secret=JBSWY3DPEHPK3PXP") === "");
 ok("wifi and migration QR codes are not setup links", parseOtpAuth("WIFI:S:cafe;T:WPA;P:secret;;") === null && parseOtpAuth("otpauth-migration://offline?data=abc") === null);
 ok("a grouped setup key with spaces is accepted", otpAuthSecret("otpauth://totp/Work?secret=JBSW%20Y3DP%20EHPK%203PXP") === "JBSWY3DPEHPK3PXP");
 {
-  const pasted = /** @type {any} */ (parseSetupInput("jbsw y3dp ehpk 3pxp", "chatgpt.com"));
+  const pasted = (parseSetupInput("jbsw y3dp ehpk 3pxp", "chatgpt.com") as any);
   ok("a pasted grouped setup key becomes an otpauth link", otpAuthSecret(pasted?.uri) === "JBSWY3DPEHPK3PXP" && pasted.account === "chatgpt.com");
   ok("a pasted otpauth link inside text is found", parseSetupInput("scan: otpauth://totp/A:b?secret=JBSWY3DPEHPK3PXP&issuer=A ok")?.issuer === "A");
   ok("junk and short keys are refused", parseSetupInput("not a key!") === null && parseSetupInput("ABC") === null && parseSetupInput("") === null);
   const linked = withAccount(pasted.uri, { username: "me@x.com", issuer: "ChatGPT" });
   const lp = parseOtpAuth(linked);
   ok("the chosen login becomes the account and the secret is kept", lp?.account === "me@x.com" && lp?.issuer === "ChatGPT" && otpAuthSecret(linked) === "JBSWY3DPEHPK3PXP");
-  ok("the client message carries only the link and the page", JSON.stringify(Object.keys(totpHandoff(/** @type {any} */ (linked), "https://chatgpt.com/connector/mfa")).sort()) === '["totpPageUrl","totpUri"]');
+  ok("the client message carries only the link and the page", JSON.stringify(Object.keys(totpHandoff((linked as any), "https://chatgpt.com/connector/mfa")).sort()) === '["totpPageUrl","totpUri"]');
 }
 ok("apple-otpauth totp is accepted", parseOtpAuth("apple-otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP&issuer=Work")?.account === "Work");
 const [scanned, synced] = normalizeOtpEntries([
@@ -143,16 +143,16 @@ ok("generated password is three hyphenated groups", /^[A-Za-z0-9]{6}-[A-Za-z0-9]
 
 // a fake native port: the helper never answers until the test says so
 function fakeNative() {
-  const port = /** @type {any} */ ({ sent: [], msg: [], gone: [], disconnected: false });
-  port.postMessage = (/** @type {any} */ m) => port.sent.push(/** @type {any} */ (m));
+  const port = ({ sent: [], msg: [], gone: [], disconnected: false } as any);
+  port.postMessage = (m: any) => port.sent.push((m as any));
   port.disconnect = () => { port.disconnected = true; };
-  port.onMessage = { addListener: (/** @type {any} */ fn) => port.msg.push(/** @type {any} */ (fn)) };
-  port.onDisconnect = { addListener: (/** @type {any} */ fn) => port.gone.push(/** @type {any} */ (fn)) };
-  port.reply = (/** @type {any} */ m) => port.msg.forEach((/** @type {any} */ fn) => /** @type {any} */ (fn)(m));
-  port.drop = () => port.gone.forEach((/** @type {any} */ fn) => /** @type {any} */ (fn)());
+  port.onMessage = { addListener: (fn: any) => port.msg.push((fn as any)) };
+  port.onDisconnect = { addListener: (fn: any) => port.gone.push((fn as any)) };
+  port.reply = (m: any) => port.msg.forEach((fn: any) => (fn as any)(m));
+  port.drop = () => port.gone.forEach((fn: any) => (fn as any)());
   return port;
 }
-async function settles(/** @type {any} */ promise) {
+async function settles(promise: any) {
   try {
     await promise;
     return "resolved";
@@ -161,8 +161,8 @@ async function settles(/** @type {any} */ promise) {
   }
 }
 async function connectedClient() {
-  const port = /** @type {any} */ (fakeNative());
-  /** @type {any} */ (globalThis).chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  const port = (fakeNative() as any);
+  (globalThis as any).chrome = { runtime: { connectNative: () => port, lastError: undefined } };
   const client = new ApplePasswords();
   const connecting = client.connect();
   port.reply({ cmd: Command.GET_CAPABILITIES, capabilities: {} });
@@ -170,8 +170,8 @@ async function connectedClient() {
   return { client, port };
 }
 {
-  const port = /** @type {any} */ (fakeNative());
-  /** @type {any} */ (globalThis).chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  const port = (fakeNative() as any);
+  (globalThis as any).chrome = { runtime: { connectNative: () => port, lastError: undefined } };
   const client = new ApplePasswords();
   const connecting = client.connect();
   port.drop();
@@ -192,7 +192,7 @@ async function connectedClient() {
   client._dropNativePort();
   ok("a dropped session rejects the pending request", (await settles(stuck)) === "rejected: connection closed" && port.disconnected);
 }
-delete /** @type {any} */ (globalThis).chrome;
+delete (globalThis as any).chrome;
 
 ok(
   "a site lookup carries only its own url",
@@ -246,14 +246,14 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
     client: { ready: true },
     getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }),
     getTab: async () => ({ id: 1, url: "https://github.com/login" }),
-    hostnameOf: (/** @type {any} */ u) => new URL(u).hostname,
+    hostnameOf: (u: any) => new URL(u).hostname,
     isFillUrlAllowed: async () => true,
     siteLogins: async () => [{ username: "a@x.com" }, { username: "b@x.com" }],
-    uniqueByUsername: (/** @type {any} */ l) => l,
-    fillLoginOnTab: async (/** @type {any} */ tab, /** @type {any} */ username) => ({ filled: true, username, password: "leak" }),
+    uniqueByUsername: (l: any) => l,
+    fillLoginOnTab: async (tab: any, username: any) => ({ filled: true, username, password: "leak" }),
     ...over,
   });
-  const run = (/** @type {any} */ msg, d = deps(), lim = createLimiter()) => handleAgentRequest(msg, /** @type {any} */ (d), lim);
+  const run = (msg: any, d = deps(), lim = createLimiter()) => handleAgentRequest(msg, (d as any), lim);
   ok("agent: disabled refuses", (await run({ op: "logins", tabId: 1 }, deps({ getSettings: async () => ({ agentSignIn: false }) }))).reply.error === "not_enabled");
   ok("agent: a host off the list is not_allowed", (await run({ op: "logins", tabId: 1 }, deps({ getTab: async () => ({ id: 1, url: "https://github.com.evil.io/" }) }))).reply.error === "not_allowed");
   ok("agent: a missing tab is no_tab", (await run({ op: "logins", tabId: 9 }, deps({ getTab: async () => { throw new Error("x"); } }))).reply.error === "no_tab");
@@ -280,8 +280,8 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
 
   // every-site: the host is off the list and the setting decides
-  const isDev = (/** @type {any} */ h) => h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost") || h.endsWith(".test");
-  const saved = (/** @type {any[]} */ ...sites) => ({ username: "u@x.com", sites, saved: sites });
+  const isDev = (h: any) => h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost") || h.endsWith(".test");
+  const saved = (...sites: any[]) => ({ username: "u@x.com", sites, saved: sites });
   const all = (over = {}, settings = {}) =>
     deps({
       getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true, ...settings }),
@@ -290,8 +290,8 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
       siteLogins: async () => [saved("example.org")],
       ...over,
     });
-  const tabAt = (/** @type {any} */ url) => ({ getTab: async () => ({ id: 1, url }) });
-  const logins = (/** @type {any} */ d, msg = {}) => run({ op: "logins", tabId: 1, ...msg }, d);
+  const tabAt = (url: any) => ({ getTab: async () => ({ id: 1, url }) });
+  const logins = (d: any, msg = {}) => run({ op: "logins", tabId: 1, ...msg }, d);
   ok("every-site: default off refuses an unlisted host", (await logins(all({}, { agentAllowAll: false }))).reply.error === "not_allowed");
   ok("every-site: a missing setting refuses", (await logins(all({}, { agentAllowAll: undefined }))).reply.error === "not_allowed");
   ok("every-site: on allows an unlisted https host", (await logins(all())).reply.usernames?.join() === "u@x.com");
@@ -302,8 +302,8 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("every-site: a login saved for another domain is filtered out", (await logins(all({ siteLogins: async () => [saved("college.edu"), saved("example.org")] }))).reply.usernames?.length === 1);
   ok("every-site: a login with no sites is filtered out", (await logins(all({ siteLogins: async () => [{ username: "n@x.com", sites: [], saved: [] }, { username: "m@x.com", sites: ["shop.example.org"] }] }))).reply.usernames?.length === 0);
   ok("every-site: sign_in with nothing saved is no_login", (await run({ op: "sign_in", tabId: 1 }, all({ siteLogins: async () => [saved("college.edu")] }))).reply.error === "no_login");
-  let seen = /** @type {any} */ (null);
-  const fillSeen = async (/** @type {any} */ tab, /** @type {any} */ username, /** @type {any} */ opts) => ((seen = opts), { filled: true, username });
+  let seen = (null as any);
+  const fillSeen = async (tab: any, username: any, opts: any) => ((seen = opts), { filled: true, username });
   const filled = await run({ op: "sign_in", tabId: 1 }, all({ fillLoginOnTab: fillSeen }));
   ok("every-site: sign_in fills with savedOnly and no frame allowlist", filled.reply.ok && seen?.savedOnly === true && !("frameAllowlist" in seen));
   ok("every-site: a request carrying agentAllowAll changes nothing", (await logins(all({}, { agentAllowAll: false }), { agentAllowAll: true, settings: { agentAllowAll: true } })).reply.error === "not_allowed");
@@ -314,7 +314,7 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("every-site: no password in any reply", !/leak|password/i.test(JSON.stringify([filled.reply, await logins(all()), await run({ op: "status" }, all())])));
 
   // the site field
-  const withSite = (/** @type {any} */ site, d = deps()) => logins(d, { site });
+  const withSite = (site: any, d = deps()) => logins(d, { site });
   ok("site: the exact host matches", (await withSite("github.com")).reply.ok === true);
   ok("site: a URL matches", (await withSite("https://github.com/login")).reply.ok === true);
   ok("site: a subdomain of the site matches", (await withSite("github.com", deps(tabAt("https://gist.github.com/")))).reply.ok === true);
@@ -339,35 +339,34 @@ const signedAssets = [
   { name: "passbridge.zip", size: 1, digest: `sha256:${"a".repeat(64)}`, browser_download_url: "https://dl.test/passbridge.zip" },
   { name: "passbridge.zip.sig", browser_download_url: "https://dl.test/passbridge.zip.sig" },
 ];
-/** @param {any} [seed] @param {any} [reply] */
-function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets }) }) {
-  const data = /** @type {any} */ ({ ...seed });
-  const pick = (/** @type {any} */ keys) => {
+function fakeUpdateEnv(seed: any = {}, reply: any = { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets }) }) {
+  const data = ({ ...seed } as any);
+  const pick = (keys: any) => {
     if (typeof keys === "string") keys = [keys];
     if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in data).map((k) => [k, data[k]]));
     return { ...keys, ...data };
   };
   const local = {
-    get: (/** @type {any} */ keys, /** @type {any} */ cb) => (cb ? cb(pick(keys)) : Promise.resolve(pick(keys))),
-    set: (/** @type {any} */ o, /** @type {any} */ cb) => {
+    get: (keys: any, cb: any) => (cb ? cb(pick(keys)) : Promise.resolve(pick(keys))),
+    set: (o: any, cb: any) => {
       Object.assign(data, o);
       cb?.();
       return Promise.resolve();
     },
-    remove: (/** @type {any} */ keys) => {
+    remove: (keys: any) => {
       for (const k of [keys].flat()) delete data[k];
       return Promise.resolve();
     },
   };
   // settings live in sync, machine state in local; one in-memory map serves both
-  /** @type {any} */ (globalThis).chrome = { storage: { local, sync: local }, runtime: { lastError: undefined } };
-  const env = /** @type {any} */ ({ data, fetched: [], inits: [] });
-  globalThis.fetch = /** @type {any} */ (async (/** @type {any} */ url, /** @type {any} */ init) => {
-    env.fetched.push(/** @type {any} */ (String(url)));
-    env.inits.push(/** @type {any} */ (init));
+  (globalThis as any).chrome = { storage: { local, sync: local }, runtime: { lastError: undefined } };
+  const env = ({ data, fetched: [], inits: [] } as any);
+  globalThis.fetch = ((async (url: any, init: any) => {
+    env.fetched.push((String(url) as any));
+    env.inits.push((init as any));
     if (reply instanceof Error) throw reply;
     return reply;
-  });
+  }) as any);
   return env;
 }
 const NOW = Date.UTC(2026, 9, 25);
@@ -375,13 +374,13 @@ const NOW = Date.UTC(2026, 9, 25);
   const env = fakeUpdateEnv();
   await checkForUpdate(NOW);
   ok("update: a first check asks GitHub for the latest release", env.fetched.join() === "https://api.github.com/repos/MehdiMamas/passbridge/releases/latest");
-  ok("update: the check keeps the tag and the time", /** @type {any} */ (env.data).latestRelease === "v1.4.0" && /** @type {any} */ (env.data).updateCheckedAt === NOW);
+  ok("update: the check keeps the tag and the time", (env.data as any).latestRelease === "v1.4.0" && (env.data as any).updateCheckedAt === NOW);
   const update = await availableUpdate("1.3.1");
   ok("update: a newer release is offered with its release page", update?.version === "1.4.0" && update?.url === "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.0");
   ok("update: the installed version is not offered", (await availableUpdate("1.4.0")) === null);
   await dismissUpdate();
   ok("update: a dismissed release is not offered again", (await availableUpdate("1.3.1")) === null);
-  /** @type {any} */ (env.data).latestRelease = "v1.5.0";
+  (env.data as any).latestRelease = "v1.5.0";
   ok("update: a release after the dismissed one is offered", (await availableUpdate("1.3.1"))?.version === "1.5.0");
 }
 {
@@ -392,7 +391,7 @@ const NOW = Date.UTC(2026, 9, 25);
 {
   const env = fakeUpdateEnv({ updateCheckedAt: NOW - 60_000 });
   const reached = await checkForUpdate(NOW, { force: true });
-  ok("update: force skips the wait", env.fetched.length === 1 && reached === true && /** @type {any} */ (env.data).updateCheckedAt === NOW);
+  ok("update: force skips the wait", env.fetched.length === 1 && reached === true && (env.data as any).updateCheckedAt === NOW);
 }
 {
   const env = fakeUpdateEnv({ updateCheckedAt: NOW - 60_000 });
@@ -416,32 +415,32 @@ const NOW = Date.UTC(2026, 9, 25);
   ok("update: turned off, nothing is offered", (await availableUpdate("1.3.1")) === null);
 }
 {
-  const env = fakeUpdateEnv({}, /** @type {any} */ (new Error("offline")));
+  const env = fakeUpdateEnv({}, (new Error("offline") as any));
   await checkForUpdate(NOW);
-  ok("update: a failed request is retried on the next alarm", /** @type {any} */ (env.data).updateCheckedAt === undefined);
+  ok("update: a failed request is retried on the next alarm", (env.data as any).updateCheckedAt === undefined);
 }
 {
-  const env = fakeUpdateEnv({ latestRelease: "v1.4.0" }, { ok: false, status: 403, json: async () => /** @type {any} */ (({ message: "rate limited" })) });
+  const env = fakeUpdateEnv({ latestRelease: "v1.4.0" }, { ok: false, status: 403, json: async () => (({ message: "rate limited" }) as any) });
   await checkForUpdate(NOW);
-  ok("update: a refused request is retried on the next alarm and keeps the last tag", /** @type {any} */ (env.data).updateCheckedAt === undefined && /** @type {any} */ (env.data).latestRelease === "v1.4.0");
+  ok("update: a refused request is retried on the next alarm and keeps the last tag", (env.data as any).updateCheckedAt === undefined && (env.data as any).latestRelease === "v1.4.0");
 }
 {
   const unsigned = fakeUpdateEnv({}, { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets.slice(0, 1) }) });
   await checkForUpdate(NOW);
-  ok("update: a newer release without its .sig is not offered", (await availableUpdate("1.3.1")) === null && /** @type {any} */ (unsigned.data).latestRelease === "v1.4.0");
+  ok("update: a newer release without its .sig is not offered", (await availableUpdate("1.3.1")) === null && (unsigned.data as any).latestRelease === "v1.4.0");
   fakeUpdateEnv();
   await checkForUpdate(NOW);
   ok("update: a newer release with its .sig is offered", (await availableUpdate("1.3.1"))?.version === "1.4.0");
 }
 {
-  const env = fakeUpdateEnv({ updateCheckedAt: 5 }, { ok: false, status: 403, json: async () => /** @type {any} */ (({})) });
+  const env = fakeUpdateEnv({ updateCheckedAt: 5 }, { ok: false, status: 403, json: async () => (({}) as any) });
   await checkForUpdate(NOW, { force: true });
-  ok("update: a refused request does not stamp the check time", /** @type {any} */ (env.data).updateCheckedAt === 5);
+  ok("update: a refused request does not stamp the check time", (env.data as any).updateCheckedAt === 5);
 }
 {
   const env = fakeUpdateEnv();
   await checkForUpdate(NOW, { force: true });
-  ok("update: the check bypasses the HTTP cache", /** @type {any} */ (env.inits[0])?.cache === "no-store");
+  ok("update: the check bypasses the HTTP cache", (env.inits[0] as any)?.cache === "no-store");
 }
 {
   const env = fakeUpdateEnv();
@@ -451,21 +450,21 @@ const NOW = Date.UTC(2026, 9, 25);
 {
   fakeUpdateEnv();
   // what chrome answers while the worker is shutting down for a reload
-  /** @type {any} */ (globalThis).chrome.storage.local.get = (/** @type {any} */ keys, /** @type {any} */ cb) => (cb ? cb({}) : Promise.reject(new Error("No SW")));
+  (globalThis as any).chrome.storage.local.get = (keys: any, cb: any) => (cb ? cb({}) : Promise.reject(new Error("No SW")));
   ok("update: a check while the worker shuts down settles quietly", (await settles(checkForUpdate(NOW))) === "resolved");
 }
 
 {
   // two areas this time, so a move from local to sync shows
-  const area = (/** @type {any} */ data) => ({
+  const area = (data: any) => ({
     data,
-    get: async (/** @type {any} */ keys) => Object.fromEntries(keys.filter((/** @type {any} */ k) => k in data).map((/** @type {any} */ k) => [k, data[k]])),
-    set: async (/** @type {any} */ o) => void Object.assign(data, o),
-    remove: async (/** @type {any} */ keys) => keys.forEach((/** @type {any} */ k) => delete data[k]),
+    get: async (keys: any) => Object.fromEntries(keys.filter((k: any) => k in data).map((k: any) => [k, data[k]])),
+    set: async (o: any) => void Object.assign(data, o),
+    remove: async (keys: any) => keys.forEach((k: any) => delete data[k]),
   });
   const local = area({ askToSave: false, updateCheckedAt: 5 });
   const sync = area({});
-  /** @type {any} */ (globalThis).chrome = { storage: { local, sync }, runtime: {} };
+  (globalThis as any).chrome = { storage: { local, sync }, runtime: {} };
   await migrateSettingsToSync();
   ok("settings: a machine's local settings move to sync once", sync.data.askToSave === false && !("askToSave" in local.data));
   ok("settings: machine state stays in local", local.data.updateCheckedAt === 5 && !("updateCheckedAt" in sync.data));
@@ -476,15 +475,15 @@ const NOW = Date.UTC(2026, 9, 25);
 }
 
 function fakePage() {
-  const win = /** @type {any} */ (new EventTarget());
+  const win = (new EventTarget() as any);
   const hosts = [{ removed: false, remove() { this.removed = true; } }, { removed: false, remove() { this.removed = true; } }];
   win.document = { querySelectorAll: () => hosts };
   return { win, hosts };
 }
 {
   const { win, hosts } = fakePage();
-  const runtime = /** @type {any} */ ({ id: "abc" });
-  const life = createLifecycle(/** @type {any} */ ({ win, runtime }));
+  const runtime = ({ id: "abc" } as any);
+  const life = createLifecycle(({ win, runtime } as any));
   let fired = 0;
   life.listen(win, "ping", () => fired++);
   let cleaned = 0;
@@ -508,19 +507,19 @@ function fakePage() {
 }
 {
   const { win, hosts } = fakePage();
-  const old = createLifecycle(/** @type {any} */ ({ win, runtime: { id: "abc" } }));
+  const old = createLifecycle(({ win, runtime: { id: "abc" } } as any));
   ok("lifecycle: the first copy does not tear itself down", !old.isDead());
-  const fresh = createLifecycle(/** @type {any} */ ({ win, runtime: { id: "abc" } }));
+  const fresh = createLifecycle(({ win, runtime: { id: "abc" } } as any));
   ok("lifecycle: a newer copy replaces the older one", old.isDead() && hosts.every((h) => h.removed));
   ok("lifecycle: the newer copy survives its own event", !fresh.isDead() && fresh.alive());
   ok("lifecycle: the replaced event name is stable", REPLACED_EVENT === "passbridge:replaced");
 }
 {
-  const calls = /** @type {any[]} */ ([]);
+  const calls = ([] as any[]);
   const runtime = { getManifest: () => ({ content_scripts: [{ js: ["src/content.js"] }] }) };
-  const tabs = { query: async (/** @type {any} */ q) => (calls.push(["query", q]), [{ id: 1, url: "https://a.test/" }, { id: 2, url: "https://locked.test/" }, { id: 3, url: "http://b.test/" }, { url: "https://noid.test/" }]) };
+  const tabs = { query: async (q: any) => (calls.push(["query", q]), [{ id: 1, url: "https://a.test/" }, { id: 2, url: "https://locked.test/" }, { id: 3, url: "http://b.test/" }, { url: "https://noid.test/" }]) };
   const scripting = {
-    executeScript: async (/** @type {any} */ o) => {
+    executeScript: async (o: any) => {
       calls.push(["inject", o.target.tabId, o.target.allFrames, o.files]);
       if (o.target.tabId === 2) throw new Error("Cannot access contents of the page");
     },
@@ -534,11 +533,11 @@ function fakePage() {
   const real = JSON.parse((await import("node:fs")).readFileSync(new URL("../../manifest.json", import.meta.url), "utf8"));
   ok("manifest: asks for scripting and lists a content script to inject", real.permissions.includes("scripting") && real.content_scripts[0].js[0] === "src/content.js");
 }
-delete /** @type {any} */ (globalThis).chrome;
+delete (globalThis as any).chrome;
 globalThis.fetch = realFetch;
 
 // a zip built in the test: stored or deflated entries, with optional flags, unix mode and a wrong declared size
-async function makeZip(/** @type {any} */ entries) {
+async function makeZip(entries: any) {
   const enc = new TextEncoder();
   const locals = [];
   const centrals = [];
@@ -585,7 +584,7 @@ async function makeZip(/** @type {any} */ entries) {
     { name: "src/a.js", data: "A".repeat(500) },
   ]);
   const files = await readZip(zip);
-  const text = (/** @type {any} */ f) => new TextDecoder().decode(f.data);
+  const text = (f: any) => new TextDecoder().decode(f.data);
   ok("zip: stored and deflated files come out with their paths", files.map((f) => f.path).join() === "manifest.json,src/a.js" && text(files[0]) === '{"version":"1.4.2"}' && text(files[1]) === "A".repeat(500));
   const bad = ["../x", "/x", "a\\b", "C:/x", "a//b", "./x", ".update-staging/x"];
   const refused = await Promise.all(bad.map(async (name) => (await settles(readZip(await makeZip([{ name, data: "x" }])))).startsWith("rejected")));
@@ -594,7 +593,7 @@ async function makeZip(/** @type {any} */ entries) {
   ok("zip: an encrypted entry is refused", (await settles(readZip(await makeZip([{ name: "a", data: "x", flags: 1 }])))).startsWith("rejected"));
   ok("zip: a size that does not match is refused", (await settles(readZip(await makeZip([{ name: "a", data: "abc", size: 9 }])))).startsWith("rejected"));
   ok("zip: bytes that are no zip are refused", (await settles(readZip(new Uint8Array([1, 2, 3])))).startsWith("rejected"));
-  const pkg = (/** @type {any} */ manifest) => [{ path: "manifest.json", data: new TextEncoder().encode(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }];
+  const pkg = (manifest: any) => [{ path: "manifest.json", data: new TextEncoder().encode(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }];
   const want = { key: "K", version: "1.4.2" };
   ok("zip: a manifest with this install's key and the expected version passes", manifestProblem(pkg({ key: "K", version: "1.4.2" }), want) === null);
   ok("zip: a different key is refused", manifestProblem(pkg({ key: "X", version: "1.4.2" }), want) === "key");
@@ -604,9 +603,9 @@ async function makeZip(/** @type {any} */ entries) {
 
 // FileSystemDirectoryHandle in memory. failAt(op, path) makes the next matching call throw; noMove drops move() like an older Chrome
 function fakeFs({ noMove = false } = {}) {
-  const faults = /** @type {any[]} */ ([]);
-  const join = (/** @type {any} */ a, /** @type {any} */ b) => (a ? `${a}/${b}` : b);
-  const trip = (/** @type {any} */ op, /** @type {any} */ path) => {
+  const faults = ([] as any[]);
+  const join = (a: any, b: any) => (a ? `${a}/${b}` : b);
+  const trip = (op: any, path: any) => {
     const i = faults.findIndex((f) => f.op === op && f.path === path);
     if (i >= 0) {
       faults.splice(i, 1);
@@ -614,8 +613,8 @@ function fakeFs({ noMove = false } = {}) {
     }
   };
   const missing = () => new DOMException("not found", "NotFoundError");
-  function file(/** @type {any} */ name, /** @type {any} */ parent) {
-    const f = /** @type {any} */ ({
+  function file(name: any, parent: any) {
+    const f = (({
       kind: "file",
       name,
       parent,
@@ -628,7 +627,7 @@ function fakeFs({ noMove = false } = {}) {
       async createWritable() {
         let next = new Uint8Array();
         return {
-          write: async (/** @type {any} */ d) => {
+          write: async (d: any) => {
             trip("write", f.path());
             next = typeof d === "string" ? new TextEncoder().encode(d) : new Uint8Array(d);
           },
@@ -637,9 +636,9 @@ function fakeFs({ noMove = false } = {}) {
           },
         };
       },
-    });
+    }) as any);
     if (!noMove) {
-      f.move = async (/** @type {any} */ a, /** @type {any} */ b) => {
+      f.move = async (a: any, b: any) => {
         const [dest, nextName] = typeof a === "string" ? [f.parent, a] : [a, b ?? f.name];
         trip("move", f.path());
         f.parent.kids.delete(f.name);
@@ -650,7 +649,7 @@ function fakeFs({ noMove = false } = {}) {
     }
     return f;
   }
-  function dir(/** @type {any} */ name, /** @type {any} */ parent) {
+  function dir(name: any, parent: any) {
     const d = {
       kind: "directory",
       name,
@@ -658,7 +657,7 @@ function fakeFs({ noMove = false } = {}) {
       get path() {
         return parent ? join(parent.path, name) : "";
       },
-      async getDirectoryHandle(/** @type {any} */ n, { create = false } = {}) {
+      async getDirectoryHandle(n: any, { create = false } = {}) {
         const k = d.kids.get(n);
         if (k?.kind === "directory") return k;
         if (k || !create) throw missing();
@@ -666,7 +665,7 @@ function fakeFs({ noMove = false } = {}) {
         d.kids.set(n, sub);
         return sub;
       },
-      async getFileHandle(/** @type {any} */ n, { create = false } = {}) {
+      async getFileHandle(n: any, { create = false } = {}) {
         const k = d.kids.get(n);
         if (k?.kind === "file") return k;
         if (k || !create) throw missing();
@@ -674,7 +673,7 @@ function fakeFs({ noMove = false } = {}) {
         d.kids.set(n, f);
         return f;
       },
-      async removeEntry(/** @type {any} */ n, { recursive = false } = {}) {
+      async removeEntry(n: any, { recursive = false } = {}) {
         const k = d.kids.get(n);
         if (!k) throw missing();
         if (k.kind === "directory" && k.kids.size && !recursive) throw new DOMException("not empty", "InvalidModificationError");
@@ -688,9 +687,9 @@ function fakeFs({ noMove = false } = {}) {
     return d;
   }
   const root = dir("otp", null);
-  return { root, failAt: (/** @type {any} */ op, /** @type {any} */ path) => faults.push({ op, path }) };
+  return { root, failAt: (op: any, path: any) => faults.push({ op, path }) };
 }
-async function put(/** @type {any} */ root, /** @type {any} */ path, /** @type {any} */ text) {
+async function put(root: any, path: any, text: any) {
   const parts = path.split("/");
   let d = root;
   for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
@@ -698,8 +697,7 @@ async function put(/** @type {any} */ root, /** @type {any} */ path, /** @type {
   await w.write(text);
   await w.close();
 }
-/** @param {any} d @param {string} [prefix] @returns {Promise<string[]>} */
-async function snapshot(d, prefix = "") {
+async function snapshot(d: any, prefix: string = ""): Promise<string[]> {
   const out = [];
   for await (const [name, h] of d.entries()) {
     if (h.kind === "directory") {
@@ -709,9 +707,8 @@ async function snapshot(d, prefix = "") {
   }
   return out.sort();
 }
-const newFile = (/** @type {any} */ path, /** @type {any} */ text) => ({ path, data: new TextEncoder().encode(text) });
-/** @param {any} [opts] */
-async function oldInstall(opts) {
+const newFile = (path: any, text: any) => ({ path, data: new TextEncoder().encode(text) });
+async function oldInstall(opts?: any) {
   const fs = fakeFs(opts);
   await put(fs.root, "manifest.json", "v1");
   await put(fs.root, "src/a.js", "A1");
@@ -724,32 +721,32 @@ const NEXT = [newFile("manifest.json", "v2"), newFile("src/a.js", "A2"), newFile
 const NEW = ["manifest.json=v2", "src/a.js=A2", "src/new/n.js=N"].join();
 {
   const fs = await oldInstall();
-  const steps = /** @type {any[]} */ ([]);
-  await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2", onProgress: (done, total) => steps.push([done, total]) });
+  const steps = ([] as any[]);
+  await applyUpdate((fs.root as any), NEXT, { version: "1.4.2", onProgress: (done, total) => steps.push([done, total]) });
   ok("files: the folder ends up holding exactly the new release", (await snapshot(fs.root)).join() === NEW);
   ok("files: progress climbs one step at a time to the total", steps.length === 8 && steps.every(([d, t], i) => d === i + 1 && t === 8));
 }
 {
   const fs = await oldInstall();
   fs.failAt("write", ".update-staging/src/a.js");
-  const err = await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
+  const err = await applyUpdate((fs.root as any), NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
   ok("files: a failed write while staging leaves the old install untouched", err?.restored === false && (await snapshot(fs.root)).join() === OLD);
 }
 {
   const fs = await oldInstall();
   fs.failAt("move", ".update-staging/src/new/n.js");
-  const err = await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
+  const err = await applyUpdate((fs.root as any), NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
   ok("files: a failed move halfway puts the old install back", err?.restored === true && (await snapshot(fs.root)).join() === OLD);
 }
 {
   const fs = await oldInstall();
   fs.failAt("move", "legacy/x.js");
-  await settles(applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" }));
+  await settles(applyUpdate((fs.root as any), NEXT, { version: "1.4.2" }));
   ok("files: a failure while setting aside a dropped file also puts the old install back", (await snapshot(fs.root)).join() === OLD);
 }
 {
   const fs = await oldInstall({ noMove: true });
-  await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" });
+  await applyUpdate((fs.root as any), NEXT, { version: "1.4.2" });
   ok("files: without move() the files are copied and the result is the same", (await snapshot(fs.root)).join() === NEW);
 }
 // the state a crash leaves: everything staged, the journal written, a.js swapped and n.js moved in
@@ -764,35 +761,35 @@ async function crashedHalfway() {
 }
 {
   const fs = await crashedHalfway();
-  const first = await recoverUpdate(/** @type {any} */ (fs.root));
+  const first = await recoverUpdate((fs.root as any));
   ok("files: an interrupted update is rolled back to the old install", first === true && (await snapshot(fs.root)).join() === OLD);
-  ok("files: a second recovery finds nothing to do", (await recoverUpdate(/** @type {any} */ (fs.root))) === false);
+  ok("files: a second recovery finds nothing to do", (await recoverUpdate((fs.root as any))) === false);
 }
 {
   const fs = await oldInstall();
   await put(fs.root, ".update-staging/src/a.js", "A2");
-  ok("files: staging left without a journal is only cleaned up", (await recoverUpdate(/** @type {any} */ (fs.root))) === false && (await snapshot(fs.root)).join() === OLD);
+  ok("files: staging left without a journal is only cleaned up", (await recoverUpdate((fs.root as any))) === false && (await snapshot(fs.root)).join() === OLD);
 }
 {
   const fs = await crashedHalfway();
-  await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" });
+  await applyUpdate((fs.root as any), NEXT, { version: "1.4.2" });
   ok("files: a new update first recovers an interrupted one", (await snapshot(fs.root)).join() === NEW);
 }
 {
   const fs = await oldInstall();
   const other = await oldInstall();
-  const readFrom = (/** @type {any} */ root) => async (/** @type {any} */ name) => (await snapshot(root)).find((/** @type {any} */ l) => l.startsWith(`${name}=`))?.slice(name.length + 1) ?? null;
-  ok("files: the folder the extension runs from is recognised", (await isOwnFolder(/** @type {any} */ (fs.root), readFrom(fs.root))) === true);
-  ok("files: a copy elsewhere is not", (await isOwnFolder(/** @type {any} */ (fs.root), readFrom(other.root))) === false);
+  const readFrom = (root: any) => async (name: any) => (await snapshot(root)).find((l: any) => l.startsWith(`${name}=`))?.slice(name.length + 1) ?? null;
+  ok("files: the folder the extension runs from is recognised", (await isOwnFolder((fs.root as any), readFrom(fs.root))) === true);
+  ok("files: a copy elsewhere is not", (await isOwnFolder((fs.root as any), readFrom(other.root))) === false);
   ok("files: the probe file is removed afterwards", (await snapshot(fs.root)).join() === OLD);
 }
 
 {
-  const journalEnv = (/** @type {any} */ journal) => {
+  const journalEnv = (journal: any) => {
     const env = fakeUpdateEnv();
-    /** @type {any} */ (globalThis).chrome.runtime.getURL = (/** @type {any} */ p) => `chrome-extension://pb/${p}`;
-    globalThis.fetch = async (/** @type {any} */ url) => {
-      env.fetched.push(/** @type {any} */ (String(url)));
+    (globalThis as any).chrome.runtime.getURL = (p: any) => `chrome-extension://pb/${p}`;
+    globalThis.fetch = async (url: any) => {
+      env.fetched.push((String(url) as any));
       if (!journal) throw new TypeError("Failed to fetch");
       return new Response("{}");
     };
@@ -804,17 +801,17 @@ async function crashedHalfway() {
   ok("interrupted: a run that left its journal is found", (await hasInterruptedUpdate()) === true && env.fetched.join() === "chrome-extension://pb/.update-journal.json");
   env = journalEnv(false);
   await setUpdating(true);
-  ok("interrupted: a run that left no journal is forgotten", (await hasInterruptedUpdate()) === false && /** @type {any} */ (env.data).isUpdating === undefined);
+  ok("interrupted: a run that left no journal is forgotten", (await hasInterruptedUpdate()) === false && (env.data as any).isUpdating === undefined);
   await setUpdating(true);
   await setUpdating(false);
-  ok("interrupted: a finished run clears its mark", /** @type {any} */ (env.data).isUpdating === undefined);
-  delete /** @type {any} */ (globalThis).chrome;
+  ok("interrupted: a finished run clears its mark", (env.data as any).isUpdating === undefined);
+  delete (globalThis as any).chrome;
   globalThis.fetch = realFetch;
 }
 
 // a saved folder handle with scripted permission answers, counting what the user would be asked
-function savedFolder(/** @type {any} */ query, request = "granted") {
-  const h = /** @type {any} */ ({ asked: 0 });
+function savedFolder(query: any, request = "granted") {
+  const h = ({ asked: 0 } as any);
   h.queryPermission = async () => query;
   h.requestPermission = async () => {
     h.asked++;
@@ -822,14 +819,14 @@ function savedFolder(/** @type {any} */ query, request = "granted") {
   };
   return h;
 }
-function folderEnv(/** @type {any} */ saved, { own = true, source = true, pickThrows = false } = {}) {
-  const env = /** @type {any} */ ({ picked: 0, startIn: [], store: { value: saved, get: async () => env.store.value, set: async (/** @type {any} */ v) => (env.store.value = v) } });
+function folderEnv(saved: any, { own = true, source = true, pickThrows = false } = {}) {
+  const env = (({ picked: 0, startIn: [], store: { value: saved, get: async () => env.store.value, set: async (v: any) => (env.store.value = v) } }) as any);
   env.picked_handle = savedFolder("granted");
   env.deps = {
     store: env.store,
-    pick: async (/** @type {any} */ startIn) => {
+    pick: async (startIn: any) => {
       env.picked++;
-      env.startIn.push(/** @type {any} */ (startIn));
+      env.startIn.push((startIn as any));
       if (pickThrows) throw new DOMException("cancelled", "AbortError");
       return env.picked_handle;
     },
@@ -839,66 +836,66 @@ function folderEnv(/** @type {any} */ saved, { own = true, source = true, pickTh
   return env;
 }
 {
-  const env = /** @type {any} */ (folderEnv(null));
+  const env = (folderEnv(null) as any);
   const r = await folderForUpdate(env.deps);
   ok("folder: the first update asks for the folder once and keeps it", r.ok && r.folder === env.picked_handle && env.picked === 1 && env.startIn[0] === undefined && env.store.value === env.picked_handle);
 }
 {
   const saved = savedFolder("prompt", "granted");
-  const env = /** @type {any} */ (folderEnv(saved));
+  const env = (folderEnv(saved) as any);
   const r = await folderForUpdate(env.deps);
   // only a folder that comes through the picker gets chrome's "allow on every visit"; requestPermission offers two buttons
   ok("folder: after a restart the picker opens at the kept folder instead of the bare permission prompt", r.ok && env.picked === 1 && env.startIn[0] === saved && saved.asked === 0 && env.store.value === env.picked_handle);
 }
 {
   const saved = savedFolder("granted");
-  const env = /** @type {any} */ (folderEnv(saved));
+  const env = (folderEnv(saved) as any);
   const r = await folderForUpdate(env.deps);
   ok("folder: with allow on every visit nothing is asked", r.ok && saved.asked === 0 && env.picked === 0);
 }
 {
   const saved = savedFolder("denied");
-  const env = /** @type {any} */ (folderEnv(saved));
+  const env = (folderEnv(saved) as any);
   const r = await folderForUpdate(env.deps);
   ok("folder: a refused permission opens the picker at the kept folder again", r.ok && env.picked === 1 && env.startIn[0] === saved);
 }
 {
-  const env = /** @type {any} */ (folderEnv(null, { own: false }));
-  const r = /** @type {any} */ (await folderForUpdate(env.deps));
+  const env = (folderEnv(null, { own: false }) as any);
+  const r = (await folderForUpdate(env.deps) as any);
   ok("folder: a folder that is not this install is refused and not kept", r.error === "notown" && env.store.value === null);
 }
 {
-  const env = /** @type {any} */ (folderEnv(null, { source: false }));
-  const r = /** @type {any} */ (await folderForUpdate(env.deps));
+  const env = (folderEnv(null, { source: false }) as any);
+  const r = (await folderForUpdate(env.deps) as any);
   ok("folder: a folder without the PassBridge manifest is refused and not kept", r.error === "notsource" && env.store.value === null);
 }
 {
-  const env = /** @type {any} */ (folderEnv(savedFolder("granted"), { source: false }));
-  ok("folder: a kept folder that lost the PassBridge manifest is refused", /** @type {any} */ ((await folderForUpdate(env.deps))).error === "notsource");
+  const env = (folderEnv(savedFolder("granted"), { source: false }) as any);
+  ok("folder: a kept folder that lost the PassBridge manifest is refused", ((await folderForUpdate(env.deps)) as any).error === "notsource");
 }
 {
   // the same lock semantics as navigator.locks with ifAvailable: the second request gets null while the first runs
   let held = false;
-  const locks = { request: async (/** @type {any} */ name, /** @type {any} */ opts, /** @type {any} */ cb) => (held ? cb(null) : ((held = true), cb({ name }).finally(() => (held = false)))) };
+  const locks = { request: async (name: any, opts: any, cb: any) => (held ? cb(null) : ((held = true), cb({ name }).finally(() => (held = false)))) };
   let release;
   const first = withUpdateLock(() => new Promise((r) => (release = r)), locks);
   let ran = false;
   const second = await withUpdateLock(async () => (ran = true), locks);
   ok("lock: a second update started while one runs is refused and never runs", second.ok === false && second.error === "busy" && !ran);
-  /** @type {any} */ (release)("done");
-  ok("lock: the first update still finishes", /** @type {any} */ ((await first)).value === "done");
+  (release as any)("done");
+  ok("lock: the first update still finishes", ((await first) as any).value === "done");
   ok("lock: after it finishes a new update can start", (await withUpdateLock(async () => 1, locks)).ok === true);
 }
 {
-  const env = /** @type {any} */ (folderEnv(null, { pickThrows: true }));
-  ok("folder: closing the picker is reported as cancelled", /** @type {any} */ ((await folderForUpdate(env.deps))).error === "cancelled");
+  const env = (folderEnv(null, { pickThrows: true }) as any);
+  ok("folder: closing the picker is reported as cancelled", ((await folderForUpdate(env.deps)) as any).error === "cancelled");
 }
 {
-  const env = /** @type {any} */ (folderEnv(savedFolder("granted"), { own: false }));
-  ok("folder: a kept folder that no longer holds this install is reported", /** @type {any} */ ((await folderForUpdate(env.deps))).error === "notown");
+  const env = (folderEnv(savedFolder("granted"), { own: false }) as any);
+  ok("folder: a kept folder that no longer holds this install is reported", ((await folderForUpdate(env.deps)) as any).error === "notown");
 }
 {
-  const env = /** @type {any} */ (folderEnv(savedFolder("granted")));
+  const env = (folderEnv(savedFolder("granted")) as any);
   const r = await pickFolder(env.deps);
   ok("folder: change folder always opens the picker", r.ok && env.picked === 1 && env.store.value === env.picked_handle);
 }
@@ -909,16 +906,16 @@ function folderEnv(/** @type {any} */ saved, { own = true, source = true, pickTh
   const zip = new TextEncoder().encode("release zip bytes ".repeat(4000));
   const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
   const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
-  const asset = (/** @type {any} */ name, /** @type {any} */ extra) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
-  const releaseJson = (/** @type {any} */ assets) => ({ tag_name: "v1.4.2", assets });
+  const asset = (name: any, extra: any) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
+  const releaseJson = (assets: any) => ({ tag_name: "v1.4.2", assets });
   const full = [asset("passbridge.zip", { size: zip.length, digest: `sha256:${hex}` }), asset("passbridge.zip.sig", { size: 64 })];
   const cacheModes = new Set();
-  const serve = (/** @type {any} */ json, files = {}) => {
+  const serve = (json: any, files = {}) => {
     globalThis.fetch = async (url, init) => {
       cacheModes.add(init?.cache);
       url = String(url);
       if (url.startsWith("https://api.github.com/")) return json instanceof Error ? Promise.reject(json) : new Response(JSON.stringify(json), { status: 200 });
-      const body = /** @type {any} */ (files)[url.slice("https://dl.test/".length)];
+      const body = (files as any)[url.slice("https://dl.test/".length)];
       return body ? new Response(body) : new Response("missing", { status: 404 });
     };
   };
@@ -926,82 +923,82 @@ function folderEnv(/** @type {any} */ saved, { own = true, source = true, pickTh
   const release = await latestRelease("1.4.1");
   ok("release: a newer signed release is described", release.ok && release.version === "1.4.2" && release.size === zip.length && release.pageUrl === "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.2");
   serve(releaseJson([full[0]]));
-  const unsigned = /** @type {any} */ (await latestRelease("1.4.1"));
+  const unsigned = (await latestRelease("1.4.1") as any);
   ok("release: no .sig means unsigned, with the version and the page to download by hand", !unsigned.ok && unsigned.error === "unsigned" && unsigned.version === "1.4.2" && unsigned.pageUrl.endsWith("/v1.4.2"));
   serve(releaseJson([asset("passbridge.zip", { size: zip.length }), full[1]]));
-  ok("release: no digest also means unsigned", /** @type {any} */ ((await latestRelease("1.4.1"))).error === "unsigned");
+  ok("release: no digest also means unsigned", ((await latestRelease("1.4.1")) as any).error === "unsigned");
   serve(releaseJson(full));
-  ok("release: the installed version is reported as current", /** @type {any} */ ((await latestRelease("1.4.2"))).error === "current");
+  ok("release: the installed version is reported as current", ((await latestRelease("1.4.2")) as any).error === "current");
   serve(new Error("offline"));
-  ok("release: no answer from GitHub is a network error", /** @type {any} */ ((await latestRelease("1.4.1"))).error === "network");
+  ok("release: no answer from GitHub is a network error", ((await latestRelease("1.4.1")) as any).error === "network");
 
   serve(releaseJson(full), { "passbridge.zip": zip, "passbridge.zip.sig": sig });
-  const seen = /** @type {any[]} */ ([]);
-  const got = await downloadRelease(/** @type {any} */ (release), { publicKey, onProgress: (n, total) => seen.push([n, total]) });
+  const seen = ([] as any[]);
+  const got = await downloadRelease((release as any), { publicKey, onProgress: (n, total) => seen.push([n, total]) });
   ok("release: the download is verified and handed back", got.ok && got.zip.length === zip.length);
   ok("release: download progress reaches the full size", seen.length > 0 && seen.at(-1)[0] === zip.length && seen.at(-1)[1] === zip.length);
   const tampered = zip.slice();
   tampered[10] ^= 1;
   serve(releaseJson(full), { "passbridge.zip": tampered, "passbridge.zip.sig": sig });
-  ok("release: a changed zip fails verification", /** @type {any} */ ((await downloadRelease(/** @type {any} */ (release), { publicKey }))).error === "verify");
+  ok("release: a changed zip fails verification", ((await downloadRelease((release as any), { publicKey })) as any).error === "verify");
   serve(releaseJson(full), { "passbridge.zip.sig": sig });
-  ok("release: a missing file is a download error", /** @type {any} */ ((await downloadRelease(/** @type {any} */ (release), { publicKey }))).error === "download");
+  ok("release: a missing file is a download error", ((await downloadRelease((release as any), { publicKey })) as any).error === "download");
   ok("release: the lookup and the downloads skip the browser cache", cacheModes.size === 1 && cacheModes.has("no-store"));
 
   serve(releaseJson([full[0]]));
   const helper = await installUpdate("1.4.1");
-  ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(/** @type {any} */ (helper.error)));
+  ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test((helper.error as any)));
 
-  const heldLocks = { request: async (/** @type {any} */ name, /** @type {any} */ opts, /** @type {any} */ cb) => cb(null) };
+  const heldLocks = { request: async (name: any, opts: any, cb: any) => cb(null) };
   const busy = await installUpdate("1.4.1", { publicKey, locks: heldLocks });
   ok("helper update: refused with the plain message while another update holds the lock", !busy.ok && busy.error === "An update is already running in another PassBridge page.");
 
   // the updater host answering, with storage and reload stubbed
-  const helperEnv = (/** @type {any} */ hostReply) => {
-    const env = /** @type {any} */ (fakeUpdateEnv());
+  const helperEnv = (hostReply: any) => {
+    const env = (fakeUpdateEnv() as any);
     env.sent = [];
     env.reloads = 0;
-    Object.assign(/** @type {any} */ (globalThis).chrome.runtime, {
-      sendNativeMessage: async (/** @type {any} */ host, /** @type {any} */ msg) => (env.sent.push(msg), hostReply),
+    Object.assign((globalThis as any).chrome.runtime, {
+      sendNativeMessage: async (host: any, msg: any) => (env.sent.push(msg), hostReply),
       reload: () => env.reloads++,
     });
     serve(releaseJson(full), { "passbridge.zip": zip, "passbridge.zip.sig": sig });
     return env;
   };
-  let env = /** @type {any} */ (helperEnv({ ok: true }));
+  let env = (helperEnv({ ok: true }) as any);
   const installed = await installUpdate("1.4.1", { publicKey });
   await new Promise((r) => setTimeout(r, 350));
-  ok("helper update: a finished install marks the version for the result page, then reloads", installed.ok && env.sent.some((/** @type {any} */ m) => m.op === "install") && /** @type {any} */ (env.data).updatedTo === "1.4.2" && env.reloads === 1);
+  ok("helper update: a finished install marks the version for the result page, then reloads", installed.ok && env.sent.some((m: any) => m.op === "install") && (env.data as any).updatedTo === "1.4.2" && env.reloads === 1);
   env = helperEnv({ ok: false, error: "disk full" });
   const refused = await installUpdate("1.4.1", { publicKey });
   await new Promise((r) => setTimeout(r, 350));
-  ok("helper update: a refused install marks nothing and does not reload", !refused.ok && /** @type {any} */ (env.data).updatedTo === undefined && env.reloads === 0);
-  delete /** @type {any} */ (globalThis).chrome;
+  ok("helper update: a refused install marks nothing and does not reload", !refused.ok && (env.data as any).updatedTo === undefined && env.reloads === 0);
+  delete (globalThis as any).chrome;
 }
 {
   const env = fakeUpdateEnv();
   await markUpdatedTo("1.4.2");
   const first = await takeUpdatedTo();
-  ok("update: the marked version is handed over once", first === "1.4.2" && /** @type {any} */ (env.data).updatedTo === undefined && (await takeUpdatedTo()) === null);
-  delete /** @type {any} */ (globalThis).chrome;
+  ok("update: the marked version is handed over once", first === "1.4.2" && (env.data as any).updatedTo === undefined && (await takeUpdatedTo()) === null);
+  delete (globalThis as any).chrome;
 }
 globalThis.fetch = realFetch;
 
 {
   // automatic install: the setting, the host and the failed-once memory decide
-  const setup = (/** @type {any} */ seed) => {
-    const env = /** @type {any} */ (fakeUpdateEnv({ latestRelease: "v1.5.0", ...seed }));
-    /** @type {any} */ (globalThis).chrome.runtime.getManifest = () => ({ version: "1.4.0" });
+  const setup = (seed: any) => {
+    const env = (fakeUpdateEnv({ latestRelease: "v1.5.0", ...seed }) as any);
+    (globalThis as any).chrome.runtime.getManifest = () => ({ version: "1.4.0" });
     env.installs = [];
     env.helpers = 0;
-    env.deps = (/** @type {any} */ host, installReply = { ok: true }) => ({
+    env.deps = (host: any, installReply = { ok: true }) => ({
       available: async () => host,
-      install: async (/** @type {any} */ v, /** @type {any} */ o) => (env.installs.push(o), installReply),
+      install: async (v: any, o: any) => (env.installs.push(o), installReply),
       helper: async () => (env.helpers++, { ok: true }),
     });
     return env;
   };
-  let env = /** @type {any} */ (setup({}));
+  let env = (setup({}) as any);
   let r = await autoInstallUpdate(env.deps(true));
   ok("auto update: a newer release with the host present and the setting on installs by itself", r.ok && env.installs.length === 1 && env.installs[0].auto === true);
   env = setup({ autoInstallUpdates: false });
@@ -1014,13 +1011,13 @@ globalThis.fetch = realFetch;
   ok("auto update: with update checks off nothing is installed", !(await autoInstallUpdate(env.deps(true))).ran);
   env = setup({});
   r = await autoInstallUpdate(env.deps(true, { ok: false, error: "x" }));
-  ok("auto update: a failed install is remembered for that version", !r.ok && /** @type {any} */ (env.data).autoInstallFailed === "1.5.0");
+  ok("auto update: a failed install is remembered for that version", !r.ok && (env.data as any).autoInstallFailed === "1.5.0");
   r = await autoInstallUpdate(env.deps(true));
   ok("auto update: the same version is not retried after a failure", !r.ran && r.why === "failed-before" && env.installs.length === 1);
   env = setup({ latestRelease: "v1.4.0" });
   r = await autoInstallUpdate(env.deps(true));
   ok("auto update: no newer extension release installs nothing but checks the helper", !r.ran && env.installs.length === 0 && env.helpers === 1);
-  delete /** @type {any} */ (globalThis).chrome;
+  delete (globalThis as any).chrome;
 }
 {
   // helper update: only when the helper is older than the release, verified like the extension zip
@@ -1029,40 +1026,39 @@ globalThis.fetch = realFetch;
   const zip = new TextEncoder().encode("helper zip bytes ".repeat(500));
   const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
   const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
-  /** @param {any} name @param {any} [extra] */
-  const asset = (name, extra) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
+  const asset = (name: any, extra?: any) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
   const json = { tag_name: "v1.5.0", assets: ["passbridge-macos-helper.zip", "passbridge-windows-helper.zip"].flatMap((n) => [asset(n, { size: zip.length, digest: `sha256:${hex}` }), asset(`${n}.sig`)]) };
-  const run = async (/** @type {any} */ status, platform = "macOS", tamper = false) => {
-    const env = /** @type {any} */ (fakeUpdateEnv({ latestRelease: "v1.5.0" }));
+  const run = async (status: any, platform = "macOS", tamper = false) => {
+    const env = (fakeUpdateEnv({ latestRelease: "v1.5.0" }) as any);
     env.sent = [];
     env.urls = [];
     const bad = zip.slice();
     bad[3] ^= 1;
-    globalThis.fetch = async (/** @type {any} */ url) => {
+    globalThis.fetch = async (url: any) => {
       url = String(url);
       env.urls.push(url);
       if (url.startsWith("https://api.github.com/")) return new Response(JSON.stringify(json));
       return new Response(url.endsWith(".sig") ? sig : tamper ? bad : zip);
     };
-    const send = async (/** @type {any} */ m) => (env.sent.push(m), m.op === "status" ? status : { ok: true });
+    const send = async (m: any) => (env.sent.push(m), m.op === "status" ? status : { ok: true });
     env.res = await updateHelper({ publicKey, send, platform });
     return env;
   };
-  let e = /** @type {any} */ (await run({ ok: true, helperVersion: "1.4.5" }));
-  const inst = e.sent.find((/** @type {any} */ m) => m.op === "install-helper");
-  ok("helper update: an older helper is replaced with the verified macOS zip", e.res.ok && inst?.version === "1.5.0" && e.urls.some((/** @type {any} */ u) => u.endsWith("/passbridge-macos-helper.zip")) && inst.zip.length > 0);
+  let e = (await run({ ok: true, helperVersion: "1.4.5" }) as any);
+  const inst = e.sent.find((m: any) => m.op === "install-helper");
+  ok("helper update: an older helper is replaced with the verified macOS zip", e.res.ok && inst?.version === "1.5.0" && e.urls.some((u: any) => u.endsWith("/passbridge-macos-helper.zip")) && inst.zip.length > 0);
   e = await run({ ok: true, helperVersion: "1.5.0" });
-  ok("helper update: a helper at the release version is left alone", e.res.skipped && !e.sent.some((/** @type {any} */ m) => m.op === "install-helper") && e.urls.length === 0);
+  ok("helper update: a helper at the release version is left alone", e.res.skipped && !e.sent.some((m: any) => m.op === "install-helper") && e.urls.length === 0);
   e = await run({ ok: true, helperVersion: null }, "Windows");
-  ok("helper update: an unknown helper version gets the Windows zip", e.sent.some((/** @type {any} */ m) => m.op === "install-helper") && e.urls.some((/** @type {any} */ u) => u.endsWith("/passbridge-windows-helper.zip")));
+  ok("helper update: an unknown helper version gets the Windows zip", e.sent.some((m: any) => m.op === "install-helper") && e.urls.some((u: any) => u.endsWith("/passbridge-windows-helper.zip")));
   e = await run({ ok: true, helperVersion: "1.4.5" }, "macOS", true);
-  ok("helper update: a zip that fails verification is never sent", !e.res.ok && e.res.error === "verify" && !e.sent.some((/** @type {any} */ m) => m.op === "install-helper"));
+  ok("helper update: a zip that fails verification is never sent", !e.res.ok && e.res.error === "verify" && !e.sent.some((m: any) => m.op === "install-helper"));
   e = await run({ ok: true });
-  ok("helper update: an old helper without install-helper gets a one-time note and no download", e.res.error === "old-helper" && /** @type {any} */ (e.data).helperOutdatedNote === true && e.urls.length === 0);
-  delete /** @type {any} */ (e.data).helperOutdatedNote; // the popup took the note
+  ok("helper update: an old helper without install-helper gets a one-time note and no download", e.res.error === "old-helper" && (e.data as any).helperOutdatedNote === true && e.urls.length === 0);
+  delete (e.data as any).helperOutdatedNote; // the popup took the note
   await updateHelper({ publicKey, send: async () => ({ ok: true }), platform: "macOS" });
   ok("helper update: the old-helper note is not set again on the next check", !("helperOutdatedNote" in e.data));
-  delete /** @type {any} */ (globalThis).chrome;
+  delete (globalThis as any).chrome;
   globalThis.fetch = realFetch;
 }
 
@@ -1072,7 +1068,7 @@ globalThis.fetch = realFetch;
   const { tmpdir } = await import("node:os");
   const out = mkdtempSync(join(tmpdir(), "pb-build-guard-"));
   const source = { latestUrl: "http://127.0.0.1:1/releases/latest", publicKey: "AAAA" };
-  ok("build: a release build refuses a test release source", (await settles(buildExtension({ out, releaseSource: /** @type {any} */ (source) }))).startsWith("rejected"));
+  ok("build: a release build refuses a test release source", (await settles(buildExtension({ out, releaseSource: (source as any) }))).startsWith("rejected"));
   ok("build: a release build refuses a test version", (await settles(buildExtension({ out, version: "9.9.9.1" }))).startsWith("rejected"));
   ok("build: a refused build writes nothing", readdirSync(out).length === 0);
   rmSync(out, { recursive: true, force: true });
@@ -1083,7 +1079,7 @@ globalThis.fetch = realFetch;
   const { tmpdir } = await import("node:os");
   const { execFileSync } = await import("node:child_process");
   const repo = mkdtempSync(join(tmpdir(), "pb-stamp-repo-"));
-  const git = (/** @type {any[]} */ ...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd: repo, stdio: "ignore" });
+  const git = (...a: any[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd: repo, stdio: "ignore" });
   git("init", "-q");
   writeFileSync(join(repo, "a.txt"), "a");
   git("add", ".");
@@ -1098,7 +1094,7 @@ globalThis.fetch = realFetch;
   ok("build stamp: a folder without git gives an empty stamp", buildStamp(plain) === "");
   rmSync(plain, { recursive: true, force: true });
   // each build runs tailwind and esbuild, so these two take a few seconds
-  const manifestOf = (/** @type {any} */ dir) => JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
+  const manifestOf = (dir: any) => JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
   const off = mkdtempSync(join(tmpdir(), "pb-stamp-off-"));
   await buildExtension({ out: off, quiet: true, stamp: false });
   ok("build stamp: stamp false leaves version_name out", !("version_name" in manifestOf(off)));
@@ -1118,8 +1114,8 @@ globalThis.fetch = realFetch;
     repo: "bitwarden/clients",
     pinned: "fc5de86",
     latest: "aaaa111",
-    diffs: /** @type {any} */ ([{ rel: "a.ts", kind: "changed" }, { rel: "b.ts", kind: "new" }]),
-    missing: /** @type {any} */ ([{ path: "gone.ts", status: 404 }, { path: "x.ts", status: 500 }]),
+    diffs: ([{ rel: "a.ts", kind: "changed" }, { rel: "b.ts", kind: "new" }] as any),
+    missing: ([{ path: "gone.ts", status: 404 }, { path: "x.ts", status: 500 }] as any),
   });
   ok("upstream: summary splits changed, new, removed and failed", s.changed.join() === "a.ts,b.ts" && s.new.join() === "b.ts" && s.removed.join() === "gone.ts" && s.failed.join() === "500 x.ts");
   ok("upstream: compare link uses pinned and latest", s.compare === "https://github.com/bitwarden/clients/compare/fc5de86...aaaa111");
@@ -1155,14 +1151,14 @@ ok("update page: other systems keep the folder update", updateRoute({ windows: f
 ok("update page: Windows is read from userAgentData or platform", isWindows({ userAgentData: { platform: "Windows" } }) && isWindows({ platform: "Win32" }) && !isWindows({ platform: "MacIntel" }) && !isWindows({}));
 
 {
-  const ids = (/** @type {any} */ state) => menuItems(state).map((i) => i.id);
+  const ids = (state: any) => menuItems(state).map((i) => i.id);
   const locked = ids({ ready: false, logins: [{ username: "a" }], hasCode: true });
-  ok("menu: locked shows Unlock and no login or code items", locked.includes("pb-unlock") && !locked.some((id) => /^pb-(fill|user|pass|otp)/.test(/** @type {any} */ (id))));
+  ok("menu: locked shows Unlock and no login or code items", locked.includes("pb-unlock") && !locked.some((id) => /^pb-(fill|user|pass|otp)/.test((id as any))));
   const offSite = ids({ ready: true, onSite: false, logins: [], hasCode: false });
-  ok("menu: unlocked on a non-web page (settings, chrome://) has no Unlock and no login lines", !offSite.includes("pb-unlock") && !offSite.includes("pb-none") && !offSite.some((id) => /^pb-(fill|user|pass|otp)/.test(/** @type {any} */ (id))));
+  ok("menu: unlocked on a non-web page (settings, chrome://) has no Unlock and no login lines", !offSite.includes("pb-unlock") && !offSite.includes("pb-none") && !offSite.some((id) => /^pb-(fill|user|pass|otp)/.test((id as any))));
   ok("menu: locked on a non-web page still offers Unlock", ids({ ready: false, onSite: false, logins: [], hasCode: false }).includes("pb-unlock"));
   const none = menuItems({ ready: true, logins: [], hasCode: false });
-  ok("menu: no logins shows a greyed note", none.find((i) => i.id === "pb-none")?.enabled === false && !none.some((i) => /^pb-(fill|user|pass)-/.test(/** @type {any} */ (i.id))));
+  ok("menu: no logins shows a greyed note", none.find((i) => i.id === "pb-none")?.enabled === false && !none.some((i) => /^pb-(fill|user|pass)-/.test((i.id as any))));
   const one = menuItems({ ready: true, logins: [{ username: "me@x.com" }], hasCode: false });
   ok("menu: one login is flat and named", one.find((i) => i.id === "pb-fill-0")?.title === "Fill me@x.com" && one.find((i) => i.id === "pb-pass-0")?.parentId === "pb-root");
   ok("menu: no code item without a code", !one.some((i) => i.id === "pb-otp"));
@@ -1172,9 +1168,9 @@ ok("update page: Windows is read from userAgentData or platform", isWindows({ us
   ok("menu: several logins get one submenu each", two.filter((i) => i.parentId === "pb-acct-1").map((i) => i.id).join() === "pb-fill-1,pb-user-1,pb-pass-1");
   ok("menu: a submenu parent is not also an action", two.every((i) => !String(i.id).startsWith("pb-acct-") || !loginAction(i.id)));
   ok("menu: code item shows when the site has a code", two.some((i) => i.id === "pb-otp"));
-  const gen = /** @type {any} */ (one.find((i) => i.id === "pb-gen")), genCopy = /** @type {any} */ (one.find((i) => i.id === "pb-gen-copy"));
+  const gen = ((one.find((i) => i.id === "pb-gen")) as any), genCopy = ((one.find((i) => i.id === "pb-gen-copy")) as any);
   ok("menu: fill a password only on fields, copy one only on pages", gen.contexts.join() === "editable" && genCopy.contexts.join() === "page");
-  const alnum = /** @type {any} */ (one.find((i) => i.id === "pb-gen-alnum")), alnumCopy = /** @type {any} */ (one.find((i) => i.id === "pb-gen-copy-alnum"));
+  const alnum = ((one.find((i) => i.id === "pb-gen-alnum")) as any), alnumCopy = ((one.find((i) => i.id === "pb-gen-copy-alnum")) as any);
   ok("menu: no-special-characters fill on fields, copy on pages", alnum?.contexts.join() === "editable" && alnumCopy?.contexts.join() === "page");
   ok("menu: copy generated password only when one is held", !one.some((i) => i.id === "pb-gen-last") && menuItems({ ready: true, logins: [], hasCode: false, hasGenerated: true }).some((i) => i.id === "pb-gen-last"));
   ok("menu: ids are unique", new Set(two.map((i) => i.id)).size === two.length);
@@ -1191,13 +1187,13 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 {
   ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
   ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
-  const sum = passkeyImportSummary(/** @type {any} */ ([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }]));
+  const sum = passkeyImportSummary(([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }] as any));
   ok("options: passkey import summary counts each outcome", sum.total === 5 && sum.saved === 2 && sum.exists === 1 && sum.skipped === 1 && sum.failed === 1);
   ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));
   ok("options: tabs in order", OPTION_TABS.map((t) => t.id).join() === "autofill,appearance,browser,agents,updates");
   ok("options: hash opens its tab", tabFromHash("#updates") === "updates");
   ok("options: odd hashes open autofill", ["", "#", "#AGENTS", "#agents?x", "#%E2"].every((h) => tabFromHash(h) === "autofill"));
-  const view = (/** @type {any} */ policy, /** @type {any} */ updater, isWindows = false, canCheckForUpdates = true) => helperView({ helpers: { policy, updater }, isWindows, canCheckForUpdates });
+  const view = (policy: any, updater: any, isWindows = false, canCheckForUpdates = true) => helperView({ helpers: { policy, updater }, isWindows, canCheckForUpdates });
   const all = view("present", "present");
   ok("options: helpers present, nothing locked or noticed", Object.values(all.rows).every((r) => r === "ready") && Object.values(all.notices).every((n) => n === null));
   const checking = view("checking", "checking");
@@ -1226,13 +1222,13 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
     }
   }
   ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);
-  ok("options: a toggle with no helper note still says to restart", policyMessage(/** @type {any} */ ({ ok: true, hidden: false, needsApproval: true }), true) === "Fully quit and reopen the browser to apply this.");
-  ok("options: a toggle shows the helper's own note", policyMessage(/** @type {any} */ ({ ok: true, hidden: true, note: "Approve it in Windows." }), true) === "Approve it in Windows.");
+  ok("options: a toggle with no helper note still says to restart", policyMessage(({ ok: true, hidden: false, needsApproval: true } as any), true) === "Fully quit and reopen the browser to apply this.");
+  ok("options: a toggle shows the helper's own note", policyMessage(({ ok: true, hidden: true, note: "Approve it in Windows." } as any), true) === "Approve it in Windows.");
   ok("options: a failed toggle shows the error or a fallback", policyMessage({ ok: false, error: "denied" }, true) === "denied" && policyMessage({ ok: false }, true) === "Couldn't change the policy.");
   ok("theme: system is the default", SETTINGS_DEFAULTS.theme === "system");
   ok("theme: light and dark force one scheme", colorSchemeFor("light") === "light" && colorSchemeFor("dark") === "dark");
   ok("theme: system or an unknown value follows the computer", ["system", undefined, null, "", "blue"].every((t) => colorSchemeFor(t) === "light dark"));
-  ok("options: reading the policy shows only an error", policyMessage(/** @type {any} */ ({ ok: true, hidden: true }), false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
+  ok("options: reading the policy shows only an error", policyMessage(({ ok: true, hidden: true } as any), false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
 }
   {
     const on = { agentSignIn: true, agentAllowAll: false, agentAllowlist: ["github.com"] };
@@ -1246,7 +1242,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
     ok("agent allow: suggested follows generated", agentOfferFor(on, "amazon.jobs", true).suggested === true && agentOfferFor(on, "amazon.jobs", false).suggested === false && agentOfferFor(on, "amazon.jobs", true).show);
   }
 {
-  const run = (/** @type {any} */ script, { before = 0, ready = /** @type {() => boolean} */ (() => true) } = {}) => {
+  const run = (script: any, { before = 0, ready = ((() => true) as () => boolean) } = {}) => {
     let t = 0;
     let i = 0;
     const lookup = async () => {
@@ -1271,7 +1267,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("passkey record: a newer version is refused", decodeRecord(pkB64u(new TextEncoder().encode(JSON.stringify({ ...rec, v: 2 })))) === null);
   ok("passkey record: garbage and missing fields are refused", decodeRecord("!!") === null && decodeRecord(pkB64u(new TextEncoder().encode('{"v":1}'))) === null);
   ok("passkey record: username holds site, user and 8 chars of the id", recordUsername(rec) === "example.test · ann · test · AbCdEfGh");
-  const parsed = /** @type {any} */ (parseUsername(recordUsername(rec)));
+  const parsed = (parseUsername(recordUsername(rec)) as any);
   ok("passkey record: username parses back", parsed.rpId === "example.test" && parsed.userName === "ann · test" && parsed.idPrefix === "AbCdEfGh");
   ok("passkey record: a normal login name is not a passkey", !isPasskeyName("me@example.com") && !isPasskeyName("a · b") && isPasskeyName(recordUsername(rec)));
   ok("passkey record: the dedicated host is recognised", isPasskeyHost(`https://${PASSKEY_HOST}/`) && isPasskeyHost(PASSKEY_HOST) && !isPasskeyHost("https://example.com"));
@@ -1279,18 +1275,18 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   const origin = "https://login.example.test";
   const getDetails = (over = {}) => ({ rpId: "example.test", challenge: "Y2hhbGxlbmdl", allowCredentials: [], userVerification: "preferred", extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
   const createDetails = (over = {}) => ({ rp: { id: "example.test", name: "Example" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2hhbGxlbmdl", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
-  const derToRaw = (/** @type {any} */ der) => {
+  const derToRaw = (der: any) => {
     let i = 3;
     const rl = der[i++];
     let r = der.slice(i, i + rl);
     i += rl + 1;
     const sl = der[i++];
     let s = der.slice(i, i + sl);
-    const fix = (/** @type {any} */ x) => (x.length > 32 ? x.slice(x.length - 32) : Uint8Array.from([...new Array(32 - x.length).fill(0), ...x]));
+    const fix = (x: any) => (x.length > 32 ? x.slice(x.length - 32) : Uint8Array.from([...new Array(32 - x.length).fill(0), ...x]));
     return Uint8Array.from([...fix(r), ...fix(s)]);
   };
-  const sha = async (/** @type {any} */ d) => new Uint8Array(await crypto.subtle.digest("SHA-256", d));
-  const verifyWith = async (/** @type {any} */ spki, /** @type {any} */ authData, /** @type {any} */ cdj, /** @type {any} */ derSig) => {
+  const sha = async (d: any) => new Uint8Array(await crypto.subtle.digest("SHA-256", d));
+  const verifyWith = async (spki: any, authData: any, cdj: any, derSig: any) => {
     const pub = await crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
     const msg = new Uint8Array([...authData, ...(await sha(cdj))]);
     return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, derToRaw(derSig), msg);
@@ -1310,8 +1306,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("passkey create: the attestation object is CBOR with fmt none", Buffer.from(pkUnb64u(cr.response.attestationObject)).toString("latin1").includes("fmtdnone"));
 
   const spki = pkUnb64u(cr.response.publicKey);
-  /** @param {any} [opts] */
-  const sign = async (opts) => {
+  const sign = async (opts?: any) => {
     const g = JSON.parse(await signAssertion(getDetails(), made.record, opts));
     return { g, ad: pkUnb64u(g.response.authenticatorData), cdj: pkUnb64u(g.response.clientDataJSON), sig: pkUnb64u(g.response.signature) };
   };
@@ -1321,7 +1316,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("passkey get: UV flag set when the vault read verified the user", (await sign({ userVerified: true })).ad[32] === 0x1d);
   ok("passkey get: a signature over other data does not verify", !(await verifyWith(spki, got.ad, new TextEncoder().encode("{}"), got.sig)));
   ok("passkey get: answer carries id, user handle and clientDataJSON origin", got.g.id === made.record.credentialId && got.g.response.userHandle === "dXNlcjE" && JSON.parse(new TextDecoder().decode(got.cdj)).origin === origin);
-  const refused = async (/** @type {any} */ fn) => {
+  const refused = async (fn: any) => {
     try {
       await fn();
       return null;
@@ -1380,7 +1375,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 {
   // passkeys: store over the mock client
   const client = createMockClient("unlocked");
-  const rec = (/** @type {any} */ rpId, /** @type {any} */ id, name = "ann") => makeRecord({ rpId, credentialId: id, userHandle: "dXNlcjE", userName: name, key: "a2V5" });
+  const rec = (rpId: any, id: any, name = "ann") => makeRecord({ rpId, credentialId: id, userHandle: "dXNlcjE", userName: name, key: "a2V5" });
   const a = rec("example.test", "AAAAAAAAAAAA");
   ok("passkey store: nothing listed at first", (await listPasskeys(client, 1)).length === 0);
   ok("passkey store: save is confirmed from the vault", (await savePasskey(client, 1, a, { pollMs: 1 })) === "saved");
@@ -1389,11 +1384,11 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   const list = await listPasskeys(client, 1);
   ok("passkey store: list parses the names", list.length === 2 && list[0].rpId === "example.test" && list[0].userName === "ann");
   ok("passkey store: a site sees its own passkeys and its parent domain's", passkeysForHost(list, "login.example.test").length === 1 && passkeysForHost(list, "example.test").length === 1 && passkeysForHost(list, "badexample.test").length === 0 && passkeysForHost(list, "none.test").length === 0);
-  const read = /** @type {any} */ (await readPasskey(client, 1, list[0]));
+  const read = (await readPasskey(client, 1, list[0]) as any);
   ok("passkey store: read returns the saved record, UV off by default", JSON.stringify(read.record) === JSON.stringify(a) && read.userVerified === false);
-  /** @type {any} */ (globalThis).__mockVerified = true;
-  ok("passkey store: UV is reported only when the client says it verified", /** @type {any} */ ((await readPasskey(client, 1, list[0]))).userVerified === true);
-  delete /** @type {any} */ (globalThis).__mockVerified;
+  (globalThis as any).__mockVerified = true;
+  ok("passkey store: UV is reported only when the client says it verified", ((await readPasskey(client, 1, list[0])) as any).userVerified === true);
+  delete (globalThis as any).__mockVerified;
   const locked = createMockClient("locked");
   ok("passkey store: a locked vault throws on list and save", (await Promise.all([listPasskeys(locked, 1).then(() => "ok", () => "throw"), savePasskey(locked, 1, a).then(() => "ok", () => "throw")])).join() === "throw,throw");
   const unreadable = { getPasswordForLoginName: async () => ({ username: "x", password: "not a record" }) };
@@ -1407,17 +1402,17 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   const createJson = (o = {}) => JSON.stringify({ rp: { id: "example.test", name: "E" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2g", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: ext, ...o });
   // a stand-in for chrome.storage.session
   const memory = () => {
-    const data = /** @type {any} */ ({});
-    return { data, get: async (/** @type {any} */ d) => ({ ...d, ...Object.fromEntries(Object.keys(d).filter((k) => k in data).map((k) => [k, structuredClone(data[k])])) }), set: async (/** @type {any} */ o) => void Object.assign(data, structuredClone(o)), remove: async (/** @type {any} */ k) => void delete data[k] };
+    const data = ({} as any);
+    return { data, get: async (d: any) => ({ ...d, ...Object.fromEntries(Object.keys(d).filter((k) => k in data).map((k) => [k, structuredClone(data[k])])) }), set: async (o: any) => void Object.assign(data, structuredClone(o)), remove: async (k: any) => void delete data[k] };
   };
   const setup = async ({ enabled = true, url = origin + "/", kind = "unlocked", allSites = false, stayUnlocked = false } = {}) => {
-    const calls = /** @type {any[]} */ ([]);
+    const calls = ([] as any[]);
     const api = {
       attach: async () => void calls.push("attach"),
       detach: async () => void calls.push("detach"),
-      completeGetRequest: async (/** @type {any} */ d) => void calls.push({ get: d }),
-      completeCreateRequest: async (/** @type {any} */ d) => void calls.push({ create: d }),
-      completeIsUvpaaRequest: async (/** @type {any} */ d) => void calls.push({ uvpaa: d }),
+      completeGetRequest: async (d: any) => void calls.push({ get: d }),
+      completeCreateRequest: async (d: any) => void calls.push({ create: d }),
+      completeIsUvpaaRequest: async (d: any) => void calls.push({ uvpaa: d }),
       onCreateRequest: { addListener: () => {} },
       onGetRequest: { addListener: () => {} },
       onIsUvpaaRequest: { addListener: () => {} },
@@ -1429,7 +1424,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
     const proxy = createPasskeyProxy({ api: () => api, client, ensureConnected: async () => {}, enabled: async () => state.enabled, settings: async () => ({ allSites: state.allSites, stayUnlocked: state.stayUnlocked }), session: () => session, getTab: async () => ({ id: 1, url: state.url }), sleep: async () => { await new Promise((r) => setTimeout(r, 1)); }, pollMs: 1 });
     return { calls, api, state, client, proxy, session };
   };
-  const seed = (/** @type {any} */ client) => createPasskey(JSON.parse(createJson())).then(({ record }) => savePasskey(client, 1, record, { pollMs: 1 }).then(() => record));
+  const seed = (client: any) => createPasskey(JSON.parse(createJson())).then(({ record }) => savePasskey(client, 1, record, { pollMs: 1 }).then(() => record));
 
   let w = await setup();
   await w.proxy.refresh();
@@ -1453,21 +1448,21 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 
   w = await setup();
   const rec = await seed(w.client);
-  await w.proxy.onGet({ requestId: /** @type {any} */ (1), requestDetailsJson: getJson() });
+  await w.proxy.onGet({ requestId: (1 as any), requestDetailsJson: getJson() });
   const g = w.calls.find((c) => c.get)?.get;
   ok("passkey proxy: a get request is answered with a response for the stored passkey", g?.requestId === 1 && !g.error && JSON.parse(g.responseJson).id === rec.credentialId);
   w.calls.length = 0;
-  await w.proxy.onGet({ requestId: /** @type {any} */ (2), requestDetailsJson: getJson({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }) });
+  await w.proxy.onGet({ requestId: (2 as any), requestDetailsJson: getJson({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }) });
   ok("passkey proxy: a get from the wrong origin is refused", w.calls[0].get.error?.name === "SecurityError" && !w.calls[0].get.responseJson);
   w.calls.length = 0;
-  await w.proxy.onGet({ requestId: /** @type {any} */ (3), requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  await w.proxy.onGet({ requestId: (3 as any), requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
   ok("passkey proxy: a get that allows only other credentials is refused", w.calls[0].get.error?.name === "NotAllowedError");
   w.calls.length = 0;
-  await w.proxy.onCreate({ requestId: /** @type {any} */ (4), requestDetailsJson: createJson({ user: { id: "dXNlcjI", name: "bo", displayName: "Bo" } }) });
+  await w.proxy.onCreate({ requestId: (4 as any), requestDetailsJson: createJson({ user: { id: "dXNlcjI", name: "bo", displayName: "Bo" } }) });
   const c = w.calls.find((x) => x.create)?.create;
   ok("passkey proxy: a create request is saved to the vault, then answered", !!c?.responseJson && (await listPasskeys(w.client, 1)).length === 2);
   w.calls.length = 0;
-  await w.proxy.onCreate({ requestId: /** @type {any} */ (5), requestDetailsJson: createJson({ rp: { id: "other.test" } }) });
+  await w.proxy.onCreate({ requestId: (5 as any), requestDetailsJson: createJson({ rp: { id: "other.test" } }) });
   ok("passkey proxy: a create for another site's rp id is refused and nothing is saved", w.calls[0].create.error?.name === "SecurityError" && (await listPasskeys(w.client, 1)).length === 2);
   const failing = { ...w.client, saveLogin: async () => true, getLoginNamesForURL: w.client.getLoginNamesForURL, get ready() { return true; } };
   const p2 = createPasskeyProxy({ api: () => w.api, client: failing, ensureConnected: async () => {}, enabled: async () => true, getTab: async () => ({ id: 1, url: origin }), sleep: async () => {}, pollMs: 1 });
@@ -1475,12 +1470,12 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   const realNow = Date.now;
   let tick = 0;
   Date.now = () => realNow() + (tick += 20000);
-  await p2.onCreate({ requestId: /** @type {any} */ (6), requestDetailsJson: createJson({ user: { id: "dXNlcjM", name: "cy", displayName: "Cy" } }) });
+  await p2.onCreate({ requestId: (6 as any), requestDetailsJson: createJson({ user: { id: "dXNlcjM", name: "cy", displayName: "Cy" } }) });
   Date.now = realNow;
   ok("passkey proxy: a create that never shows in the vault is reported as failed", w.calls[0].create.error?.name === "NotAllowedError" && !w.calls[0].create.responseJson);
 
   const lk = await setup({ kind: "locked" });
-  await lk.proxy.onGet({ requestId: /** @type {any} */ (7), requestDetailsJson: getJson({ timeout: 30 }) });
+  await lk.proxy.onGet({ requestId: (7 as any), requestDetailsJson: getJson({ timeout: 30 }) });
   ok("passkey proxy: a locked vault waits, then ends with Chrome's normal error", lk.calls[0].get.error?.name === "NotAllowedError");
   ok("passkey proxy: a locked vault is not attached before it can list passkeys", (await lk.proxy.refresh(), !lk.calls.includes("attach")));
 
@@ -1499,14 +1494,14 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 
   // create, then get: the assertion verifies with the public key returned at registration
   const cr = await setup({ allSites: true });
-  await cr.proxy.onCreate({ requestId: /** @type {any} */ (20), requestDetailsJson: createJson() });
+  await cr.proxy.onCreate({ requestId: (20 as any), requestDetailsJson: createJson() });
   const created = JSON.parse(cr.calls.find((x) => x.create).create.responseJson);
   ok("passkey proxy: create on a site with no passkey stores it", (await listPasskeys(cr.client, 1)).length === 1 && !!created.id);
-  await cr.proxy.onGet({ requestId: /** @type {any} */ (21), requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: created.rawId }] }) });
+  await cr.proxy.onGet({ requestId: (21 as any), requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: created.rawId }] }) });
   const got = JSON.parse(cr.calls.find((x) => x.get).get.responseJson);
   const pub = await crypto.subtle.importKey("spki", pkUnb64u(created.response.publicKey), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
   const der = pkUnb64u(got.response.signature);
-  const derInt = (/** @type {any} */ at) => { const l = der[at + 1]; let x = der.slice(at + 2, at + 2 + l); while (x.length > 32) x = x.slice(1); const o = new Uint8Array(32); o.set(x, 32 - x.length); return [o, at + 2 + l]; };
+  const derInt = (at: any) => { const l = der[at + 1]; let x = der.slice(at + 2, at + 2 + l); while (x.length > 32) x = x.slice(1); const o = new Uint8Array(32); o.set(x, 32 - x.length); return [o, at + 2 + l]; };
   const [r1, next] = derInt(2);
   const [r2] = derInt(next);
   const sigRaw = new Uint8Array(64);
@@ -1521,54 +1516,54 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 
   // excludeCredentials that matches a stored passkey
   cr.calls.length = 0;
-  await cr.proxy.onCreate({ requestId: /** @type {any} */ (22), requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: created.rawId }] }) });
+  await cr.proxy.onCreate({ requestId: (22 as any), requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: created.rawId }] }) });
   ok("passkey proxy: excludeCredentials matching a stored passkey gives InvalidStateError and saves nothing", cr.calls[0].create.error?.name === "InvalidStateError" && (await listPasskeys(cr.client, 1)).length === 1);
   cr.calls.length = 0;
-  await cr.proxy.onCreate({ requestId: /** @type {any} */ (23), requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  await cr.proxy.onCreate({ requestId: (23 as any), requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
   ok("passkey proxy: excludeCredentials that match nothing still creates", !!cr.calls[0].create.responseJson);
 
   // two passkeys of one user on one site both exist; the same credential id is skipped
   ok("passkey store: a second passkey for the same user and site is saved", (await listPasskeys(cr.client, 1)).length === 2);
   const again = await listPasskeys(cr.client, 1);
-  const rd = /** @type {any} */ (await readPasskey(cr.client, 1, again[0]));
+  const rd = (await readPasskey(cr.client, 1, again[0]) as any);
   ok("passkey store: a record with an existing credential id is skipped", (await savePasskey(cr.client, 1, rd.record, { pollMs: 1 })) === "exists" && (await listPasskeys(cr.client, 1)).length === 2);
 
   // stay-unlocked cache: off keeps nothing, on keeps the read passkey, a locked helper still signs, clearing drops it
   const stay = await setup();
   const kept = await seed(stay.client);
-  await stay.proxy.onGet({ requestId: /** @type {any} */ (30), requestDetailsJson: getJson() });
+  await stay.proxy.onGet({ requestId: (30 as any), requestDetailsJson: getJson() });
   ok("passkey proxy: stay unlocked off keeps nothing in the session cache", !("passkeyCache" in stay.session.data));
   stay.state.stayUnlocked = true;
-  await stay.proxy.onGet({ requestId: /** @type {any} */ (31), requestDetailsJson: getJson() });
-  ok("passkey proxy: stay unlocked on keeps the passkey after a read", !!/** @type {any} */ (stay.session.data).passkeyCache?.["example.test"]?.[kept.credentialId]);
+  await stay.proxy.onGet({ requestId: (31 as any), requestDetailsJson: getJson() });
+  ok("passkey proxy: stay unlocked on keeps the passkey after a read", !!(stay.session.data as any).passkeyCache?.["example.test"]?.[kept.credentialId]);
   const reads = { n: 0 };
   const realRead = stay.client.getPasswordForLoginName;
   stay.client.getPasswordForLoginName = async (...a) => (reads.n++, realRead(...a));
   stay.calls.length = 0;
-  await stay.proxy.onGet({ requestId: /** @type {any} */ (32), requestDetailsJson: getJson() });
+  await stay.proxy.onGet({ requestId: (32 as any), requestDetailsJson: getJson() });
   ok("passkey proxy: a cached passkey signs without reading through the helper", reads.n === 0 && !!stay.calls[0].get.responseJson);
   stay.client.state = "locked";
   Object.defineProperty(stay.client, "ready", { get: () => false, configurable: true });
   stay.calls.length = 0;
-  await stay.proxy.onGet({ requestId: /** @type {any} */ (33), requestDetailsJson: getJson() });
+  await stay.proxy.onGet({ requestId: (33 as any), requestDetailsJson: getJson() });
   ok("passkey proxy: a cached passkey signs while the helper is locked", !!stay.calls[0].get.responseJson);
   await stay.proxy.clearCache();
   ok("passkey proxy: clearing the cache drops the kept passkeys", !("passkeyCache" in stay.session.data));
 
   // nudge: a get with no passkey for the site leaves its rp id for the popup
   const nd = await setup({ allSites: true });
-  await nd.proxy.onGet({ requestId: /** @type {any} */ (40), requestDetailsJson: getJson() });
-  ok("passkey proxy: a get with no passkey saves the nudge and ends with Chrome's normal error", /** @type {any} */ (nd.session.data).passkeyNudge?.rpId === "example.test" && nd.calls.find((x) => x.get).get.error?.name === "NotAllowedError");
+  await nd.proxy.onGet({ requestId: (40 as any), requestDetailsJson: getJson() });
+  ok("passkey proxy: a get with no passkey saves the nudge and ends with Chrome's normal error", (nd.session.data as any).passkeyNudge?.rpId === "example.test" && nd.calls.find((x) => x.get).get.error?.name === "NotAllowedError");
   ok("passkey login filter: passkey rows are hidden from fill lists", isPasskeyLogin({ username: "example.test · ann · AAAAAAAA", sites: [] }) && isPasskeyLogin({ username: "x", sites: ["passkeys.passbridge.invalid"] }) && !isPasskeyLogin({ username: "me@example.com", sites: ["example.com"] }));
   const logins = [{ username: "Alex@Mail.com" }, { username: "sam" }, { username: "" }];
-  const names = (/** @type {any} */ q) => filterByUsername(logins, q).map((l) => l.username);
+  const names = (q: any) => filterByUsername(logins, q).map((l) => l.username);
   ok("username filter: case is ignored", names("ALEX").join() === "Alex@Mail.com");
   ok("username filter: outer spaces are ignored", names("  sam ").join() === "sam");
   ok("username filter: part of a name matches", names("mail").join() === "Alex@Mail.com");
   ok("username filter: empty query keeps all", names("").length === 3 && names("   ").length === 3);
   ok("username filter: no match gives an empty list", names("zzz").length === 0);
   const codes = [{ id: 1, username: "sam" }, { id: 2, username: "alex@mail.com" }, { id: 3, username: "bob" }, { id: 4 }];
-  const ids = (/** @type {any} */ q) => codesForLogins(codes, filterByUsername(logins, q), q).map((c) => c.id).join();
+  const ids = (q: any) => codesForLogins(codes, filterByUsername(logins, q), q).map((c) => c.id).join();
   ok("codes: grouped codes follow their kept login", ids("sam") === "1");
   ok("codes: an ungrouped code stays when its username matches", ids("bo") === "3");
   ok("codes: empty query keeps every code", ids("") === "1,2,3,4");
@@ -1576,17 +1571,17 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 }
 // the save offer for a login we just autofilled: a corrected password is a change, not a re-login
 {
-  const target = (/** @type {any} */ p) => pickSaveTarget(p);
+  const target = (p: any) => pickSaveTarget(p);
   const existing = ["ada@example.com"];
 
   ok("save: an unchanged autofilled login is not offered", target({ existing, detected: "ada@example.com", newPwCtx: false }) === null);
   ok(
     "save: a password corrected after autofill is offered as an update",
-    target({ existing, detected: "ada@example.com", newPwCtx: newPasswordContext(/** @type {any} */ ({ passwordCount: 1, correctedAfterFill: true })) }) === "ada@example.com",
+    target({ existing, detected: "ada@example.com", newPwCtx: newPasswordContext(({ passwordCount: 1, correctedAfterFill: true } as any)) }) === "ada@example.com",
   );
   ok(
     "save: a corrected password with no username read off the form attaches to the recent login",
-    target({ existing, detected: "", newPwCtx: newPasswordContext(/** @type {any} */ ({ passwordCount: 1, correctedAfterFill: true })), recent: "ada@example.com" }) === "ada@example.com",
+    target({ existing, detected: "", newPwCtx: newPasswordContext(({ passwordCount: 1, correctedAfterFill: true } as any)), recent: "ada@example.com" }) === "ada@example.com",
   );
   ok("save: no username and no change still saves nothing", target({ existing, detected: "", newPwCtx: false }) === null);
   ok("save: an unknown username is saved as typed", target({ existing, detected: "new@example.com", newPwCtx: false }) === "new@example.com");
@@ -1594,11 +1589,11 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("save: a generated password with no match lets Apple's sheet ask", target({ existing: [], detected: "", generated: true }) === "");
   ok("save: the username match ignores case", target({ existing: ["Ada@Example.com"], detected: "ada@example.com", newPwCtx: true }) === "Ada@Example.com");
 
-  ok("new password context: a plain one-field login is not a new password", !newPasswordContext(/** @type {any} */ ({ passwordCount: 1 })));
-  ok("new password context: a correction after autofill is", newPasswordContext(/** @type {any} */ ({ passwordCount: 1, correctedAfterFill: true })));
-  ok("new password context: two password fields are", newPasswordContext(/** @type {any} */ ({ passwordCount: 2 })));
-  ok("new password context: autocomplete=new-password is", newPasswordContext(/** @type {any} */ ({ passwordCount: 1, hasNewPasswordMark: true })));
-  ok("new password context: a generated password is", newPasswordContext(/** @type {any} */ ({ passwordCount: 1, generated: true })));
+  ok("new password context: a plain one-field login is not a new password", !newPasswordContext(({ passwordCount: 1 } as any)));
+  ok("new password context: a correction after autofill is", newPasswordContext(({ passwordCount: 1, correctedAfterFill: true } as any)));
+  ok("new password context: two password fields are", newPasswordContext(({ passwordCount: 2 } as any)));
+  ok("new password context: autocomplete=new-password is", newPasswordContext(({ passwordCount: 1, hasNewPasswordMark: true } as any)));
+  ok("new password context: a generated password is", newPasswordContext(({ passwordCount: 1, generated: true } as any)));
 }
 
 ok("add login: same username shown takes the new-login sheet", useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: true }));
