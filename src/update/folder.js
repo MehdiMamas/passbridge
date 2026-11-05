@@ -46,6 +46,11 @@ function openDb() {
   });
 }
 
+/**
+ * @param {IDBTransactionMode} mode
+ * @param {(s: IDBObjectStore) => IDBRequest} run
+ * @returns {Promise<any>}
+ */
 async function kv(mode, run) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -57,6 +62,7 @@ async function kv(mode, run) {
 
 // the handle survives restarts in IndexedDB, its permission does not
 export const folderStore = {
-  get: () => kv("readonly", (s) => s.get(KEY)).catch(() => null),
-  set: (handle) => kv("readwrite", (s) => s.put(handle, KEY)),
+  get: () => kv("readonly", (/** @type {IDBObjectStore} */ s) => s.get(KEY)).catch(() => null),
+  /** @param {any} handle */
+  set: (handle) => kv("readwrite", (/** @type {IDBObjectStore} */ s) => s.put(handle, KEY)),
 };

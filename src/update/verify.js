@@ -5,6 +5,7 @@ import { RELEASE_SOURCE } from "./source.js";
 // raw Ed25519 public key (base64) of the maintainer release signing key
 export const PUBLIC_KEY_B64 = RELEASE_SOURCE?.publicKey ?? "sccY06ba0IpGgg5+x6XPsY10TBdARZVzTAeQQCDmaEY=";
 
+/** @param {string} s */
 function fromB64(s) {
   const bin = atob(s);
   const out = new Uint8Array(bin.length);
@@ -12,17 +13,25 @@ function fromB64(s) {
   return out;
 }
 
+/** @param {ArrayBuffer | ArrayLike<number>} bytes */
 export function toHex(bytes) {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // "sha256:<hex>" from the release asset JSON, or null
+/** @param {unknown} digest */
 export function digestHex(digest) {
   const m = /^sha256:([0-9a-f]{64})$/i.exec(String(digest ?? "").trim());
   return m ? m[1].toLowerCase() : null;
 }
 
-/** @returns {Promise<boolean>} true only when the signature and the digest both match */
+/**
+ * @param {ArrayBuffer | ArrayLike<number>} zipBytes
+ * @param {ArrayBuffer | ArrayLike<number>} sigBytes
+ * @param {string} expectedSha256Hex
+ * @param {string} [publicKeyB64]
+ * @returns {Promise<boolean>} true only when the signature and the digest both match
+ */
 export async function verifyRelease(zipBytes, sigBytes, expectedSha256Hex, publicKeyB64 = PUBLIC_KEY_B64) {
   try {
     const want = digestHex(`sha256:${expectedSha256Hex}`);

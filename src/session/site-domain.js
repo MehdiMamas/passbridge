@@ -34,10 +34,15 @@ const MULTI_LABEL_SUFFIXES = new Set([
   "cloudfront.net", "blogspot.com", "wordpress.com",
 ]);
 
+/** @param {string} host */
 function isIpLiteral(host) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":") || host.startsWith("[");
 }
 
+/**
+ * @param {unknown} host
+ * @returns {string | null}
+ */
 export function registrableDomain(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
   if (!h || isIpLiteral(h)) return h || null;
@@ -49,6 +54,10 @@ export function registrableDomain(host) {
 }
 
 // account.apple.com -> account.apple.com, apple.com. the page host always comes first
+/**
+ * @param {unknown} host
+ * @returns {string[]}
+ */
 export function siteLookupHosts(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
   if (!h) return [];

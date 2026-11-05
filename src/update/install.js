@@ -7,6 +7,7 @@ import { PUBLIC_KEY_B64 } from "./verify.js";
 import { t } from "../i18n/runtime.js";
 
 // short error texts the popup shows; the messages are t(MESSAGES[code])
+/** @type {Record<string, string>} */
 const MESSAGES = {
   download: "errDownload",
   unsigned: "updErrUnsigned",
@@ -28,6 +29,7 @@ export async function updaterAvailable() {
   }
 }
 
+/** @param {Uint8Array} bytes */
 function toB64(bytes) {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -78,7 +80,17 @@ export async function updateHelper({ publicKey = PUBLIC_KEY_B64, send = (m) => c
   return { ok: true, version: release.version };
 }
 
+/**
+ * @param {string} currentVersion
+ * @param {string | undefined} publicKey
+ * @param {boolean} [auto]
+ * @returns {Promise<{ ok: boolean, error?: string }>}
+ */
 async function runInstall(currentVersion, publicKey, auto = false) {
+  /**
+   * @param {string} key
+   * @param {string} [extra]
+   */
   const fail = (key, extra) => ({ ok: false, error: extra || t(MESSAGES[key]) });
   if (!publicKey) return fail("nokey");
   await updateHelper({ publicKey }).catch(() => {});

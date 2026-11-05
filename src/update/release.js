@@ -27,7 +27,10 @@ export function helperZipName(platform = /** @type {Navigator & { userAgentData?
   return /win/i.test(platform) ? "passbridge-windows-helper.zip" : "passbridge-macos-helper.zip";
 }
 
-/** @returns {Promise<{ ok: true, version: string, zipUrl: string, sigUrl: string, digest: string, size: number } | { ok: false, error: "network" | "unsigned" }>} */
+/**
+ * @param {string} [platform]
+ * @returns {Promise<{ ok: true, version: string, zipUrl: string, sigUrl: string, digest: string, size: number } | { ok: false, error: "network" | "unsigned" }>}
+ */
 export async function latestHelperRelease(platform) {
   const found = await fetchLatest();
   if (!found) return { ok: false, error: "network" };
@@ -48,19 +51,29 @@ async function fetchLatest() {
   return { release, tag, version: tag.replace(/^v/, "") };
 }
 
+/**
+ * @param {{ assets?: { name?: string, digest?: string, size?: number, browser_download_url?: string }[] }} release
+ * @param {string} name
+ */
 export function signedAsset(release, name) {
   const assets = Array.isArray(release.assets) ? release.assets : [];
   const zip = assets.find((a) => a?.name === name);
   const sig = assets.find((a) => a?.name === `${name}.sig`);
   const digest = digestHex(zip?.digest);
   if (!zip || !sig || !digest) return null;
-  return { zipUrl: zip.browser_download_url, sigUrl: sig.browser_download_url, digest, size: Number(zip.size) || 0 };
+  return { zipUrl: /** @type {string} */ (zip.browser_download_url), sigUrl: /** @type {string} */ (sig.browser_download_url), digest, size: Number(zip.size) || 0 };
 }
 
+/**
+ * @param {string} url
+ * @param {(done: number, total: number) => void} [onProgress]
+ * @param {number} [total]
+ */
 async function download(url, onProgress, total) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok || !res.body) throw new Error("download");
   const reader = res.body.getReader();
+  /** @type {Uint8Array[]} */
   const parts = [];
   let got = 0;
   for (;;) {

@@ -1,10 +1,19 @@
 // parent or child only. a bare TLD is not a site, and notaugustana.edu does not match augustana.edu
+/**
+ * @param {string | null | undefined} frameHost
+ * @param {string | null | undefined} siteHost
+ * @returns {boolean}
+ */
 export function hostsRelated(frameHost, siteHost) {
   if (!frameHost || !siteHost || frameHost === siteHost) return false;
   if (!frameHost.includes(".") || !siteHost.includes(".")) return false;
   return frameHost.endsWith("." + siteHost) || siteHost.endsWith("." + frameHost);
 }
 
+/**
+ * @param {unknown} site
+ * @returns {string | null}
+ */
 export function hostOfSite(site) {
   const raw = String(site || "").trim();
   if (!raw) return null;
@@ -15,8 +24,13 @@ export function hostOfSite(site) {
   }
 }
 
+/**
+ * @param {unknown} sites
+ * @returns {string[]}
+ */
 export function siteHosts(sites) {
   const raw = Array.isArray(sites) ? sites : sites ? [sites] : [];
+  /** @type {string[]} */
   const out = [];
   for (const s of raw) {
     const text = typeof s === "string" ? s : s?.url || s?.URL || s?.host || "";
@@ -26,6 +40,11 @@ export function siteHosts(sites) {
   return out;
 }
 
+/**
+ * @param {string} frameHost
+ * @param {unknown} sites
+ * @returns {string | null}
+ */
 export function bestRelatedHost(frameHost, sites) {
   const hosts = siteHosts(sites).filter((h) => hostsRelated(frameHost, h));
   const parents = hosts.filter((h) => frameHost.endsWith("." + h)).sort((a, b) => b.length - a.length);
@@ -39,8 +58,20 @@ export function bestRelatedHost(frameHost, sites) {
 // same helper response, then a parent or child host with the frame as the outer url.
 // viaHost is the parent domain whose list returned the login (apple.com on account.apple.com),
 // searched first because the page host never lists that login.
+/**
+ * @param {string | null | undefined} frameHost
+ * @param {unknown} sites
+ * @param {string | null | undefined} [pathUrl]
+ * @param {string | null | undefined} [viaHost]
+ * @returns {{ search: string, envelope: string }[]}
+ */
 export function passwordSearchSteps(frameHost, sites, pathUrl, viaHost) {
+  /** @type {{ search: string, envelope: string }[]} */
   const steps = [];
+  /**
+   * @param {string | null | undefined} search
+   * @param {string | null | undefined} envelope
+   */
   const push = (search, envelope) => {
     const s = search || frameHost;
     const e = envelope || frameHost;
@@ -61,7 +92,7 @@ export function passwordSearchSteps(frameHost, sites, pathUrl, viaHost) {
     if (site === frameHost) continue;
     push(site, primary || frameHost);
   }
-  const related = bestRelatedHost(frameHost, sites);
+  const related = bestRelatedHost(/** @type {string} */ (frameHost), sites);
   if (related) push(related, frameHost);
   return steps;
 }

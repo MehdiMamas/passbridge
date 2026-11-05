@@ -7,6 +7,10 @@ export function isWindows(nav = globalThis.navigator) {
 }
 
 // "native": the helper swaps the files. "helper": install it first. "folder": write through the picked folder
+/**
+ * @param {{ windows?: boolean, helper?: boolean, noHelper?: boolean }} opts
+ * @returns {"native" | "helper" | "folder"}
+ */
 export function updateRoute({ windows, helper, noHelper = false }) {
   if (!windows) return "folder";
   if (helper) return "native";

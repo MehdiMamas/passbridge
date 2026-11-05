@@ -4,14 +4,16 @@
 export const WORK_PREFIX = ".update-";
 const MAX_UNZIPPED = 256 * 1024 * 1024;
 
+/** @param {string} path */
 function unsafePath(path) {
   if (/^[a-z]:/i.test(path) || path.includes("\\")) return true;
   const parts = path.split("/");
   return parts.some((p) => p === "" || p === "." || p === "..") || parts[0].startsWith(WORK_PREFIX);
 }
 
+/** @param {Uint8Array} raw */
 async function inflate(raw) {
-  const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const stream = new Blob([/** @type {BlobPart} */ (raw)]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
@@ -47,6 +49,7 @@ export async function readZip(bytes) {
   const count = v.getUint16(end + 10, true);
   let p = v.getUint32(end + 16, true);
   const names = new TextDecoder("utf-8", { fatal: true });
+  /** @type {{ path: string, data: Uint8Array }[]} */
   const files = [];
   let total = 0;
   for (let i = 0; i < count; i++) {
