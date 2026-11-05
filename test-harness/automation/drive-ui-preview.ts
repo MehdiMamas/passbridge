@@ -30,14 +30,14 @@ await main(async () => {
       ok("update: the notice names the new version and links its release", noticeText.startsWith("v1.4.0 is available!") && noticeText.includes("View release"), noticeText);
       ok("update: the notice offers Update now even without the helper", noticeText.includes("Update now"), noticeText);
       ok("update: the notice can be dismissed", (await notice.locator('button[aria-label="Dismiss update notice"]').count()) === 1, "no dismiss button");
-      const updatePage = (/** @type {string} */ title) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
+      const updatePage = (title: string) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
       const first = (await updatePage("ready_first").innerText()).replace(/\s+/g, " ");
       ok("update page: shows the installed and the new version with the release link", first.includes("1.4.1") && first.includes("1.4.2") && (await updatePage("ready_first").locator('a[href$="/releases/tag/v1.4.2"]').count()) === 1, first);
       ok("update page: the first update explains the folder choice", first.includes("Not chosen yet") && first.includes("chrome://extensions") && !first.includes("Change folder"), first);
       ok("update page: a known folder can be changed", (await updatePage("ready").locator("button", { hasText: "Change folder" }).count()) === 1);
       const bar = updatePage("working").locator('[role="progressbar"]');
       ok("update page: the progress bar reports its value", (await bar.getAttribute("aria-valuenow")) === "72");
-      const states = await updatePage("working").locator("[data-step]").evaluateAll((/** @type {HTMLElement[]} */ els) => els.map((e) => `${e.dataset.step}:${e.dataset.state}`).join());
+      const states = await updatePage("working").locator("[data-step]").evaluateAll((els: HTMLElement[]) => els.map((e) => `${e.dataset.step}:${e.dataset.state}`).join());
       ok("update page: the steps before the current one are done", states === "download:done,verify:done,write:active,restart:todo", states);
       ok("update page: no folder change while files are being replaced", (await updatePage("working").locator("button", { hasText: "Change folder" }).count()) === 0);
       const failedText = await updatePage("failed").innerText();
@@ -50,7 +50,7 @@ await main(async () => {
       const quiet = await page.locator('[data-screen="unlocked"] [data-passbridge="update"]').count();
       ok("update: no notice without an update", quiet === 0, `notices=${quiet}`);
       const frame = page.locator('[data-screen="grouped_codes"][data-scheme="light"]');
-      const rows = (await frame.locator("li").allInnerTexts()).map((/** @type {string} */ t) => t.replace(/\s+/g, " ").trim());
+      const rows = (await frame.locator("li").allInnerTexts()).map((t: string) => t.replace(/\s+/g, " ").trim());
       ok("grouped: 8 rows, one li per code", rows.length === 8, `rows=${rows.length}`);
       ok("grouped: same-domain code says Verification code, no strip", rows[1]?.includes("Verification code") && !rows[1].includes("↳") && !rows[1].includes("cloudflare.com"), rows[1]);
       ok("grouped: foreign domain moves to a thin strip", rows[2]?.includes("Verification code") && rows[2].includes("↳ api.cloudflare.com") && !rows[2].includes("Code for"), rows[2]);

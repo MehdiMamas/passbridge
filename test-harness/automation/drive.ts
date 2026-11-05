@@ -101,10 +101,10 @@ await main(async () => {
     await shortcutPage.waitForTimeout(200);
     await sw.evaluate(async () => {
       const [tab] = await chrome.tabs.query({ url: "*://127.0.0.1/login-standard.html" });
-      await chrome.tabs.sendMessage(/** @type {number} */ (tab.id), { type: "shortcut" });
+      await chrome.tabs.sendMessage((tab.id as number), { type: "shortcut" });
     });
     await shortcutPage.waitForTimeout(600);
-    const focused = await shortcutPage.evaluate(() => /** @type {HTMLInputElement | null} */ (document.activeElement)?.name || "");
+    const focused = await shortcutPage.evaluate(() => (document.activeElement as HTMLInputElement | null)?.name || "");
     ok("shortcut: focuses the login field", focused === "username", `active="${focused}"`);
     const t = await menuText(shortcutPage);
     ok("shortcut: offer appears", /test@example\.com/.test(t), t);

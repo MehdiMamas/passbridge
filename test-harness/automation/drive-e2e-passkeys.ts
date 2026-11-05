@@ -54,7 +54,7 @@ window.wrongOrigin=async function(){
 await main(async () => {
   const web = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(PAGE));
   await new Promise((r) => web.listen(0, "127.0.0.1", () => r(undefined)));
-  const port = /** @type {import("net").AddressInfo} */ (web.address()).port;
+  const port = (web.address() as import("net").AddressInfo).port;
   try {
     const { ctx, helper } = await startE2E("win");
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
@@ -91,7 +91,7 @@ await main(async () => {
     await pick.setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("not json") });
     await imp.waitForSelector("[data-passkey-results]", { timeout: 10000 });
     const badRows = await imp.$$eval("[data-passkey-results] li", (els) => els.map((e) => [e.getAttribute("data-status"), e.textContent]));
-    ok("win: import of a file that is not JSON shows one failed row with the reason", badRows.length === 1 && badRows[0][0] === "failed" && /** @type {string} */ (badRows[0][1]).includes("This file is not JSON."), JSON.stringify(badRows));
+    ok("win: import of a file that is not JSON shows one failed row with the reason", badRows.length === 1 && badRows[0][0] === "failed" && (badRows[0][1] as string).includes("This file is not JSON."), JSON.stringify(badRows));
     const pair2 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
     const key2 = b64u(new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair2.privateKey)));
     const cxf = { accounts: [{ items: [{ credentials: [{ type: "passkey", credentialId: b64u(crypto.getRandomValues(new Uint8Array(16))), rpId: "import.localhost", username: "imported", userHandle: "AQID", key: key2 }] }] }] };
@@ -107,10 +107,10 @@ await main(async () => {
     await page.bringToFront();
     await page.waitForTimeout(2000);
     const prompts = helper.authPrompts;
-    const r = await page.evaluate(() => /** @type {any} */ (window).run("seed.localhost"));
+    const r = await page.evaluate(() => (window as any).run("seed.localhost"));
     ok("win: create and two gets answered from the helper", r.create === "ok" && r.createOrigin === true && r.gets?.length === 2 && r.gets.every(Boolean), JSON.stringify(r));
     ok("win: reading the passkey went through the helper's approval", helper.authPrompts > prompts, `${prompts} -> ${helper.authPrompts}`);
-    const wrong = await page.evaluate(() => /** @type {any} */ (window).wrongOrigin());
+    const wrong = await page.evaluate(() => (window as any).wrongOrigin());
     ok("win: another site's rp id is refused", /SecurityError|NotAllowedError/.test(wrong), wrong);
   } finally {
     web.closeAllConnections?.();

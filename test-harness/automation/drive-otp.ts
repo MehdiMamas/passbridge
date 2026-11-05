@@ -85,7 +85,7 @@ await main(async () => {
     const page = await ctx.newPage();
     await page.goto(`${BASE}/otp-totp-pin.html`, { waitUntil: "domcontentloaded" });
     await page.evaluate((n) => {
-      const el = /** @type {HTMLInputElement} */ (document.querySelector("input"));
+      const el = (document.querySelector("input") as HTMLInputElement);
       el.name = n;
       el.id = n;
     }, name);
@@ -101,7 +101,7 @@ await main(async () => {
     const page = await ctx.newPage();
     await page.goto(`${BASE}/login-okta-passcode.html`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => {
-      /** @type {HTMLElement} */ (document.querySelector('label[for="input28"]')).textContent = "Enter code";
+      (document.querySelector('label[for="input28"]') as HTMLElement).textContent = "Enter code";
     });
     await page.waitForTimeout(300);
     await page.focus('input[name="credentials.passcode"]');

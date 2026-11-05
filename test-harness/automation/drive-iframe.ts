@@ -5,7 +5,7 @@ await main(async () => {
   const page = await ctx.newPage();
   await page.goto(`${BASE}/tricky.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
-  const frame = /** @type {import("playwright-core").Frame} */ (page.frames().find((f) => f.url().includes("iframe-login")));
+  const frame = ((page.frames().find((f) => f.url().includes("iframe-login"))) as import("playwright-core").Frame);
   if (!ok("iframe-login frame loaded", !!frame, "frame not found")) return;
   await frame.locator('input[autocomplete="username"], input[name="username"], input[type="text"]').first().focus().catch(() => {});
   await page.waitForTimeout(700);

@@ -6,7 +6,7 @@ import { PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.ts";
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
+    const t = (n: string) => `${platform}: ${n}`;
     const { ctx, helper } = await startE2E(platform);
     const login = await ctx.newPage();
     await login.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
@@ -14,7 +14,7 @@ await main(async () => {
     ok(t("paired"), await pairFromMenu(login, helper));
     await login.close();
 
-    const open = async (/** @type {string} */ path, /** @type {string} */ field) => {
+    const open = async (path: string, field: string) => {
       const page = await ctx.newPage();
       await page.goto(`${BASE}/${path}`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(300);

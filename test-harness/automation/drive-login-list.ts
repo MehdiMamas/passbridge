@@ -1,14 +1,13 @@
 import { BASE, build, clickMenu, launchExtension, main, ok, pierced } from "./lib.ts";
 
-const attrs = (/** @type {any} */ node) => {
-  /** @type {Record<string, string>} */
-  const a = {};
+const attrs = (node: any) => {
+  const a: Record<string, string> = {};
   const list = node.attributes || [];
   for (let i = 0; i < list.length; i += 2) a[list[i]] = list[i + 1];
   return a;
 };
 
-async function openMany(/** @type {import("playwright-core").Page} */ page) {
+async function openMany(page: import("playwright-core").Page) {
   await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);
   await page.focus('input[name="username"]');
@@ -20,10 +19,10 @@ await main(async () => {
   const page = await manyCtx.newPage();
   await openMany(page);
 
-  let view = /** @type {any} */ (await pierced(page));
+  let view = (await pierced(page) as any);
   const opened = view.textOf(view.host);
-  ok("long list offers a username search", !!view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames"), opened.slice(0, 180));
-  const listNode = view.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]);
+  ok("long list offers a username search", !!view.find((n: any) => attrs(n).placeholder === "Search usernames"), opened.slice(0, 180));
+  const listNode = view.find((n: any) => attrs(n)["data-passbridge-login-list"]);
   const metrics = listNode
     ? await view.call(listNode, "function(){return {clientHeight:this.clientHeight,scrollHeight:this.scrollHeight,overflowY:getComputedStyle(this).overflowY}}")
     : null;
@@ -37,7 +36,7 @@ await main(async () => {
   for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowDown");
   view = await pierced(page);
   const scrolled = await view.call(
-    view.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]),
+    view.find((n: any) => attrs(n)["data-passbridge-login-list"]),
     "function(){return this.scrollTop}",
   );
   ok("arrow down scrolls the list", scrolled > 0, String(scrolled));
@@ -47,7 +46,7 @@ await main(async () => {
   view = await pierced(page);
   const filtered = view.textOf(view.host);
   const searchValue = await view.call(
-    view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames"),
+    view.find((n: any) => attrs(n).placeholder === "Search usernames"),
     "function(){return this.value}",
   );
   ok(
@@ -57,7 +56,7 @@ await main(async () => {
   );
   ok("search box follows the username field", searchValue === "mehdi", searchValue);
 
-  const searchNode = view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames");
+  const searchNode = view.find((n: any) => attrs(n).placeholder === "Search usernames");
   await view.client.send("DOM.focus", { nodeId: searchNode.nodeId });
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("riot");
@@ -66,12 +65,12 @@ await main(async () => {
   const siteMiss = view.textOf(view.host);
   ok("search matches username only", /No matching usernames/.test(siteMiss) && !/alice@example.com/.test(siteMiss), siteMiss);
 
-  await view.client.send("DOM.focus", { nodeId: view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames").nodeId });
+  await view.client.send("DOM.focus", { nodeId: view.find((n: any) => attrs(n).placeholder === "Search usernames").nodeId });
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("mehdi.one");
   await page.waitForTimeout(150);
   view = await pierced(page);
-  const nameNode = view.nodes.find((/** @type {any} */ n) => (n.children || []).some((/** @type {any} */ c) => c.nodeValue?.trim() === "mehdi.one@example.com"));
+  const nameNode = view.nodes.find((n: any) => (n.children || []).some((c: any) => c.nodeValue?.trim() === "mehdi.one@example.com"));
   await view.click(nameNode);
   await page.waitForTimeout(400);
   ok(
@@ -90,11 +89,11 @@ await main(async () => {
   const pwText = view.textOf(view.host);
   ok("password text is not a username query", /alice@example.com/.test(pwText) && /jake@example.com/.test(pwText), pwText.slice(0, 240));
 
-  await view.client.send("DOM.focus", { nodeId: view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames").nodeId });
+  await view.client.send("DOM.focus", { nodeId: view.find((n: any) => attrs(n).placeholder === "Search usernames").nodeId });
   for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowDown");
-  const fromSearch = /** @type {any} */ (await pierced(page));
+  const fromSearch = (await pierced(page) as any);
   const searchScrolled = await fromSearch.call(
-    fromSearch.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]),
+    fromSearch.find((n: any) => attrs(n)["data-passbridge-login-list"]),
     "function(){return this.scrollTop}",
   );
   ok("arrow keys scroll while the search field is focused", searchScrolled > 0, String(searchScrolled));
@@ -111,7 +110,7 @@ await main(async () => {
   await page.waitForTimeout(600);
   view = await pierced(page);
   const signup = view.textOf(view.host);
-  const signupList = view.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]);
+  const signupList = view.find((n: any) => attrs(n)["data-passbridge-login-list"]);
   const signupMetrics = await view.call(
     signupList,
     "function(){return {clientHeight:this.clientHeight,scrollHeight:this.scrollHeight}}",
@@ -129,9 +128,9 @@ await main(async () => {
   await multi.waitForTimeout(300);
   await multi.focus('input[name="username"]');
   await multi.waitForTimeout(600);
-  const multiView = /** @type {any} */ (await pierced(multi));
+  const multiView = (await pierced(multi) as any);
   const multiText = multiView.textOf(multiView.host);
-  const multiList = multiView.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]);
+  const multiList = multiView.find((n: any) => attrs(n)["data-passbridge-login-list"]);
   const multiMetrics = multiList
     ? await multiView.call(multiList, "function(){return {scrollHeight:this.scrollHeight,clientHeight:this.clientHeight,overflowY:getComputedStyle(this).overflowY}}")
     : null;
@@ -139,7 +138,7 @@ await main(async () => {
     "two logins stay a short list without search",
     /alice@example.com/.test(multiText) &&
       /bob@work.com/.test(multiText) &&
-      !multiView.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames") &&
+      !multiView.find((n: any) => attrs(n).placeholder === "Search usernames") &&
       multiMetrics &&
       multiMetrics.scrollHeight <= multiMetrics.clientHeight + 1 &&
       multiMetrics.overflowY !== "auto",
@@ -172,7 +171,7 @@ await main(async () => {
 
   await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
   await bare.waitForTimeout(300);
-  await bare.evaluate(() => (/** @type {HTMLInputElement} */ (document.querySelector(".m-input__inner")).placeholder = "Promo code"));
+  await bare.evaluate(() => ((document.querySelector(".m-input__inner") as HTMLInputElement).placeholder = "Promo code"));
   await bare.focus(BARE);
   await bare.waitForTimeout(500);
   ok("labelled promo box before a password gets no menu", !(await hasMenu()), "menu host found");
@@ -208,7 +207,7 @@ await main(async () => {
   await cjk.waitForTimeout(300);
   await cjk.evaluate(() => {
     document.querySelectorAll('input[type="password"]').forEach((p) => p.remove());
-    /** @type {HTMLInputElement} */ (document.querySelector(".ant-input:not([type=password])")).placeholder = "搜索";
+    (document.querySelector(".ant-input:not([type=password])") as HTMLInputElement).placeholder = "搜索";
   });
   await cjk.focus(".ant-input:not([type=password])");
   await cjk.waitForTimeout(500);

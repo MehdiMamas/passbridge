@@ -6,9 +6,9 @@ import { BASE, build, launchExtension, main, ok } from "./lib.ts";
 await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0];
-  const barOf = async (/** @type {import("playwright-core").Page} */ page) => {
+  const barOf = async (page: import("playwright-core").Page) => {
     for (let i = 0; i < 40; i++) {
-      const f = page.frames().find((/** @type {import("playwright-core").Frame} */ fr) => fr.url().includes("overlay/save-bar.html"));
+      const f = page.frames().find((fr: import("playwright-core").Frame) => fr.url().includes("overlay/save-bar.html"));
       if (f && (await f.locator("[data-field=password]").count())) return f;
       await page.waitForTimeout(150);
     }
@@ -29,7 +29,7 @@ await main(async () => {
   if (!first) return;
   await first.locator("[data-action=save]").click();
   await page.waitForTimeout(600);
-  const stored = await sw.evaluate(() => /** @type {any} */ (globalThis).__mockSaved || []);
+  const stored = await sw.evaluate(() => (globalThis as any).__mockSaved || []);
   ok("the stale password is now in the vault", stored.length === 1 && stored[0].password === "stale-pw1", JSON.stringify(stored));
 
   // 2. back to the login page, and fill from the vault so lastAutofill is the stale value
@@ -37,13 +37,13 @@ await main(async () => {
   await page.waitForTimeout(400);
   await sw.evaluate(
     async ({ url }) => {
-      const tab = /** @type {chrome.tabs.Tab} */ ((await chrome.tabs.query({})).find((t) => t.url?.startsWith(url)));
+      const tab = (((await chrome.tabs.query({})).find((t) => t.url?.startsWith(url))) as chrome.tabs.Tab);
       return chrome.tabs
-        .sendMessage(/** @type {number} */ (tab.id), {
+        .sendMessage((tab.id as number), {
           type: "fill",
           username: "ada@example.org",
           password: "stale-pw1",
-          expectedHost: new URL(/** @type {string} */ (tab.url)).hostname,
+          expectedHost: new URL((tab.url as string)).hostname,
         })
         .catch(() => null);
     },
@@ -68,6 +68,6 @@ await main(async () => {
   // 4. saving it replaces the stale password in the vault
   await second.locator("[data-action=save]").click();
   await page.waitForTimeout(600);
-  const after = await sw.evaluate(() => /** @type {any} */ (globalThis).__mockSaved || []);
+  const after = await sw.evaluate(() => (globalThis as any).__mockSaved || []);
   ok("the corrected password is saved", after.length === 2 && after[1].password === "fresh-pw2", JSON.stringify(after));
 });

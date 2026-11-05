@@ -6,7 +6,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { HERE, chromium, main, ok, serveStatic } from "./lib.ts";
 
-async function releaseStyleZip(/** @type {string} */ dir) {
+async function releaseStyleZip(dir: string) {
   const pkg = join(dir, "pkg");
   await mkdir(join(pkg, "src"), { recursive: true });
   await writeFile(join(pkg, "manifest.json"), '{"version":"1.4.2"}');
@@ -28,8 +28,8 @@ await main(async () => {
     if (!zip) console.log("SKIP zip check (no zip command)");
     const page = await browser.newPage();
     await page.goto(`${server.url}/test-harness/update-fs.html`);
-    await page.waitForFunction(() => typeof /** @type {any} */ (window).runUpdateFsChecks === "function");
-    for (const [name, passed, detail] of await page.evaluate((/** @type {number[]} */ bytes) => /** @type {any} */ (window).runUpdateFsChecks(bytes), zip)) {
+    await page.waitForFunction(() => typeof (window as any).runUpdateFsChecks === "function");
+    for (const [name, passed, detail] of await page.evaluate((bytes: number[]) => (window as any).runUpdateFsChecks(bytes), zip)) {
       ok(`update fs: ${name}`, passed, detail);
     }
   } finally {

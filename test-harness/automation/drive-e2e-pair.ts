@@ -8,7 +8,7 @@ import { PLATFORMS, startE2E } from "./e2e-lib.ts";
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
+    const t = (n: string) => `${platform}: ${n}`;
     const bundle = await readFile(join(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`), "src", "background.js"), "utf8");
     ok(t("the build holds no mock fixture data"), !bundle.includes("test@example.com"));
 

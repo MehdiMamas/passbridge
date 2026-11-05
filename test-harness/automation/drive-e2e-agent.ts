@@ -9,8 +9,8 @@ import { BASE, main, ok } from "./lib.ts";
 import { seedVault } from "../fake-apple-helper/helper.ts";
 import { AGENT_CLI, PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.ts";
 
-const cli = (/** @type {string} */ appDir, /** @type {string[]} */ ...args) =>
-  new Promise((resolve) => {
+const cli = (appDir: string, ...args: string[]) =>
+  new Promise<any>((resolve) => {
     execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir }, timeout: 110000 }, (err, stdout) => {
       try {
         resolve(JSON.parse(stdout));
@@ -29,7 +29,7 @@ const vault = () => {
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
+    const t = (n: string) => `${platform}: ${n}`;
     const { ctx, helper, appDir } = await startE2E(platform, { agent: true, vault: vault() });
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
     const page = await ctx.newPage();

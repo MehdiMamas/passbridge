@@ -4,10 +4,10 @@ import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.ts";
 await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const page = await ctx.newPage();
-  for (const [label, row, alnum] of /** @type {[string, string, boolean][]} */ ([
+  for (const [label, row, alnum] of ([
     ["strong", "Strong Password", false],
     ["no special characters", "Without Special Characters", true],
-  ])) {
+  ] as [string, string, boolean][])) {
     await page.goto(`${BASE}/signup-noform-clears.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(300);
     await page.focus("#pw1");

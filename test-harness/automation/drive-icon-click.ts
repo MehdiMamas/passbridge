@@ -3,17 +3,17 @@ import { BASE, build, launchExtension, main, menuText, ok } from "./lib.ts";
 const ICON = "[data-passbridge-icon]";
 
 // focus the field so its icon appears, then drop focus without the focusout that removes the icon
-async function unfocusKeepingIcon(/** @type {import("playwright-core").Page} */ page, /** @type {string} */ sel) {
+async function unfocusKeepingIcon(page: import("playwright-core").Page, sel: string) {
   await page.goto(`${BASE}/icon-click.html?mode=sticky`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);
   await page.focus(sel);
   await page.waitForTimeout(500);
-  await page.evaluate(() => /** @type {HTMLElement} */ (document.activeElement).blur());
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
   await page.waitForTimeout(100);
 }
 
-async function clickIcon(/** @type {import("playwright-core").Page} */ page) {
-  const box = /** @type {{ x: number, y: number, width: number, height: number }} */ (await page.locator(ICON).boundingBox());
+async function clickIcon(page: import("playwright-core").Page) {
+  const box = (await page.locator(ICON).boundingBox() as { x: number, y: number, width: number, height: number });
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(600);
 }
@@ -44,11 +44,11 @@ await main(async () => {
   await page.waitForTimeout(300);
   await page.focus("#em");
   await page.waitForTimeout(600);
-  await page.evaluate(() => /** @type {HTMLElement | null} */ (document.activeElement)?.blur?.());
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
   await page.waitForTimeout(100);
   if ((await page.locator(ICON).count()) === 0) await page.focus("#em");
   await page.waitForTimeout(300);
-  ok("the input was replaced", await page.evaluate(() => /** @type {HTMLElement} */ (document.getElementById("em")).isConnected));
+  ok("the input was replaced", await page.evaluate(() => (document.getElementById("em") as HTMLElement).isConnected));
   await clickIcon(page);
   const replaced = await menuText(page);
   ok("icon click after a re-render opens the menu", /test@example.com/.test(replaced), replaced);

@@ -5,21 +5,21 @@ await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0];
   const host = new URL(BASE).hostname;
-  const setup = (/** @type {Record<string, unknown>} */ settings) =>
+  const setup = (settings: Record<string, unknown>) =>
     sw.evaluate(async (s) => {
       await chrome.storage.sync.set(s);
     }, { agentAllowlist: ["github.com"], ...settings });
-  const list = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowlist").then((o) => /** @type {string[]} */ (o.agentAllowlist)));
-  const barOf = async (/** @type {import("playwright-core").Page} */ page) => {
+  const list = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowlist").then((o) => (o.agentAllowlist as string[])));
+  const barOf = async (page: import("playwright-core").Page) => {
     for (let i = 0; i < 40; i++) {
-      const f = page.frames().find((/** @type {import("playwright-core").Frame} */ fr) => fr.url().includes("overlay/save-bar.html"));
+      const f = page.frames().find((fr: import("playwright-core").Frame) => fr.url().includes("overlay/save-bar.html"));
       if (f && (await f.locator("[data-field=password]").count())) return f;
       await page.waitForTimeout(150);
     }
     return null;
   };
   // a create-account page; generated = pick the menu's Strong Password, else type the same one twice
-  const signup = async (/** @type {import("playwright-core").Page} */ page, /** @type {boolean} */ generated) => {
+  const signup = async (page: import("playwright-core").Page, generated: boolean) => {
     await page.goto(`${BASE}/signup.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(400);
     await page.fill("#email", "new@example.org");
@@ -42,7 +42,7 @@ await main(async () => {
   // generated password: checkbox shown and checked, Save adds the host
   await setup({ agentSignIn: true });
   const page = await ctx.newPage();
-  const bar = /** @type {import("playwright-core").Frame} */ (await signup(page, true));
+  const bar = (await signup(page, true) as import("playwright-core").Frame);
   ok("bar appears after a generated sign-up", !!bar);
   const box = bar.locator("[data-field=allow-agent]");
   ok("agent checkbox shown", (await box.count()) === 1);
@@ -57,7 +57,7 @@ await main(async () => {
   // typed password: shown, unchecked, saving leaves the list alone
   await setup({ agentSignIn: true });
   const page2 = await ctx.newPage();
-  const bar2 = /** @type {import("playwright-core").Frame} */ (await signup(page2, false));
+  const bar2 = (await signup(page2, false) as import("playwright-core").Frame);
   ok("agent checkbox shown for a typed password", !!bar2 && (await bar2.locator("[data-field=allow-agent]").count()) === 1);
   ok("agent checkbox starts unchecked for a typed password", !(await bar2.locator("[data-field=allow-agent]").isChecked()));
   await bar2.locator("[data-action=save]").click();
@@ -74,8 +74,7 @@ await main(async () => {
   await setup({ agentSignIn: true });
   const page4 = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page4);
-  /** @type {number[]} */
-  const worlds = [];
+  const worlds: number[] = [];
   cdp.on("Runtime.executionContextCreated", (e) => {
     if (String(e.context.origin).startsWith("chrome-extension://") && e.context.auxData?.type === "isolated") worlds.push(e.context.id);
   });
