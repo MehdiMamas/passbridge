@@ -160,7 +160,7 @@ function OptionsApp() {
     setPasskeyResults([]);
     let parsed;
     try {
-      parsed = parseExport(await file.text());
+      parsed = await parseExport(await file.text());
     } catch (e) {
       return setPasskeyResults([{ label: file.name, status: "failed", reason: e?.message || "" }]);
     }
