@@ -12,10 +12,10 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(url: string) => any} hostnameOf the host, or null for an unparsable url
  * @property {(url: string) => Promise<boolean>} isFillUrlAllowed
  * @property {(host: string) => boolean | undefined} isLocalDevHost
- * @property {(tabId: number, url: string) => Promise<any[]>} siteLogins
+ * @property {(tabId: number | undefined, url: string) => Promise<any[]>} siteLogins
  * @property {(logins: any[]) => any[]} uniqueByUsername
  * @property {(tab: any, username: string, opts: Record<string, unknown>) => Promise<any>} fillLoginOnTab
- * @property {(tabId: number, url: string, username: string, password: string) => Promise<any>} [saveLogin] adds a login, reports an unanswered Apple prompt as an error
+ * @property {(tabId: number | undefined, url: string, username: string, password: string) => Promise<any>} [saveLogin] adds a login, reports an unanswered Apple prompt as an error
  * @property {(host: string, username: string) => void} [notifySaved]
  */
 
@@ -107,7 +107,15 @@ export function agentSaveAllowed(settings) {
 export function logEntry(msg, out, safe, now = Date.now()) {
   /** @type {Record<string, unknown>} */
   const entry = { t: now, op: String(msg?.op || ""), host: out?.host || "", username: out?.username || "", result: safe?.ok ? "ok" : safe?.reason || safe?.error };
-  if (msg?.op === "save") entry.tabId = Number(msg.tabId);
+  if (msg?.op === "save") {
+    if (msg.tabId != null) entry.tabId = Number(msg.tabId);
+    // the origin only, never the path or query
+    if (msg.url != null) {
+      try {
+        entry.url = new URL(msg.url).origin;
+      } catch {}
+    }
+  }
   return entry;
 }
 
@@ -169,12 +177,28 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   const saveName = op === "save" && typeof msg.username === "string" ? msg.username.trim() : "";
   if (op === "save" && (!saveName || typeof msg.password !== "string" || !msg.password)) return done(fail("bad_request"));
 
+  // save may name a site by url instead of a tab. both or neither is bad_request, and only save takes a url
+  const urlMode = op === "save" && msg.url != null;
+  if (op === "save" && (msg.url != null) === (msg.tabId != null)) return done(fail("bad_request"));
+  if (op !== "save" && msg.url != null) return done(fail("bad_request"));
+  if (urlMode) {
+    let parsed = null;
+    try {
+      parsed = typeof msg.url === "string" ? new URL(msg.url) : null;
+    } catch {}
+    // a url that parses but is not https falls to the https check below (not_allowed)
+    if (!parsed) return done(fail("bad_request"));
+  }
+
   /** @type {{ id?: number, url?: string } | null} */
   let tab = null;
-  try {
-    tab = await deps.getTab(Number(msg.tabId));
-  } catch {}
-  if (!tab || tab.id == null || !tab.url) return done(fail("no_tab"));
+  if (urlMode) tab = { id: undefined, url: msg.url };
+  else {
+    try {
+      tab = await deps.getTab(Number(msg.tabId));
+    } catch {}
+  }
+  if (!tab || !tab.url || (tab.id == null && !urlMode)) return done(fail("no_tab"));
   const host = deps.hostnameOf(tab.url);
   base.host = host;
   // an agent that names its site must be on it

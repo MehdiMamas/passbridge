@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username>  (save reads the password from stdin)
+# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | save --url <https-url> <username>  (save reads the password from stdin)
 import getpass
 import json
 import os
@@ -83,7 +83,8 @@ def main(argv):
         if code is not None:
             return code
     req = {"id": uuid.uuid4().hex, "op": argv[0]}
-    if argv[0] != "status":
+    by_url = argv[0] == "save" and len(argv) > 1 and argv[1] == "--url"
+    if argv[0] != "status" and not by_url:
         if len(argv) < 2 or not argv[1].isdigit():
             print("tabId must be a number", file=sys.stderr)
             return 2
@@ -91,6 +92,12 @@ def main(argv):
     if argv[0] == "sign_in" and len(argv) > 2:
         req["username"] = argv[2]
     if argv[0] == "save":
+        if by_url:
+            if len(argv) < 4:
+                print("usage: save --url <https-url> <username>, password on stdin", file=sys.stderr)
+                return 2
+            req["url"] = argv[2]
+            argv = argv[:1] + argv[2:]
         if len(argv) < 3:
             print("usage: save <tabId> <username>, password on stdin", file=sys.stderr)
             return 2
