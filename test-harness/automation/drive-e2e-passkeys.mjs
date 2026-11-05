@@ -81,6 +81,27 @@ await main(async () => {
     const row = helper.vault.logins.find((l) => /seed\.localhost/.test(l.username));
     ok("win: it is one login with the record as its password", !!row && row.password.length > 100, row ? "short password" : "no row");
 
+    // Import from a file on the Browser tab (the page is reopened so it reads passkeyStore on load).
+    // The Options page shows the Windows rows by the browser's platform, so it reports Windows here.
+    const imp = await ctx.newPage();
+    await imp.addInitScript(() => Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => ({ platform: "Windows" }) }));
+    await imp.goto(new URL("options.html#browser", sw.url()).href);
+    const pick = imp.locator("input[type=file]");
+    await pick.waitFor({ state: "attached", timeout: 10000 });
+    await pick.setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("not json") });
+    await imp.waitForSelector("[data-passkey-results]", { timeout: 10000 });
+    const badRows = await imp.$$eval("[data-passkey-results] li", (els) => els.map((e) => [e.getAttribute("data-status"), e.textContent]));
+    ok("win: import of a file that is not JSON shows one failed row with the reason", badRows.length === 1 && badRows[0][0] === "failed" && badRows[0][1].includes("This file is not JSON."), JSON.stringify(badRows));
+    const pair2 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+    const key2 = b64u(new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair2.privateKey)));
+    const cxf = { accounts: [{ items: [{ credentials: [{ type: "passkey", credentialId: b64u(crypto.getRandomValues(new Uint8Array(16))), rpId: "import.localhost", username: "imported", userHandle: "AQID", key: key2 }] }] }] };
+    const beforeImport = helper.vault.logins.length;
+    await pick.setInputFiles({ name: "export.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(cxf)) });
+    await imp.waitForFunction(() => document.querySelector("[data-passkey-results] li[data-status=saved]"), null, { timeout: 15000 }).catch(() => {});
+    const goodRows = await imp.$$eval("[data-passkey-results] li", (els) => els.map((e) => e.getAttribute("data-status")));
+    const summary = await imp.$eval("[data-passkey-results] p", (e) => e.textContent).catch(() => "");
+    ok("win: import of a valid export saves it (1 of 1) and the helper vault grows by one", goodRows.length === 1 && goodRows[0] === "saved" && /1\D+1/.test(summary) && helper.vault.logins.length === beforeImport + 1, `${JSON.stringify(goodRows)} ${summary} ${beforeImport} -> ${helper.vault.logins.length}`);
+
     const page = await ctx.newPage();
     await page.goto(`http://seed.localhost:${port}/`);
     await page.bringToFront();
