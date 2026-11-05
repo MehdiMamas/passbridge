@@ -21,7 +21,7 @@ await main(async () => {
     // the bar can be rebuilt right after it appears: let it settle, take the frame again, click without waiting on animation
     const press = async (/** @type {import("playwright-core").Page} */ page) => {
       await page.waitForTimeout(800);
-      const f = await barOf(page);
+      const f = /** @type {import("playwright-core").Frame} */ (await barOf(page));
       await f.locator("[data-action=save]:not([disabled])").waitFor();
       await f.locator("[data-action=save]").dispatchEvent("click");
       await page.waitForTimeout(1200);

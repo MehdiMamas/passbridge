@@ -37,7 +37,7 @@ await main(async () => {
       ok("update page: a known folder can be changed", (await updatePage("ready").locator("button", { hasText: "Change folder" }).count()) === 1);
       const bar = updatePage("working").locator('[role="progressbar"]');
       ok("update page: the progress bar reports its value", (await bar.getAttribute("aria-valuenow")) === "72");
-      const states = await updatePage("working").locator("[data-step]").evaluateAll((els) => els.map((e) => `${e.dataset.step}:${e.dataset.state}`).join());
+      const states = await updatePage("working").locator("[data-step]").evaluateAll((/** @type {HTMLElement[]} */ els) => els.map((e) => `${e.dataset.step}:${e.dataset.state}`).join());
       ok("update page: the steps before the current one are done", states === "download:done,verify:done,write:active,restart:todo", states);
       ok("update page: no folder change while files are being replaced", (await updatePage("working").locator("button", { hasText: "Change folder" }).count()) === 0);
       const failedText = await updatePage("failed").innerText();

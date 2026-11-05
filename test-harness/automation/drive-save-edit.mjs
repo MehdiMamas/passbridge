@@ -22,7 +22,7 @@ await main(async () => {
 
   const page = await ctx.newPage();
   await submit(page, "alice@example.org", "hunter2-pw");
-  const bar = await barOf(page);
+  const bar = /** @type {import("playwright-core").Frame} */ (await barOf(page));
   ok("save prompt appears", !!bar, "no save-bar frame");
   const u = bar.locator("[data-field=username]");
   const p = bar.locator("[data-field=password]");
@@ -47,7 +47,7 @@ await main(async () => {
   // an emptied username stays savable but is flagged
   const page2 = await ctx.newPage();
   await submit(page2, "carol@example.org", "another-pw1");
-  const bar2 = await barOf(page2);
+  const bar2 = /** @type {import("playwright-core").Frame} */ (await barOf(page2));
   ok("second prompt appears", !!bar2);
   await bar2.locator("[data-action=save]:not([disabled])").waitFor();
   const u2 = bar2.locator("[data-field=username]");

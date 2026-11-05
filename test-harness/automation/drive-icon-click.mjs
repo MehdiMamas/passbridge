@@ -13,7 +13,7 @@ async function unfocusKeepingIcon(/** @type {import("playwright-core").Page} */ 
 }
 
 async function clickIcon(/** @type {import("playwright-core").Page} */ page) {
-  const box = await page.locator(ICON).boundingBox();
+  const box = /** @type {{ x: number, y: number, width: number, height: number }} */ (await page.locator(ICON).boundingBox());
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(600);
 }

@@ -37,13 +37,13 @@ await main(async () => {
   await page.waitForTimeout(400);
   await sw.evaluate(
     async ({ url }) => {
-      const tab = (await chrome.tabs.query({})).find((t) => t.url?.startsWith(url));
+      const tab = /** @type {chrome.tabs.Tab} */ ((await chrome.tabs.query({})).find((t) => t.url?.startsWith(url)));
       return chrome.tabs
-        .sendMessage(tab.id, {
+        .sendMessage(/** @type {number} */ (tab.id), {
           type: "fill",
           username: "ada@example.org",
           password: "stale-pw1",
-          expectedHost: new URL(tab.url).hostname,
+          expectedHost: new URL(/** @type {string} */ (tab.url)).hostname,
         })
         .catch(() => null);
     },

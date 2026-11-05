@@ -92,7 +92,7 @@ await main(async () => {
     await pick.setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("not json") });
     await imp.waitForSelector("[data-passkey-results]", { timeout: 10000 });
     const badRows = await imp.$$eval("[data-passkey-results] li", (els) => els.map((e) => [e.getAttribute("data-status"), e.textContent]));
-    ok("win: import of a file that is not JSON shows one failed row with the reason", badRows.length === 1 && badRows[0][0] === "failed" && badRows[0][1].includes("This file is not JSON."), JSON.stringify(badRows));
+    ok("win: import of a file that is not JSON shows one failed row with the reason", badRows.length === 1 && badRows[0][0] === "failed" && /** @type {string} */ (badRows[0][1]).includes("This file is not JSON."), JSON.stringify(badRows));
     const pair2 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
     const key2 = b64u(new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair2.privateKey)));
     const cxf = { accounts: [{ items: [{ credentials: [{ type: "passkey", credentialId: b64u(crypto.getRandomValues(new Uint8Array(16))), rpId: "import.localhost", username: "imported", userHandle: "AQID", key: key2 }] }] }] };
