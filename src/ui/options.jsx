@@ -127,11 +127,8 @@ function OptionsApp() {
   async function onPasskeyToggle(on) {
     setPasskeyNote("");
     if (on) {
-      let granted = false;
-      try {
-        granted = await chrome.permissions.request({ permissions: ["webAuthenticationProxy"] });
-      } catch {}
-      if (!granted) return setPasskeyNote(t("passkeyNoPermission"));
+      // webAuthenticationProxy is a required permission (Chrome refuses it as optional, #226);
+      // holding it does nothing until this setting turns the proxy on
       await chrome.storage.local.set({ passkeyStore: true });
       setPasskeyOn(true);
       return;
@@ -140,7 +137,6 @@ function OptionsApp() {
     setPasskeyOn(false);
     try {
       await chrome.runtime.sendMessage({ type: "passkeyDetach" });
-      await chrome.permissions.remove({ permissions: ["webAuthenticationProxy"] });
     } catch {}
   }
 
