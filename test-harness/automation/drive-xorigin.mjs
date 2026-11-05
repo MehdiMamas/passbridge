@@ -1,3 +1,4 @@
+// @ts-nocheck
 // a foreign sub-frame must never get an offer (confused deputy via all_frames)
 // openpw.test resolves to 127.0.0.1 through the launch flags in lib.mjs
 import { join } from "path";

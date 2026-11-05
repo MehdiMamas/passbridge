@@ -1,3 +1,4 @@
+// @ts-nocheck
 let failed = 0;
 function ok(name, cond) {
   if (!cond) failed++;

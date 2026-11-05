@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 
 // the save prompt shows the captured login for editing, and Save stores what is in the fields

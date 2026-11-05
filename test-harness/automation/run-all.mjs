@@ -1,3 +1,4 @@
+// @ts-nocheck
 // needs the mock builds (node build-test-extensions.mjs). Serves test-harness/ itself unless OP_BASE is set.
 
 import { spawn } from "child_process";

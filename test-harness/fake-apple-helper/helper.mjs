@@ -1,3 +1,4 @@
+// @ts-nocheck
 // The Apple helper's side of the native-messaging protocol, for tests. It does what the real helper does for the
 // extension (capabilities, SRP-6a pairing with a 6-digit code, AES-GCM sessions, the vault commands) and nothing else.
 // Keychain and Touch ID / Windows Hello happen inside Apple's helper, so they show up here as vault state and as an

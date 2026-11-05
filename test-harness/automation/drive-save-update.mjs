@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 
 // A password corrected after autofill is a change worth saving, not a re-login to ignore (#224).

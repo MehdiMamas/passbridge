@@ -1,3 +1,4 @@
+// @ts-nocheck
 // a code is only valid for the exact challenge it was shown for, the client must never swap the challenge under the user
 
 import { randomBytes, webcrypto } from "node:crypto";

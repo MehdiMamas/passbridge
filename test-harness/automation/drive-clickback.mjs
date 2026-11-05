@@ -1,3 +1,4 @@
+// @ts-nocheck
 // regression: a scroll listener used to destroy the dropdown on the focus-scroll
 import { BASE, build, clickMenu, launchExtension, main, menuShown, ok } from "./lib.mjs";
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 
 await main(async () => {

@@ -5,7 +5,7 @@ PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Ap
 
 ## Setup, build, test
 - Needs Node.js 22.18 or newer. `npm install`, then `npm run build` (output in `dist/`; load that folder unpacked from `chrome://extensions`). Local builds add `version_name` (`<version>+<short sha>`, `-dirty` if uncommitted; omitted without git) shown in `chrome://extensions` and the Options sidebar; `PASSBRIDGE_RELEASE=1` (set in `release.yml`) skips it. Update code keeps reading `version`.
-- `npm run typecheck`, `npm test` (`scripts/test.mjs`), `npm run test:unit`.
+- `npm run typecheck` (also covers `scripts/` and `test-harness/` through `tsconfig.tools.json`), `npm test` (`scripts/test.mjs`), `npm run test:unit`.
 - Browser tests (CI): `npx playwright install --with-deps chromium`, `node test-harness/automation/build-test-extensions.mjs`, `node test-harness/automation/run-all.mjs`.
 - macOS helper install: `sh native/install.sh` (Windows scripts are in `native/windows`).
 

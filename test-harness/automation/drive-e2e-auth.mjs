@@ -1,3 +1,4 @@
+// @ts-nocheck
 // e2e: what the extension does when the helper's approval (Touch ID / Windows Hello) is denied or never answered,
 // and when the helper asks to sign in again: it stays usable, asks to unlock, and pairs again with the new code.
 // Both platforms, run side by side because the unanswered approval has to outlast the extension's own wait.

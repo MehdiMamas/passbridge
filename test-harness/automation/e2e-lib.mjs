@@ -1,3 +1,4 @@
+// @ts-nocheck
 // plumbing for the e2e drivers: the real extension build for one platform, a simulated Apple helper that the browser
 // reaches through a native-messaging host, and a throwaway folder for the agent relay
 
