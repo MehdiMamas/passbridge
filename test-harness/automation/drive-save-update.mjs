@@ -4,7 +4,7 @@ import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 // The vault holds a stale value, we fill it, the user retypes the one that works, and the login
 // succeeds: the save bar has to come back as an update instead of staying silent.
 await main(async () => {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0];
   const barOf = async (/** @type {import("playwright-core").Page} */ page) => {
     for (let i = 0; i < 40; i++) {

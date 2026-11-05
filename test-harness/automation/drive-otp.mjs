@@ -1,7 +1,7 @@
 import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok } from "./lib.mjs";
 
 await main(async () => {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("otp"))));
+  const ctx = await launchExtension(build("otp"));
 
   {
     const page = await ctx.newPage();

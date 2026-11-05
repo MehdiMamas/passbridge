@@ -15,10 +15,9 @@ const vault = () => {
   return v;
 };
 
-async function run(/** @type {string} */ platform) {
+async function run(/** @type {"mac" | "win"} */ platform) {
   const t = (/** @type {string} */ n) => `${platform}: ${n}`;
-  const { ctx: rawCtx, helper  } = await startE2E(platform, /** @type {{ agent?: boolean }} */ ({ vault: vault() }));
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
+  const { ctx, helper } = await startE2E(platform, { vault: vault() });
   const url = `${BASE}/login-standard.html`;
   const fresh = async () => {
     const page = await ctx.newPage();

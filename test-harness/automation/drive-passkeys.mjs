@@ -64,7 +64,7 @@ await main(async () => {
   await new Promise((r) => web.listen(0, "127.0.0.1", () => r(undefined)));
   const port = /** @type {import("net").AddressInfo} */ (web.address()).port;
   try {
-    const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await within("launch", launchExtension(build("passkeys")), 60000)));
+    const ctx = await within("launch", launchExtension(build("passkeys")), 60000);
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
     if (!(await within("api check", sw.evaluate(() => typeof chrome.webAuthenticationProxy?.attach === "function")))) {
       ok("passkeys: SKIPPED, this browser has no chrome.webAuthenticationProxy API", true);

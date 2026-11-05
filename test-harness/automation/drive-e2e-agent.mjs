@@ -30,8 +30,7 @@ const vault = () => {
 await main(async () => {
   for (const platform of PLATFORMS) {
     const t = (/** @type {string} */ n) => `${platform}: ${n}`;
-    const { ctx: rawCtx, helper, appDir  } = await startE2E(platform, /** @type {{ agent?: boolean }} */ ({ agent: true, vault: vault() }));
-    const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
+    const { ctx, helper, appDir } = await startE2E(platform, { agent: true, vault: vault() });
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
     const page = await ctx.newPage();
     await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });

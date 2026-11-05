@@ -2,7 +2,7 @@ import { join } from "path";
 import { BASE, SHOTS, build, clickMenu, launchExtension, main, menuShown, menuText, ok, pierced } from "./lib.mjs";
 
 await main(async () => {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const ctx = await launchExtension(build("unlocked"));
   for (const pg of ["login-standard", "login-twostep", "signup", "forum"]) {
     const page = await ctx.newPage();
     await page.goto(`${BASE}/${pg}.html`, { waitUntil: "domcontentloaded" });
@@ -114,7 +114,7 @@ await main(async () => {
   }
   await ctx.close();
 
-  const locked = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("locked", "OP_LOCKED"))));
+  const locked = await launchExtension(build("locked", "OP_LOCKED"));
   const lp = await locked.newPage();
   await lp.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   await lp.waitForTimeout(300);

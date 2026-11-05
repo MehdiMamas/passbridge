@@ -6,7 +6,7 @@ import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok 
 const HTTP_BASE = BASE.replace("//127.0.0.1", "//127.0.0.1.nip.io");
 
 await main(async () => {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
 
   const page = await ctx.newPage();

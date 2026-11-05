@@ -16,11 +16,11 @@ async function openMany(/** @type {import("playwright-core").Page} */ page) {
 }
 
 await main(async () => {
-  const manyCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("many"))));
+  const manyCtx = await launchExtension(build("many"));
   const page = await manyCtx.newPage();
   await openMany(page);
 
-  let view = await pierced(page);
+  let view = /** @type {any} */ (await pierced(page));
   const opened = view.textOf(view.host);
   ok("long list offers a username search", !!view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames"), opened.slice(0, 180));
   const listNode = view.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]);
@@ -71,7 +71,7 @@ await main(async () => {
   await page.keyboard.type("mehdi.one");
   await page.waitForTimeout(150);
   view = await pierced(page);
-  const nameNode = view.nodes.find((n) => (n.children || []).some((/** @type {any} */ c) => c.nodeValue?.trim() === "mehdi.one@example.com"));
+  const nameNode = view.nodes.find((/** @type {any} */ n) => (n.children || []).some((/** @type {any} */ c) => c.nodeValue?.trim() === "mehdi.one@example.com"));
   await view.click(nameNode);
   await page.waitForTimeout(400);
   ok(
@@ -92,7 +92,7 @@ await main(async () => {
 
   await view.client.send("DOM.focus", { nodeId: view.find((/** @type {any} */ n) => attrs(n).placeholder === "Search usernames").nodeId });
   for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowDown");
-  const fromSearch = await pierced(page);
+  const fromSearch = /** @type {any} */ (await pierced(page));
   const searchScrolled = await fromSearch.call(
     fromSearch.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]),
     "function(){return this.scrollTop}",
@@ -123,13 +123,13 @@ await main(async () => {
   );
   await manyCtx.close();
 
-  const multiCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("multi", "OP_MULTI"))));
+  const multiCtx = await launchExtension(build("multi", "OP_MULTI"));
   const multi = await multiCtx.newPage();
   await multi.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   await multi.waitForTimeout(300);
   await multi.focus('input[name="username"]');
   await multi.waitForTimeout(600);
-  const multiView = await pierced(multi);
+  const multiView = /** @type {any} */ (await pierced(multi));
   const multiText = multiView.textOf(multiView.host);
   const multiList = multiView.find((/** @type {any} */ n) => attrs(n)["data-passbridge-login-list"]);
   const multiMetrics = multiList
@@ -151,7 +151,7 @@ await main(async () => {
   const DECOY_PW = "input[type=password][style]";
   const REAL_PW = "input[type=password]:not([style])";
   // unlabelled email box right before a password, with a hidden decoy password (issue #134)
-  const bareCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const bareCtx = await launchExtension(build("unlocked"));
   const bare = await bareCtx.newPage();
   const hasMenu = async () => (await bare.locator('[data-passbridge-host="menu"]').count()) > 0;
   await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
@@ -186,7 +186,7 @@ await main(async () => {
   await bareCtx.close();
 
   // CJK-only labels, no <form> (issue #147)
-  const cjkCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const cjkCtx = await launchExtension(build("unlocked"));
   const cjk = await cjkCtx.newPage();
   const cjkMenu = async () => (await cjk.locator('[data-passbridge-host="menu"]').count()) > 0;
   await cjk.goto(`${BASE}/username-cjk-noform.html`, { waitUntil: "domcontentloaded" });

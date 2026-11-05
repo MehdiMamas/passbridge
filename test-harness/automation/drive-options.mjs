@@ -62,7 +62,7 @@ function contrastWithBackground(/** @type {Element} */ el) {
 }
 
 await main(async () => {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
   const optionsUrl = new URL("options.html", sw.url()).href;
   await sw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));

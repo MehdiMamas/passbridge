@@ -10,7 +10,7 @@ async function clickIcon(/** @type {import("playwright-core").Page} */ page) {
 }
 
 async function open(/** @type {string} */ kind) {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build(kind))));
+  const ctx = await launchExtension(build(kind));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login-email-password.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);

@@ -4,7 +4,7 @@ import { join } from "path";
 import { BASE, HERE, build, launchExtension, main, ok, serveStatic } from "./lib.mjs";
 
 await main(async () => {
-  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
+  const ctx = await launchExtension(build("unlocked"));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   const foreign = new URL("/iframe-pages/iframe-login.html", BASE);
