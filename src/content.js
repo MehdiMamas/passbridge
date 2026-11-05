@@ -568,6 +568,13 @@ function showSaveBar(msg) {
   saveListener = (e) => {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
     const action = e.data.action;
+    // the bar reports its new position; move the host without closing it
+    if (action === "drag" && e.data.x != null && e.data.y != null) {
+      host.style.inset = "auto";
+      host.style.left = `${e.data.x}px`;
+      host.style.top = `${e.data.y}px`;
+      return;
+    }
     hideSaveBar();
     // "save" is sent by the bar itself, so the edited password never crosses the page's message events
     if (action === "save") return;
