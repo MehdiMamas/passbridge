@@ -14,6 +14,7 @@ import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 
 // update error codes; the message shown on the page is t(ERROR_KEYS[code])
+/** @type {Record<string, string>} */
 const ERROR_KEYS = {
   cancelled: "errCancelled",
   notsource: "errNotSource",
@@ -28,16 +29,20 @@ const ERROR_KEYS = {
 };
 
 // the running extension serves its folder straight from disk, so this reads what is there now
+/** @param {string} name */
 const readBack = (name) => fetch(chrome.runtime.getURL(name), { cache: "no-store" }).then((r) => (r.ok ? r.text() : null), () => null);
 
 const folderDeps = {
   store: folderStore,
+  /** @param {any} [startIn] a directory handle from IndexedDB */
   pick: (startIn) => /** @type {typeof globalThis & { showDirectoryPicker: (opts: object) => Promise<FileSystemDirectoryHandle> }} */ (globalThis).showDirectoryPicker({ id: "passbridge-folder", mode: "readwrite", ...(startIn ? { startIn } : {}) }),
   isSource: looksLikeSource,
+  /** @param {any} folder */
   isOwn: (folder) => isOwnFolder(folder, readBack),
 };
 
 // the share of the bar each step fills
+/** @type {Record<string, number[]>} */
 const SPAN = { download: [0, 0.45], verify: [0.45, 0.5], write: [0.5, 0.95], restart: [1, 1] };
 
 function UpdateApp() {
@@ -73,7 +78,7 @@ function UpdateApp() {
     if (!found.ok) return setPhase(found.error);
     const route = updateRoute({ windows: isWindows(), helper: await updaterAvailable(), noHelper: noHelper.current });
     if (route === "helper") return setPhase("helper");
-    if (route === "folder" && typeof globalThis.showDirectoryPicker !== "function") return setPhase("unsupported");
+    if (route === "folder" && typeof /** @type {any} */ (globalThis).showDirectoryPicker !== "function") return setPhase("unsupported");
     setNative(route === "native");
     setPhase("ready");
   }
@@ -85,16 +90,19 @@ function UpdateApp() {
   // closing the tab mid-swap would leave the journal behind; the restart itself must not ask
   useEffect(() => {
     if (phase !== "working" || step === "restart") return;
+    /** @param {Event} e */
     const hold = (e) => e.preventDefault();
     addEventListener("beforeunload", hold);
     return () => removeEventListener("beforeunload", hold);
   }, [phase, step]);
 
+  /** @param {string} key @param {boolean} [restored] */
   function fail(key, restored = false) {
     setError({ message: t(ERROR_KEYS[key] || ERROR_KEYS.write), restored });
     setPhase("failed");
   }
 
+  /** @param {string} id @param {number} [share] */
   function advance(id, share = 0) {
     const [from, to] = SPAN[id];
     setStep(id);

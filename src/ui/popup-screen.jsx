@@ -139,7 +139,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
  *   onTotpAdd: (target: string) => Promise<any>, onTotpCopyKey: () => Promise<any>,
  *   onCheckCodes: () => Promise<PopupRow[]>, onLock: () => any, onRefresh: () => any, onSettings: () => any,
  *   onReport: () => any, onOpenUpdate: () => any, onInstallUpdate: () => any, onDismissUpdate: () => any,
- *   onCheckUpdate: () => any,
+ *   onCheckUpdate?: () => any,
  * }} props
  */
 export function PopupScreen({
