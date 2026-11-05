@@ -41,11 +41,11 @@ copying `en` and translating the `message` values.
 4. **Check it.** Run:
 
    ```bash
-   npm test          # includes scripts/check-locales.mjs
+   npm test          # includes scripts/check-locales.ts
    npm run typecheck
    ```
 
-   `check-locales.mjs` verifies that every key the code uses exists in `en`,
+   `check-locales.ts` verifies that every key the code uses exists in `en`,
    that every `en` key exists in each locale, and that placeholders match. A
    missing or extra key fails the run.
 

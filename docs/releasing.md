@@ -7,12 +7,12 @@
    ```
    for z in passbridge passbridge-macos-helper passbridge-windows-helper; do
      gh release download vX.Y.Z -p "$z.zip"
-     node scripts/sign-release.mjs sign "$z.zip"
+     node scripts/sign-release.ts sign "$z.zip"
      gh release upload vX.Y.Z "$z.zip.sig"
    done
    ```
 
-   Over ssh the login Keychain refuses access ("User interaction is not allowed", exit 36). Run the signing as a one-shot LaunchAgent in the logged-in GUI session instead: write a plist whose `ProgramArguments` run the `sign-release.mjs sign` loop on zips copied to the Mac, then `launchctl bootstrap gui/$(id -u) <plist>`, wait for it to finish, `launchctl bootout gui/$(id -u)/<label>`, and copy the `.sig` files back. This needs no password and opens no window.
+   Over ssh the login Keychain refuses access ("User interaction is not allowed", exit 36). Run the signing as a one-shot LaunchAgent in the logged-in GUI session instead: write a plist whose `ProgramArguments` run the `sign-release.ts sign` loop on zips copied to the Mac, then `launchctl bootstrap gui/$(id -u) <plist>`, wait for it to finish, `launchctl bootout gui/$(id -u)/<label>`, and copy the `.sig` files back. This needs no password and opens no window.
 
 4. Real-device check before publishing. The browser tests run against a simulated Apple helper, so they cannot show that Apple's own helper still answers the way the simulation does. Do the Windows smoke test below on a real PC (and, when the release changes the macOS helper path, one unlock and fill on a Mac). Smoke test on Windows before publishing. On a Windows PC with iCloud for Windows signed in, download the draft's `passbridge.zip` and `passbridge-windows-helper.zip`, install the helper from its zip, and load the extension unpacked from `chrome://extensions`. Then:
    - unlock with a verification code (a wrong code first should say "Incorrect code"),

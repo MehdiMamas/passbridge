@@ -89,7 +89,7 @@ The popup's update notice always shows Update now. When the updater host (`com.p
 
 Maintainer: the private key is the Keychain item "PassBridge release signing key" (account `passbridge`, service `passbridge-release-signing`, the PKCS8 PEM base64 encoded on one line), with a backup in the maintainer's password manager. It never goes on GitHub. The matching public key is pinned as `PUBLIC_KEY_B64` in `src/update/verify.js`.
 
-For each release, after the tag build uploads `passbridge.zip`: download it, then `node scripts/sign-release.mjs sign passbridge.zip` (reads the key from the Keychain, writes `passbridge.zip.sig` and checks it against the pinned key; `--key <pem file>` uses a PEM file instead), then `gh release upload vX passbridge.zip.sig`.
+For each release, after the tag build uploads `passbridge.zip`: download it, then `node scripts/sign-release.ts sign passbridge.zip` (reads the key from the Keychain, writes `passbridge.zip.sig` and checks it against the pinned key; `--key <pem file>` uses a PEM file instead), then `gh release upload vX passbridge.zip.sig`.
 
 ### Automatic updates (Windows)
 
