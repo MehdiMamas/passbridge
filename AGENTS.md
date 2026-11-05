@@ -9,6 +9,9 @@ PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Ap
 - Browser tests (CI): `npx playwright install --with-deps chromium`, `node test-harness/automation/build-test-extensions.mjs`, `node test-harness/automation/run-all.mjs`.
 - macOS helper install: `sh native/install.sh` (Windows scripts are in `native/windows`).
 
+## End-to-end suite
+`node test-harness/automation/build-test-extensions.mjs`, then `xvfb-run -a node test-harness/automation/run-all.mjs` runs every browser driver, including `drive-e2e-*.mjs`: the real extension builds (`.builds/real-mac`, `.builds/real-win`) against a simulated Apple helper (`test-harness/fake-apple-helper`) and the agent relay. No Apple account, no person. Use `node`, never `npx`; on WSL run `env -u WAYLAND_DISPLAY xvfb-run -a ...`. `drive-e2e-auth.mjs` takes about two minutes (it waits out an unanswered approval). Details: `test-harness/automation/README.md`.
+
 ## Where things live
 - `src/`: extension code (`background.js`, `content.js`, `menu.js`, `autofill/`, `apple/`, `ui/`, `update/`, popup/options pages).
 - `overlay/`: save and TOTP bar pages. `native/`: Python helper agent and install scripts. `manifest.json`: extension manifest (its key fixes the extension id).
