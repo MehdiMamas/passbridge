@@ -129,5 +129,5 @@ function SavePrompt() {
 }
 
 void applyDocumentLanguage(document);
-createRoot(document.getElementById("root")).render(<SavePrompt />);
+createRoot(/** @type {HTMLElement} */ (document.getElementById("root"))).render(<SavePrompt />);
 

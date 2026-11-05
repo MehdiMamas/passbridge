@@ -115,7 +115,7 @@ export function createMockClient(kind) {
         listeners.forEach((fn) => fn(client.state));
         return;
       }
-      const err = new Error("Incorrect code");
+      const err = /** @type {Error & { code?: string }} */ (new Error("Incorrect code"));
       err.code = "challenge_reissued";
       client.hasChallenge = true;
       client.state = "needs_pin";

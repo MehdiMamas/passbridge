@@ -52,7 +52,9 @@ export function substitute(message, subs) {
   });
 }
 
+/** @type {string | null} */
 let locale = null;
+/** @type {Promise<string> | null} */
 let pending = null;
 
 /** @param {string} next @returns {void} */

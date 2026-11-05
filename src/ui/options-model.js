@@ -37,6 +37,7 @@ export function passkeyImportSummary(results) {
   return { total: results.length, saved: count("saved"), exists: count("exists"), skipped: count("skipped"), failed: count("failed") };
 }
 
+/** @type {Record<HelperState, RowState>} */
 const ROW_STATE = { checking: "checking", present: "ready", missing: "locked" };
 
 /**

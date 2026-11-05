@@ -16,6 +16,7 @@ export function parseSetupInput(raw, fallbackLabel = "") {
 }
 
 // relabels the setup link with the login the user chose, keeping the secret and its other parameters
+/** @param {string} uri @param {{ username?: string, issuer?: string }} [account] */
 export function withAccount(uri, { username, issuer } = {}) {
   const secret = otpAuthSecret(uri);
   if (!secret) return null;

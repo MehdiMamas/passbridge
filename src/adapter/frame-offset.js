@@ -12,6 +12,7 @@ export function frameOffsetFromWindow(win) {
   let w = win;
   let known = true;
   while (w && w !== w.top) {
+    /** @type {Element | null} */
     let fe = null;
     try {
       fe = depth < MAX_SUB_FRAME_DEPTH ? w.frameElement : null;

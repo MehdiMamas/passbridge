@@ -19,7 +19,7 @@ function bitwardenCredentialId(id) {
   if (id.startsWith("b64.")) return id.slice(4) || null;
   const hex = id.replace(/-/g, "");
   if (!/^[0-9a-fA-F]{32}$/.test(hex) || id.length !== 36) return null;
-  return b64u(Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16)));
+  return b64u(Uint8Array.from(/** @type {RegExpMatchArray} */ (hex.match(/../g)), (h) => parseInt(h, 16)));
 }
 
 const label = (rpId, userName) => [rpId || "(no site)", userName].filter(Boolean).join(" · ");
@@ -38,6 +38,7 @@ async function toRecord(f, out) {
 }
 
 export async function parseBitwarden(data) {
+  /** @type {{ records: any[], skipped: { label: string, reason: string }[] }} */
   const out = { records: [], skipped: [] };
   if (data.encrypted) {
     out.skipped.push({ label: "(whole file)", reason: "encrypted export; export as unencrypted .json" });

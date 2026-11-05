@@ -311,4 +311,4 @@ function setPrivacy(name, on, setRow, storageKey) {
 
 followTheme();
 void applyDocumentLanguage(document, "settingsTitle");
-createRoot(document.getElementById("root")).render(<OptionsApp />);
+createRoot(/** @type {HTMLElement} */ (document.getElementById("root"))).render(<OptionsApp />);
