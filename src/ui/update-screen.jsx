@@ -14,6 +14,7 @@ const STEPS = [
 ];
 
 
+/** @param {{ step?: string }} props */
 function Steps({ step }) {
   const at = STEPS.findIndex(([id]) => id === step);
   return (
@@ -34,6 +35,7 @@ function Steps({ step }) {
   );
 }
 
+/** @param {{ value: number }} props */
 function Progress({ value }) {
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
@@ -43,6 +45,13 @@ function Progress({ value }) {
   );
 }
 
+/**
+ * @param {{
+ *   phase: string, installed: string, expected: string, release?: { version?: string, pageUrl?: string, zipUrl?: string, sigUrl?: string, digest?: string, size?: number } | null, folderName?: string, step?: string,
+ *   progress: number, error?: { message: string, restored: boolean } | null, onUpdate: () => any, onChangeFolder: () => any, onRetry: () => any,
+ *   onRestore: () => any, helperUrl?: string, native?: boolean, onNoHelper: () => any,
+ * }} props
+ */
 export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, helperUrl, native, onNoHelper }) {
   const working = phase === "working";
   return (

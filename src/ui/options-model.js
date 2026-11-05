@@ -33,6 +33,7 @@ export function passkeysView(isWindows) {
  * @param {{ label: string, status: string }[]} results
  */
 export function passkeyImportSummary(results) {
+  /** @param {string} s */
   const count = (s) => results.filter((r) => r.status === s).length;
   return { total: results.length, saved: count("saved"), exists: count("exists"), skipped: count("skipped"), failed: count("failed") };
 }
@@ -65,6 +66,7 @@ export function tabFromHash(hash) {
  */
 export function helperView({ helpers, isWindows, canCheckForUpdates, relay }) {
   const anchors = isWindows ? SETUP_ANCHORS.windows : SETUP_ANCHORS.mac;
+  /** @param {HelperState} state @param {"browser" | "agents" | "updates"} tab */
   const notice = (state, tab) => (state === "missing" ? { text: t("helperNotice"), href: `${SETUP_URL}#${anchors[tab]}` } : null);
   return {
     rows: {
@@ -80,7 +82,12 @@ export function helperView({ helpers, isWindows, canCheckForUpdates, relay }) {
   };
 }
 
-/** True when enough time has passed since the last helper check to run another. */
+/**
+ * True when enough time has passed since the last helper check to run another.
+ * @param {number} lastMs
+ * @param {number} nowMs
+ * @param {number} [minGapMs]
+ */
 export function shouldRecheck(lastMs, nowMs, minGapMs = 5000) {
   return nowMs - lastMs >= minGapMs;
 }

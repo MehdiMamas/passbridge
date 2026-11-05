@@ -10,6 +10,7 @@ export function useLocale() {
     resolveLocale().then((l) => {
       if (!dead) setLocale(l);
     });
+    /** @param {Record<string, chrome.storage.StorageChange>} changes @param {string} area */
     const onChange = (changes, area) => {
       if (area === "sync" && changes.uiLanguage) {
         invalidateLocale();
