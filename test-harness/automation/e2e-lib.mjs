@@ -1,13 +1,14 @@
 // plumbing for the e2e drivers: the real extension build for one platform, a simulated Apple helper that the browser
 // reaches through a native-messaging host, and a throwaway folder for the agent relay
 
-import { mkdtemp, rm } from "fs/promises";
+import { mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { FakeHelper, seedVault } from "../fake-apple-helper/helper.mjs";
 import { serveHelper } from "../fake-apple-helper/serve.mjs";
 import { HERE, build, clickMenu, launchExtension, onCleanup, typeInMenu } from "./lib.mjs";
 
+export const AGENT_CLI = join(HERE, "..", "..", "native", "passbridge-agent-cli.py");
 export const PLATFORMS = ["mac", "win"];
 const HOST = join(HERE, "..", "fake-apple-helper", "host.mjs");
 const AGENT = join(HERE, "..", "..", "native", "passbridge-agent.py");
@@ -19,7 +20,12 @@ export async function startE2E(platform, { agent = false, vault } = {}) {
   const sock = await serveHelper(helper, join(dir, "helper.sock"));
   const appDir = join(dir, "agent");
   const hosts = { "com.apple.passwordmanager": HOST };
-  if (agent) hosts["com.passbridge.agent"] = AGENT;
+  if (agent) {
+    // the relay is not an executable file in the repo, so the browser starts it through a small launcher
+    const launcher = join(dir, "agent-host.sh");
+    await writeFile(launcher, `#!/bin/sh\nexec python3 -I "${AGENT}"\n`);
+    hosts["com.passbridge.agent"] = launcher;
+  }
   const ctx = await launchExtension(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`), {
     hosts,
     env: { PB_FAKE_HELPER_SOCK: sock.sockPath, PASSBRIDGE_APPDIR: appDir },
