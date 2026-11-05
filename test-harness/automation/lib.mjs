@@ -41,11 +41,14 @@ const open = [];
 
 // openpw.test is the cross-origin host; map it so no hosts-file entry is needed
 export async function launchExtension(ext) {
+  // under WSLg Chrome would draw to the Wayland display instead of the virtual X one, get no frames, and every Playwright click would wait for "stable" until it timed out
+  const { WAYLAND_DISPLAY: _wayland, ...env } = process.env;
   const profile = await mkdtemp(join(tmpdir(), "pb-"));
   const entry = { profile, ctx: null };
   open.push(entry);
   entry.ctx = await chromium.launchPersistentContext(profile, {
     headless: false,
+    env,
     locale: "en-US",
     args: [
       `--disable-extensions-except=${ext}`,

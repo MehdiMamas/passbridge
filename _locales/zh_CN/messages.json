@@ -137,6 +137,7 @@
   "clipboardClear": { "message": "自动清除剪贴板" },
   "clipboardHelp": { "message": "在此时间后清除 PassBridge 复制的任何内容（密码、用户名、验证码）。Windows 剪贴板历史和剪贴板应用会保留它们自己的副本。" },
   "clearMru": { "message": "清除最近使用的顺序" },
+  "clearMruHelp": { "message": "忘记你在每个网站上最后使用的登录，建议将恢复为默认顺序。" },
   "clearMruDone": { "message": "已清除" },
   "clear10s": { "message": "10 秒" },
   "clear20s": { "message": "20 秒" },
