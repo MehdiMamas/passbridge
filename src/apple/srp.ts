@@ -14,7 +14,7 @@ import {
   bytesToBase64,
   utf8ToBytes,
   concatBytes,
-} from "./crypto.js";
+} from "./crypto.ts";
 
 // RFC 5054 appendix A 3072-bit group, one wrong digit silently breaks interop with the helper
 const GROUP_PRIME = BigInt(
@@ -41,6 +41,14 @@ export const MSGType = {
 };
 
 export class SRPSession {
+  shouldUseBase64: boolean;
+  usernameBytes: Uint8Array;
+  username: string;
+  clientPrivateKey: bigint;
+  serverPublicKey: bigint | undefined;
+  salt: Uint8Array | undefined;
+  sharedKey: bigint | undefined;
+
   constructor(shouldUseBase64 = false) {
     this.shouldUseBase64 = !!shouldUseBase64;
     this.usernameBytes = randomBytes(16);
@@ -61,32 +69,21 @@ export class SRPSession {
   }
 
   get serverPublicKeyBytes() {
-    return bigIntToBytes(/** @type {bigint} */ (this.serverPublicKey));
+    return bigIntToBytes(this.serverPublicKey as bigint);
   }
 
-  /**
-   * @param {Uint8Array} bytes
-   * @param {boolean} [prefix]
-   */
-  serialize(bytes, prefix = true) {
+  serialize(bytes: Uint8Array, prefix: boolean = true) {
     if (this.shouldUseBase64) return bytesToBase64(bytes);
     return (prefix ? "0x" : "") + bytesToHex(bytes);
   }
 
-  /**
-   * @param {string} str
-   */
-  deserialize(str) {
+  deserialize(str: string) {
     if (this.shouldUseBase64) return base64ToBytes(str);
     return hexToBytes(str.replace(/^0x/, ""));
   }
 
   // salt stays raw bytes, a bigint round trip drops a leading zero and looks like a wrong PIN
-  /**
-   * @param {bigint} serverPublicKey
-   * @param {Uint8Array} saltBytes
-   */
-  setServerPublicKey(serverPublicKey, saltBytes) {
+  setServerPublicKey(serverPublicKey: bigint, saltBytes: Uint8Array) {
     if (serverPublicKey <= 0n || serverPublicKey >= GROUP_PRIME)
       throw new Error("invalid server public key: out of range");
     if (mod(serverPublicKey, GROUP_PRIME) === 0n) throw new Error("invalid server public key");
@@ -95,10 +92,7 @@ export class SRPSession {
     this.salt = saltBytes;
   }
 
-  /**
-   * @param {string} pin
-   */
-  async setSharedKey(pin) {
+  async setSharedKey(pin: string) {
     if (this.serverPublicKey === undefined) throw new Error("missing server public key");
     if (this.salt === undefined) throw new Error("missing salt");
 
@@ -132,18 +126,15 @@ export class SRPSession {
     return await sha256(
       xored,
       hI,
-      /** @type {Uint8Array} */ (this.salt),
+      (this.salt as Uint8Array),
       this.clientPublicKeyBytes,
       this.serverPublicKeyBytes,
       padBytes(bigIntToBytes(this.sharedKey), 32),
     );
   }
 
-  /**
-   * @param {Uint8Array} m
-   */
-  async computeHMAC(m) {
-    return await sha256(this.clientPublicKeyBytes, m, padBytes(bigIntToBytes(/** @type {bigint} */ (this.sharedKey)), 32));
+  async computeHMAC(m: Uint8Array) {
+    return await sha256(this.clientPublicKeyBytes, m, padBytes(bigIntToBytes(this.sharedKey as bigint), 32));
   }
 
   async getEncryptionKey() {
@@ -154,10 +145,7 @@ export class SRPSession {
   }
 
   // ciphertext+tag || iv, matches Apple's SecretSession.encrypt concat(ciphertext, iv)
-  /**
-   * @param {unknown} obj
-   */
-  async encrypt(obj) {
+  async encrypt(obj: unknown) {
     const key = await this.getEncryptionKey();
     if (!key) throw new Error("missing encryption key");
     const iv = randomBytes(16);
@@ -167,10 +155,7 @@ export class SRPSession {
   }
 
   // inbound is iv || ciphertext+tag, asymmetric with encrypt() on purpose
-  /**
-   * @param {Uint8Array} bytes
-   */
-  async decrypt(bytes) {
+  async decrypt(bytes: Uint8Array) {
     const key = await this.getEncryptionKey();
     if (!key) throw new Error("missing encryption key");
     const iv = bytes.slice(0, 16);

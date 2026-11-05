@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
-import { RECEIVER_READY } from "../passkeys/receiver.js";
+import { RECEIVER_READY } from "../passkeys/receiver.ts";
 import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
 
 

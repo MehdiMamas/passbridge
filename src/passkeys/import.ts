@@ -2,10 +2,9 @@
 // Credential Exchange JSON (accounts[].items[].credentials[] with type "passkey").
 // Returns { records, skipped: [{ label, reason }] }. Only P-256 (ES256) keys can be kept.
 
-import { b64u, makeRecord, unb64u } from "./record.js";
+import { b64u, makeRecord, unb64u } from "./record.ts";
 
-/** @param {string} keyB64u */
-async function p256Key(keyB64u) {
+async function p256Key(keyB64u: string) {
   try {
     const key = await crypto.subtle.importKey("pkcs8", unb64u(keyB64u), { name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
     return b64u(await crypto.subtle.exportKey("pkcs8", key));
@@ -15,30 +14,19 @@ async function p256Key(keyB64u) {
 }
 
 // A Bitwarden credential id is a GUID, or "b64." plus base64url of the raw id.
-/** @param {unknown} id */
-function bitwardenCredentialId(id) {
+function bitwardenCredentialId(id: unknown) {
   if (typeof id !== "string") return null;
   if (id.startsWith("b64.")) return id.slice(4) || null;
   const hex = id.replace(/-/g, "");
   if (!/^[0-9a-fA-F]{32}$/.test(hex) || id.length !== 36) return null;
-  return b64u(Uint8Array.from(/** @type {RegExpMatchArray} */ (hex.match(/../g)), (h) => parseInt(h, 16)));
+  return b64u(Uint8Array.from((hex.match(/../g) as RegExpMatchArray), (h) => parseInt(h, 16)));
 }
 
-/**
- * @param {string | undefined} rpId
- * @param {string | undefined} userName
- */
-const label = (rpId, userName) => [rpId || "(no site)", userName].filter(Boolean).join(" · ");
+const label = (rpId: string | undefined, userName: string | undefined) => [rpId || "(no site)", userName].filter(Boolean).join(" · ");
 
-/**
- * @typedef {{ records: any[], skipped: { label: string, reason: string }[] }} ParseResult
- */
+export type ParseResult = { records: any[], skipped: { label: string, reason: string }[] };
 
-/**
- * @param {{ rpId?: string, userName?: string, userHandle?: string, keyValue?: string, keyAlgorithm?: string, keyCurve?: string, credentialId?: string | null }} f
- * @param {ParseResult} out
- */
-async function toRecord(f, out) {
+async function toRecord(f: { rpId?: string, userName?: string, userHandle?: string, keyValue?: string, keyAlgorithm?: string, keyCurve?: string, credentialId?: string | null }, out: ParseResult) {
   const name = label(f.rpId, f.userName);
   if (!f.rpId) return out.skipped.push({ label: name, reason: "missing site (rpId)" });
   if (!f.credentialId) return out.skipped.push({ label: name, reason: "missing or invalid credential id" });
@@ -52,12 +40,10 @@ async function toRecord(f, out) {
 }
 
 /**
- * @param {any} data parsed JSON from the export file
- * @returns {Promise<ParseResult>}
+ * @param data parsed JSON from the export file
  */
-export async function parseBitwarden(data) {
-  /** @type {{ records: any[], skipped: { label: string, reason: string }[] }} */
-  const out = { records: [], skipped: [] };
+export async function parseBitwarden(data: any): Promise<ParseResult> {
+  const out: { records: any[], skipped: { label: string, reason: string }[] } = { records: [], skipped: [] };
   if (data.encrypted) {
     out.skipped.push({ label: "(whole file)", reason: "encrypted export; export as unencrypted .json" });
     return out;
@@ -74,12 +60,10 @@ export async function parseBitwarden(data) {
 }
 
 /**
- * @param {any} data parsed JSON from the export file
- * @returns {Promise<ParseResult>}
+ * @param data parsed JSON from the export file
  */
-export async function parseCxf(data) {
-  /** @type {ParseResult} */
-  const out = { records: [], skipped: [] };
+export async function parseCxf(data: any): Promise<ParseResult> {
+  const out: ParseResult = { records: [], skipped: [] };
   for (const account of data.accounts || []) {
     for (const item of account?.items || []) {
       for (const c of item?.credentials || []) {
@@ -93,9 +77,8 @@ export async function parseCxf(data) {
 
 /**
  * Parse the text of an export file. Throws an Error with a plain message when it is not a known format.
- * @param {string} text
  */
-export async function parseExport(text) {
+export async function parseExport(text: string) {
   let data;
   try {
     data = JSON.parse(text);

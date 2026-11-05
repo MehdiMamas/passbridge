@@ -1,8 +1,8 @@
 // alarm keep-alive holds the MV3 worker so the PIN isnt re-prompted every idle-out
 
-import { State, setDeviceLabel } from "./apple/protocol.js";
+import { State, setDeviceLabel } from "./apple/protocol.ts";
 import { createClient } from "./session/create-client.js";
-import { labelForOs, uiDeviceLabel } from "./apple/os-label.js";
+import { labelForOs, uiDeviceLabel } from "./apple/os-label.ts";
 import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
@@ -24,11 +24,11 @@ import { reinjectContentScripts } from "./reload-recovery.js";
 import { loginAction, menuItems } from "./menu.js";
 import { confirmLoginAdded, countLogins, useNewLoginSheet } from "./session/add-login-check.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
-import { ALL_SITES_SETTING, PASSKEY_SETTING, STAY_UNLOCKED_SETTING, createPasskeyProxy } from "./passkeys/proxy.js";
+import { ALL_SITES_SETTING, PASSKEY_SETTING, STAY_UNLOCKED_SETTING, createPasskeyProxy } from "./passkeys/proxy.ts";
 import { MOCK_KIND } from "./session/mock-kind.js";
 import { TEST_PLATFORM } from "./session/test-platform.js";
-import { isPasskeyLogin } from "./passkeys/record.js";
-import { savePasskey } from "./passkeys/store.js";
+import { isPasskeyLogin } from "./passkeys/record.ts";
+import { savePasskey } from "./passkeys/store.ts";
 
 // menu titles and the errors sent back to the pages follow the UI language
 void resolveLocale();

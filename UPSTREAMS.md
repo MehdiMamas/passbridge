@@ -6,7 +6,7 @@ PassBridge is three layers. Each upstream is pinned. `npm run sync -- <name> [co
 |---|---|---|---|
 | `bitwarden` | `bitwarden/clients` | Field-name lists and the autofill reference snapshot | `src/content.js` imports `AutoFillConstants` from the pinned snapshot. The menu, fill pacing, and site fixes stay in `src/content.js` (`patches/site-fixes.md`). |
 | `au2001` | `au2001/icloud-passwords-firefox` | Apple helper protocol (SRP, crypto, API) | `src/apple/` |
-| `open-passwords` | `ManiForoughi2/open-passwords` | The original Chrome protocol client | `src/apple/protocol.js` |
+| `open-passwords` | `ManiForoughi2/open-passwords` | The original Chrome protocol client | `src/apple/protocol.ts` |
 
 Pins live in `vendor/<name>/PINNED`. The mirrors under `vendor/` are the diff baseline, not a second runtime. Nothing from `bitwarden_license/` is included. The Bitwarden name and logo are not used.
 
@@ -25,7 +25,7 @@ The content bundle after this change is 70,020 bytes (17,496 gzip), against a ba
 ## When something breaks
 
 - Bitwarden changes detection: `npm run sync -- bitwarden <commit>`. Read the diff. If `autofill-constants.ts` changed, rebuild and run the harness, then `--accept`.
-- A new macOS or iCloud for Windows breaks pairing or login lookup, and au2001 or open-passwords has the fix: `npm run sync -- au2001 <commit>` (or `open-passwords`). Update `src/apple/` only where the command shape changed. `src/apple/protocol.js` is the client the background talks to.
+- A new macOS or iCloud for Windows breaks pairing or login lookup, and au2001 or open-passwords has the fix: `npm run sync -- au2001 <commit>` (or `open-passwords`). Update `src/apple/` only where the command shape changed. `src/apple/protocol.ts` is the client the background talks to.
 - The popup needs a new capability: add the message to `src/background.js` first. The React UI in `src/ui/` only renders what the background answers.
 
 ## Parity

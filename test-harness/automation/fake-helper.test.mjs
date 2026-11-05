@@ -1,4 +1,4 @@
-// The fake Apple helper (test-harness/fake-apple-helper) against the real src/apple/protocol.js, in process,
+// The fake Apple helper (test-harness/fake-apple-helper) against the real src/apple/protocol.ts, in process,
 // in both reply styles: pairing, a wrong code, every command, Touch ID outcomes, relogin. The win style is also
 // checked against the replies recorded from iCloud for Windows (test-harness/fixtures/windows).
 
@@ -19,7 +19,7 @@ const FIX = new URL("../fixtures/windows/", import.meta.url);
 const fixture = (name) => JSON.parse(readFileSync(new URL(`${name}.json`, FIX), "utf8"));
 const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
 const keys = (o) => Object.keys(o).sort().join(",");
-const { bytesToUtf8 } = await import(new URL("crypto.js", SRC));
+const { bytesToUtf8 } = await import(new URL("crypto.ts", SRC));
 
 // a port wired straight to the helper, remembering every reply
 function setup(style, opts) {
@@ -43,7 +43,7 @@ function setup(style, opts) {
 
 async function pairedClient(style, opts) {
   const env = setup(style, opts);
-  const { ApplePasswords } = await import(new URL(`protocol.js?fake=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
   const client = new ApplePasswords();
   await client.connect();
   await client.requestChallenge();
@@ -65,7 +65,7 @@ for (const style of ["mac", "win"]) {
   const t = (name) => `${style}: ${name}`;
   {
     const env = setup(style);
-    const { ApplePasswords } = await import(new URL(`protocol.js?fake=${Math.random()}`, SRC));
+    const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
     const client = new ApplePasswords();
     await client.connect();
     ok(t("capabilities say codes can be filled"), client.canFillOneTimeCodes === true && client.canSetUpTotp === true);
@@ -133,7 +133,7 @@ for (const style of ["mac", "win"]) {
 
   {
     const env = setup(style);
-    const { ApplePasswords } = await import(new URL(`protocol.js?fake=${Math.random()}`, SRC));
+    const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
     const client = new ApplePasswords();
     env.helper.setState("disabled");
     const e = await err(client.connect());
@@ -162,7 +162,7 @@ for (const style of ["mac", "win"]) {
   ok("win: code entries have the recorded keys", keys(otp.Entries[0]) === keys(fixture("otp").Entries[0]), keys(otp.Entries[0]));
 
   const bad = setup("win");
-  const { ApplePasswords } = await import(new URL(`protocol.js?fake=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
   const c2 = new ApplePasswords();
   await c2.connect();
   await c2.requestChallenge();

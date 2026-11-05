@@ -1,4 +1,4 @@
-import { AutoFillConstants } from "./autofill/hints.js";
+import { AutoFillConstants } from "./autofill/hints.ts";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { isBareCodeOtp } from "./otp-field.js";
 import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.js";

@@ -13,7 +13,7 @@ You need:
 - macOS 14 (Sonoma) or later
 - Signed into iCloud, with Passwords turned on
 - Google Chrome
-- [Node.js](https://nodejs.org/) 20 or newer (to build)
+- [Node.js](https://nodejs.org/) 22.18 or newer (to build)
 - Git
 
 ```bash
@@ -110,7 +110,7 @@ You need:
 
 - [iCloud for Windows](https://apps.microsoft.com/detail/9pktq5699m62) installed, with Passwords turned on
 - Google Chrome
-- [Node.js](https://nodejs.org/) 20 or newer
+- [Node.js](https://nodejs.org/) 22.18 or newer
 - Git
 
 In Git Bash or PowerShell:

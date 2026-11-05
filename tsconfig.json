@@ -17,6 +17,8 @@
       "chrome"
     ],
     "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "checkJs": true,
     "noImplicitAny": true,
     "useUnknownInCatchVariables": false

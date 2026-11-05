@@ -5,7 +5,7 @@
 import { createServer } from "http";
 import { BASE, main, ok } from "./lib.mjs";
 import { pairFromMenu, startE2E } from "./e2e-lib.mjs";
-import { b64u, makeRecord } from "../../src/passkeys/record.js";
+import { b64u, makeRecord } from "../../src/passkeys/record.ts";
 
 const PAGE = `<!doctype html><meta charset=utf-8><body><pre id=o></pre><script>
 const u=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return Uint8Array.from(atob(s),c=>c.charCodeAt(0));};

@@ -1,4 +1,4 @@
-import { ApplePasswords } from "../apple/protocol.js";
+import { ApplePasswords } from "../apple/protocol.ts";
 import { createMockClient } from "./mock-client.js";
 import { MOCK_KIND } from "./mock-kind.js";
 

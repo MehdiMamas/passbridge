@@ -9,8 +9,8 @@ Upstream client (Apache-2.0):
   https://github.com/ManiForoughi2/open-passwords
   Copyright 2026 the Open Passwords contributors
 
-Protocol implementation in src/apple/srp.js, src/apple/crypto.js, and
-src/apple/protocol.js, derived from:
+Protocol implementation in src/apple/srp.ts, src/apple/crypto.ts, and
+src/apple/protocol.ts, derived from:
   icloud-passwords-firefox
   https://github.com/au2001/icloud-passwords-firefox
   Copyright (c) au2001, licensed under the Apache License, Version 2.0.

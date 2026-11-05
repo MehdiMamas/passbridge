@@ -50,7 +50,7 @@ function replayHost(verifyName) {
 
 async function challenged(verifyName) {
   replayHost(verifyName);
-  const { ApplePasswords } = await import(new URL(`protocol.js?fixtures=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(new URL(`protocol.ts?fixtures=${Math.random()}`, SRC));
   const client = new ApplePasswords();
   await client.connect();
   await client.requestChallenge();
@@ -59,7 +59,7 @@ async function challenged(verifyName) {
 
 async function unlockedWith(reply) {
   const client = await challenged("verify-ok");
-  const { State } = await import(new URL("protocol.js", SRC));
+  const { State } = await import(new URL("protocol.ts", SRC));
   client.state = State.Unlocked;
   client.session.sharedKey = new Uint8Array(32);
   client._encryptedQuery = async () => reply;

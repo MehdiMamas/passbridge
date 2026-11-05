@@ -55,7 +55,7 @@ A client-hello (`m0`) was accepted. The server hello PAKE fields were:
 
 | Field | Type on the wire | Notes |
 |---|---|---|
-| `MSG` | string `"1"` | macOS sends a number. `protocol.js` already compares with `.toString()` |
+| `MSG` | string `"1"` | macOS sends a number. `protocol.ts` already compares with `.toString()` |
 | `PROTO` | number `1` | |
 | `VER` | string `"1.0"` | |
 | `B`, `s` | hex strings with a `0x` prefix | `shouldUseBase64` was absent, so hex is correct |
