@@ -2,39 +2,45 @@ import { listOtpEntries, matchSyncedTotp } from "../../src/session/otp-list.js";
 import { watchState } from "../../src/ui/totp-watch.js";
 
 let failed = 0;
+/** @param {string} name @param {unknown} cond */
 function ok(name, cond) {
   if (!cond) failed++;
   console.log(`${cond ? "ok  " : "FAIL"} ${name}`);
 }
 
+/** @param {string} username @param {string} [domain] */
 const totp = (username, domain = "google.com") => ({ source: "totp", username, domain, code: "000000" });
+/** @param {string} username */
 const pw = (username) => ({ source: "password", username, domain: "google.com" });
 
 // stub helper: main list rows, login names by host, cmd 17 rows by username
+/** @param {{ list?: any[], names?: Record<string, string[]>, reads?: Record<string, any[]> }} opts */
 function stub({ list = [], names = {}, reads = {} }) {
+  /** @type {{ reads: number, namesFor: string[] }} */
   const calls = { reads: 0, namesFor: [] };
   return {
     calls,
     getOneTimeCodes: async () => ({ entries: list, requiresAuth: false }),
-    getLoginNamesForURL: async (_t, url) => {
+    getLoginNamesForURL: async (/** @type {unknown} */ _t, /** @type {string} */ url) => {
       const h = new URL(url).hostname;
       calls.namesFor.push(h);
       return (names[h] || []).map((username) => ({ username }));
     },
-    readOneTimeCode: async (_t, _f, _u, username) => {
+    readOneTimeCode: async (/** @type {unknown} */ _t, /** @type {unknown} */ _f, /** @type {unknown} */ _u, /** @type {string} */ username) => {
       calls.reads++;
       return reads[username] || [];
     },
   };
 }
+/** @param {Record<string, unknown>} [extra] */
 const args = (extra = {}) => ({ tabId: 1, frameId: 0, frameUrls: ["https://accounts.google.com/signin"], platform: "win", ...extra });
 
 {
   // a: main list has only non-totp rows, fallback must still run
   const c = stub({ list: [pw("me@x.com")], names: { "accounts.google.com": ["me@x.com"] }, reads: { "me@x.com": [totp("me@x.com")] } });
   const { entries } = await listOtpEntries(c, args());
-  ok("a: non-totp rows only still runs the fallback", entries.some((e) => e.source === "totp"));
-  ok("a: password row kept", entries.some((e) => e.source === "password"));
+  ok("a: non-totp rows only still runs the fallback", entries.some((/** @type {{ source?: string }} */ e) => e.source === "totp"));
+  ok("a: password row kept", entries.some((/** @type {{ source?: string }} */ e) => e.source === "password"));
 }
 {
   // b: different username forms
@@ -69,7 +75,7 @@ const args = (extra = {}) => ({ tabId: 1, frameId: 0, frameUrls: ["https://accou
   ok("reads capped at 8 logins", c2.calls.reads === 8);
   const dup = stub({ list: [pw("me@x.com")], names: { "accounts.google.com": ["me@x.com"] }, reads: { "me@x.com": [totp("me@x.com"), totp("me@x.com")] } });
   const d = await listOtpEntries(dup, args());
-  ok("merge has no duplicates", d.entries.filter((e) => e.source === "totp").length === 1);
+  ok("merge has no duplicates", d.entries.filter((/** @type {{ source?: string }} */ e) => e.source === "totp").length === 1);
 }
 {
   const c = stub({ names: { "accounts.google.com": ["me@x.com"] }, reads: { "me@x.com": [totp("me@x.com")] } });

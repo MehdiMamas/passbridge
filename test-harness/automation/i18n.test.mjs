@@ -5,7 +5,8 @@ import { menuItems } from "../../src/menu.js";
 import { SETTINGS_DEFAULTS } from "../../src/settings.js";
 
 let failed = 0;
-function ok(name, cond) {
+/** @param {string} name @param {unknown} cond @param {string} [_detail] */
+function ok(name, cond, _detail) {
   console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
   if (!cond) failed++;
 }
@@ -48,7 +49,7 @@ ok("t: zh_CN placeholder filled", !t("menuFillName", ["ada@example.com"]).includ
 const zhCat = JSON.parse(readFileSync(new URL("../../_locales/zh_CN/messages.json", import.meta.url), "utf8"));
 const translated = Object.keys(zhCat).filter((k) => zhCat[k].message !== en[k].message).length;
 ok("zh_CN: most messages are actually translated", translated >= Object.keys(en).length * 0.9, `${translated}/${Object.keys(en).length}`);
-setLocale(null);
+setLocale(/** @type {any} */ (null));
 ok("t: unresolved locale falls back to en", t("unlock") === "Unlock");
 
 // manifest wiring
@@ -69,10 +70,10 @@ ok("settings: uiLanguage default follows the system", SETTINGS_DEFAULTS.uiLangua
 setLocale("en");
 const items = menuItems({ ready: true, onSite: true, logins: [{ username: "ada@example.com" }], hasCode: true });
 ok("menu: ids unchanged", items.some((i) => i.id === "pb-root") && items.some((i) => i.id === "pb-fill-0"));
-ok("menu: titles come from the catalog", items.find((i) => i.id === "pb-root").title === "PassBridge" && items.find((i) => i.id === "pb-copy-username" || i.id === "pb-user-0")?.title === "Copy username");
-ok("menu: fill title carries the username", items.find((i) => i.id === "pb-fill-0").title === "Fill ada@example.com");
+ok("menu: titles come from the catalog", /** @type {any} */ (items.find((i) => i.id === "pb-root")).title === "PassBridge" && items.find((i) => i.id === "pb-copy-username" || i.id === "pb-user-0")?.title === "Copy username");
+ok("menu: fill title carries the username", /** @type {any} */ (items.find((i) => i.id === "pb-fill-0")).title === "Fill ada@example.com");
 const none = menuItems({ ready: true, onSite: true, logins: [], hasCode: false });
-ok("menu: empty site shows the greyed note", none.find((i) => i.id === "pb-none").title === "No saved logins for this site" && none.find((i) => i.id === "pb-none").enabled === false);
+ok("menu: empty site shows the greyed note", /** @type {any} */ (none.find((i) => i.id === "pb-none")).title === "No saved logins for this site" && /** @type {any} */ (none.find((i) => i.id === "pb-none")).enabled === false);
 
 // icon-click empty row key exists in every locale
 for (const locale of SUPPORTED_LOCALES) {
