@@ -53,10 +53,11 @@ window.wrongOrigin=async function(){
 
 await main(async () => {
   const web = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(PAGE));
-  await new Promise((r) => web.listen(0, "127.0.0.1", r));
-  const port = web.address().port;
+  await new Promise((r) => web.listen(0, "127.0.0.1", () => r(undefined)));
+  const port = /** @type {import("net").AddressInfo} */ (web.address()).port;
   try {
-    const { ctx, helper } = await startE2E("win");
+    const { ctx: rawCtx, helper  } = await startE2E("win");
+    const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
     if (!(await sw.evaluate(() => typeof chrome.webAuthenticationProxy?.attach === "function"))) {
       ok("passkeys: SKIPPED, this browser has no chrome.webAuthenticationProxy API", true);
@@ -107,10 +108,10 @@ await main(async () => {
     await page.bringToFront();
     await page.waitForTimeout(2000);
     const prompts = helper.authPrompts;
-    const r = await page.evaluate(() => window.run("seed.localhost"));
+    const r = await page.evaluate(() => /** @type {any} */ (window).run("seed.localhost"));
     ok("win: create and two gets answered from the helper", r.create === "ok" && r.createOrigin === true && r.gets?.length === 2 && r.gets.every(Boolean), JSON.stringify(r));
     ok("win: reading the passkey went through the helper's approval", helper.authPrompts > prompts, `${prompts} -> ${helper.authPrompts}`);
-    const wrong = await page.evaluate(() => window.wrongOrigin());
+    const wrong = await page.evaluate(() => /** @type {any} */ (window).wrongOrigin());
     ok("win: another site's rp id is refused", /SecurityError|NotAllowedError/.test(wrong), wrong);
   } finally {
     web.closeAllConnections?.();

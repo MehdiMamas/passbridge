@@ -6,15 +6,16 @@ import { PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.mjs";
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (n) => `${platform}: ${n}`;
-    const { ctx, helper } = await startE2E(platform);
+    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
+    const { ctx: rawCtx, helper  } = await startE2E(platform);
+    const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
     const login = await ctx.newPage();
     await login.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
     await login.waitForTimeout(300);
     ok(t("paired"), await pairFromMenu(login, helper));
     await login.close();
 
-    const open = async (path, field) => {
+    const open = async (/** @type {string} */ path, /** @type {string} */ field) => {
       const page = await ctx.newPage();
       await page.goto(`${BASE}/${path}`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(300);

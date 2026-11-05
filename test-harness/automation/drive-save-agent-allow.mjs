@@ -5,21 +5,21 @@ await main(async () => {
   const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const sw = ctx.serviceWorkers()[0];
   const host = new URL(BASE).hostname;
-  const setup = (settings) =>
+  const setup = (/** @type {Record<string, unknown>} */ settings) =>
     sw.evaluate(async (s) => {
       await chrome.storage.sync.set(s);
     }, { agentAllowlist: ["github.com"], ...settings });
   const list = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowlist").then((o) => o.agentAllowlist));
-  const barOf = async (page) => {
+  const barOf = async (/** @type {import("playwright-core").Page} */ page) => {
     for (let i = 0; i < 40; i++) {
-      const f = page.frames().find((fr) => fr.url().includes("overlay/save-bar.html"));
+      const f = page.frames().find((/** @type {import("playwright-core").Frame} */ fr) => fr.url().includes("overlay/save-bar.html"));
       if (f && (await f.locator("[data-field=password]").count())) return f;
       await page.waitForTimeout(150);
     }
     return null;
   };
   // a create-account page; generated = pick the menu's Strong Password, else type the same one twice
-  const signup = async (page, generated) => {
+  const signup = async (/** @type {import("playwright-core").Page} */ page, /** @type {string} */ generated) => {
     await page.goto(`${BASE}/signup.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(400);
     await page.fill("#email", "new@example.org");

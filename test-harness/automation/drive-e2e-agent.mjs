@@ -9,7 +9,7 @@ import { BASE, main, ok } from "./lib.mjs";
 import { seedVault } from "../fake-apple-helper/helper.mjs";
 import { AGENT_CLI, PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.mjs";
 
-const cli = (appDir, ...args) =>
+const cli = (/** @type {string} */ appDir, /** @type {string[]} */ ...args) =>
   new Promise((resolve) => {
     execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir }, timeout: 110000 }, (err, stdout) => {
       try {
@@ -29,8 +29,9 @@ const vault = () => {
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (n) => `${platform}: ${n}`;
-    const { ctx, helper, appDir } = await startE2E(platform, { agent: true, vault: vault() });
+    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
+    const { ctx: rawCtx, helper, appDir  } = await startE2E(platform, /** @type {{ agent?: boolean }} */ ({ agent: true, vault: vault() }));
+    const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent("serviceworker", { timeout: 10000 }));
     const page = await ctx.newPage();
     await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });

@@ -15,9 +15,10 @@ const vault = () => {
   return v;
 };
 
-async function run(platform) {
-  const t = (n) => `${platform}: ${n}`;
-  const { ctx, helper } = await startE2E(platform, { vault: vault() });
+async function run(/** @type {string} */ platform) {
+  const t = (/** @type {string} */ n) => `${platform}: ${n}`;
+  const { ctx: rawCtx, helper  } = await startE2E(platform, /** @type {{ agent?: boolean }} */ ({ vault: vault() }));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
   const url = `${BASE}/login-standard.html`;
   const fresh = async () => {
     const page = await ctx.newPage();
@@ -27,7 +28,7 @@ async function run(platform) {
     await page.waitForTimeout(900);
     return page;
   };
-  const pw = (page) => page.inputValue('input[name="password"]');
+  const pw = (/** @type {import("playwright-core").Page} */ page) => page.inputValue('input[name="password"]');
 
   const first = await ctx.newPage();
   await first.goto(url, { waitUntil: "domcontentloaded" });

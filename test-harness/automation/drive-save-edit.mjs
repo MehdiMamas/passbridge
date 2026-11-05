@@ -4,15 +4,15 @@ import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 await main(async () => {
   const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const sw = ctx.serviceWorkers()[0];
-  const barOf = async (page) => {
+  const barOf = async (/** @type {import("playwright-core").Page} */ page) => {
     for (let i = 0; i < 40; i++) {
-      const f = page.frames().find((fr) => fr.url().includes("overlay/save-bar.html"));
+      const f = page.frames().find((/** @type {import("playwright-core").Frame} */ fr) => fr.url().includes("overlay/save-bar.html"));
       if (f && (await f.locator("[data-field=password]").count())) return f;
       await page.waitForTimeout(150);
     }
     return null;
   };
-  const submit = async (page, user, pass) => {
+  const submit = async (/** @type {import("playwright-core").Page} */ page, /** @type {string} */ user, /** @type {string} */ pass) => {
     await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(400);
     await page.fill("input[name=username]", user);
@@ -40,7 +40,7 @@ await main(async () => {
   ok("page username field unchanged by typing in the bar", (await page.inputValue("input[name=username]")) === "alice@example.org");
   await bar.locator("[data-action=save]").click();
   await page.waitForTimeout(500);
-  const saved = await sw.evaluate(() => globalThis.__mockSaved || []);
+  const saved = await sw.evaluate(() => /** @type {any} */ (globalThis).__mockSaved || []);
   ok("Save stores the edited username and the password", saved.length === 1 && saved[0].username === "bob@example.org" && saved[0].password === "hunter2-pw", JSON.stringify(saved));
   ok("prompt closes after Save", !page.frames().some((fr) => fr.url().includes("overlay/save-bar.html")));
 
@@ -57,6 +57,6 @@ await main(async () => {
   ok("Save stays enabled with an empty username", await bar2.locator("[data-action=save]").isEnabled());
   await bar2.locator("[data-action=save]").click();
   await page2.waitForTimeout(500);
-  const saved2 = await sw.evaluate(() => globalThis.__mockSaved || []);
+  const saved2 = await sw.evaluate(() => /** @type {any} */ (globalThis).__mockSaved || []);
   ok("empty username saves with the password", saved2.length === 2 && saved2[1].username === "" && saved2[1].password === "another-pw1", JSON.stringify(saved2));
 });

@@ -8,11 +8,12 @@ import { PLATFORMS, startE2E } from "./e2e-lib.mjs";
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (n) => `${platform}: ${n}`;
+    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
     const bundle = await readFile(join(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`), "src", "background.js"), "utf8");
     ok(t("the build holds no mock fixture data"), !bundle.includes("test@example.com"));
 
-    const { ctx, helper } = await startE2E(platform);
+    const { ctx: rawCtx, helper  } = await startE2E(platform);
+    const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (rawCtx));
     const page = await ctx.newPage();
     await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(300);

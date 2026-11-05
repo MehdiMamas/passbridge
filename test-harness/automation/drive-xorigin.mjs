@@ -42,7 +42,7 @@ await main(async () => {
   await user.focus();
   await top.waitForTimeout(500);
   const sw = ctx.serviceWorkers()[0];
-  const send = (extra) =>
+  const send = (/** @type {string} */ extra) =>
     sw.evaluate(
       async ({ url, extra }) => {
         const tab = (await chrome.tabs.query({})).find((t) => t.url?.startsWith(url));

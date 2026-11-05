@@ -29,7 +29,7 @@ const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el) {
   const matches = (rule) => {
-    const isOwnMatch = !!rule.selectorText?.includes(":hover") && rule.selectorText.split(/(?<!\\),/).some((sel) => {
+    const isOwnMatch = !!rule.selectorText?.includes(":hover") && rule.selectorText.split(/(?<!\\),/).some((/** @type {string} */ sel) => {
       try {
         return el.matches(sel.replace(/(?<!\\):hover/g, ""));
       } catch {
@@ -42,12 +42,12 @@ function hasHoverRule(el) {
 }
 
 function contrastWithBackground(el) {
-  const rgb = (c) => {
+  const rgb = (/** @type {string} */ c) => {
     const n = c.match(/[\d.]+/g).map(Number);
-    return c.startsWith("color(") ? n.slice(0, 3).map((v) => v * 255) : n.slice(0, 3);
+    return c.startsWith("color(") ? n.slice(0, 3).map((/** @type {string} */ v) => v * 255) : n.slice(0, 3);
   };
-  const lum = (c) => {
-    const [r, g, b] = rgb(c).map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+  const lum = (/** @type {string} */ c) => {
+    const [r, g, b] = rgb(c).map((/** @type {string} */ v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
   let parent = el.parentElement;
@@ -68,8 +68,8 @@ await main(async () => {
 
   const page = await ctx.newPage();
   await page.setViewportSize({ width: 1400, height: 700 });
-  const row = (label) => page.locator(`[data-row="${label}"]`);
-  const showsHeading = (p, text) => p.locator("main h1", { hasText: text }).waitFor({ timeout: 3000 }).then(() => true, () => false);
+  const row = (/** @type {string} */ label) => page.locator(`[data-row="${label}"]`);
+  const showsHeading = (/** @type {string} */ p, /** @type {string} */ text) => p.locator("main h1", { hasText: text }).waitFor({ timeout: 3000 }).then(() => true, () => false);
   await page.goto(optionsUrl);
   await page.locator("main h1").waitFor();
 
@@ -212,7 +212,7 @@ await main(async () => {
   }
 
   const themed = await ctx.newPage();
-  const scheme = (p) => p.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+  const scheme = (/** @type {string} */ p) => p.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   await themed.goto(`${optionsUrl}#appearance`);
   await themed.locator("main h1", { hasText: "Appearance" }).waitFor();
   const themeRow = themed.locator('[data-row="Theme"]');
@@ -235,7 +235,7 @@ await main(async () => {
   await sw.evaluate(() => chrome.storage.sync.set({ theme: "dark" }));
   const site = await ctx.newPage();
   site.on("dialog", (d) => d.dismiss().catch(() => {}));
-  const frameOf = async (path) => {
+  const frameOf = async (/** @type {string} */ path) => {
     for (let i = 0; i < 40; i++) {
       const f = site.frames().find((fr) => fr.url().includes(path));
       if (f) {
@@ -246,7 +246,7 @@ await main(async () => {
     }
     return null;
   };
-  const frameSchemes = async (f) => ({
+  const frameSchemes = async (/** @type {import("playwright-core").Frame} */ f) => ({
     page: await f.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
     element: await (await f.frameElement()).evaluate((el) => getComputedStyle(el).colorScheme),
   });
@@ -284,7 +284,7 @@ await main(async () => {
       setTimeout(() => cb(msg.action === "get" ? { ok: true, hidden: false } : { ok: true, hidden: false, needsApproval: true }), 0);
     };
   });
-  const helpedRow = (label) => helped.locator(`[data-row="${label}"]`);
+  const helpedRow = (/** @type {string} */ label) => helped.locator(`[data-row="${label}"]`);
   const allowedSites = () => helpedRow("Allowed sites").locator("textarea");
   const savedAllowlist = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowlist").then((o) => (o.agentAllowlist || []).join()));
 
