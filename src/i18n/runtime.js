@@ -9,6 +9,8 @@ import zhCN from "../../_locales/zh_CN/messages.json" with { type: "json" };
 import zhTW from "../../_locales/zh_TW/messages.json" with { type: "json" };
 import { settingsStore } from "../settings.js";
 
+/** @typedef {Record<string, Record<string, { message: string }>>} CatalogMap */
+
 export const CATALOGS = { en, zh_CN: zhCN, zh_TW: zhTW };
 export const SUPPORTED_LOCALES = Object.keys(CATALOGS);
 export const DEFAULT_LOCALE = "en";
@@ -28,7 +30,7 @@ export const LOCALE_NAMES = {
 export function normalizeLocale(raw) {
   if (!raw) return null;
   const s = String(raw).trim().replace(/[- ]/g, "_");
-  if (CATALOGS[s]) return s;
+  if (/** @type {CatalogMap} */ (CATALOGS)[s]) return s;
   const lower = s.toLowerCase();
   for (const key of SUPPORTED_LOCALES) if (key.toLowerCase() === lower) return key;
   const base = lower.split("_")[0];
@@ -59,7 +61,7 @@ let pending = null;
 
 /** @param {string} next @returns {void} */
 export function setLocale(next) {
-  locale = CATALOGS[next] ? next : null;
+  locale = /** @type {CatalogMap} */ (CATALOGS)[next] ? next : null;
 }
 
 /** drop the cache so resolveLocale() picks up a changed setting @returns {void} */
@@ -113,8 +115,9 @@ export function resolveLocale() {
  * @returns {string}
  */
 export function t(key, subs) {
-  const catalog = CATALOGS[locale] || CATALOGS[DEFAULT_LOCALE];
-  const entry = catalog[key] || CATALOGS[DEFAULT_LOCALE][key];
+  const catalogs = /** @type {CatalogMap} */ (CATALOGS);
+  const catalog = (locale && catalogs[locale]) || catalogs[DEFAULT_LOCALE];
+  const entry = catalog[key] || catalogs[DEFAULT_LOCALE][key];
   if (!entry?.message) return key;
   return subs ? substitute(entry.message, subs) : entry.message;
 }

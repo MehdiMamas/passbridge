@@ -1,5 +1,6 @@
 // the MAIN-world guard cant read chrome.storage, so relay hidePasskeys via a window event
 (() => {
+  /** @param {boolean} on */
   const push = (on) =>
     dispatchEvent(new Event(on ? "passbridge:hide-passkeys-on" : "passbridge:hide-passkeys-off"));
   chrome.storage?.sync?.get({ hidePasskeys: false }, (d) => push(!!d.hidePasskeys));

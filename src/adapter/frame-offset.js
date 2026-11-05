@@ -5,6 +5,7 @@
 
 export const MAX_SUB_FRAME_DEPTH = 8;
 
+/** @param {Window} win */
 export function frameOffsetFromWindow(win) {
   let x = 0;
   let y = 0;

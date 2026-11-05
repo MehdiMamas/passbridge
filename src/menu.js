@@ -29,7 +29,8 @@ export function menuItems({ ready, onSite = true, logins, hasCode, hasGenerated 
   } else if (logins.length) {
     logins.forEach((login, i) => {
       add({ id: `pb-acct-${i}`, title: login.username || t("menuNoUsername") });
-      const sub = (props) => items.push({ parentId: `pb-acct-${i}`, contexts: ON_PAGE, ...props });
+      /** @param {{ id: string, title?: string }} props */
+      const sub = (props) => items.push(/** @type {chrome.contextMenus.CreateProperties} */ ({ parentId: `pb-acct-${i}`, contexts: ON_PAGE, ...props }));
       sub({ id: `pb-fill-${i}`, title: t("menuFill") });
       if (login.username) sub({ id: `pb-user-${i}`, title: t("menuCopyUsername") });
       sub({ id: `pb-pass-${i}`, title: t("menuCopyPassword") });
@@ -51,10 +52,11 @@ export function menuItems({ ready, onSite = true, logins, hasCode, hasGenerated 
 }
 
 /** @returns {{ action: string, index: number } | null} "pb-pass-2" → { action: "pass", index: 2 } */
-export function loginAction(menuItemId) {
+export function loginAction(/** @type {unknown} */ menuItemId) {
   const m = /^pb-(fill|user|pass)-(\d+)$/.exec(String(menuItemId));
   return m ? { action: m[1], index: Number(m[2]) } : null;
 }
+/** @param {any} msg message payload; shape varies per action */
 export function send(msg) {
   return new Promise((resolve) => {
     if (!globalThis.chrome?.runtime?.sendMessage) {
