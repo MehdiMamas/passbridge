@@ -27,7 +27,8 @@ const BROWSER_ROWS = [
 const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allowed sites", "Activity"];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
-function hasHoverRule(el) {
+function hasHoverRule(/** @type {Element} */ el) {
+  /** @type {(rule: any) => boolean} */
   const matches = (rule) => {
     const isOwnMatch = !!rule.selectorText?.includes(":hover") && rule.selectorText.split(/(?<!\\),/).some((/** @type {string} */ sel) => {
       try {
@@ -41,17 +42,17 @@ function hasHoverRule(el) {
   return [...document.styleSheets].some((sheet) => [...sheet.cssRules].some(matches));
 }
 
-function contrastWithBackground(el) {
+function contrastWithBackground(/** @type {Element} */ el) {
   const rgb = (/** @type {string} */ c) => {
-    const n = c.match(/[\d.]+/g).map(Number);
-    return c.startsWith("color(") ? n.slice(0, 3).map((/** @type {string} */ v) => v * 255) : n.slice(0, 3);
+    const n = /** @type {RegExpMatchArray} */ (c.match(/[\d.]+/g)).map(Number);
+    return c.startsWith("color(") ? n.slice(0, 3).map((/** @type {number} */ v) => v * 255) : n.slice(0, 3);
   };
   const lum = (/** @type {string} */ c) => {
-    const [r, g, b] = rgb(c).map((/** @type {string} */ v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+    const [r, g, b] = rgb(c).map((/** @type {number} */ v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
   let parent = el.parentElement;
-  let bg = getComputedStyle(parent).backgroundColor;
+  let bg = getComputedStyle(/** @type {Element} */ (parent)).backgroundColor;
   while (parent && /^rgba\(0, 0, 0, 0\)$|transparent/.test(bg)) {
     parent = parent.parentElement;
     bg = parent ? getComputedStyle(parent).backgroundColor : "rgb(255, 255, 255)";
@@ -69,7 +70,7 @@ await main(async () => {
   const page = await ctx.newPage();
   await page.setViewportSize({ width: 1400, height: 700 });
   const row = (/** @type {string} */ label) => page.locator(`[data-row="${label}"]`);
-  const showsHeading = (/** @type {string} */ p, /** @type {string} */ text) => p.locator("main h1", { hasText: text }).waitFor({ timeout: 3000 }).then(() => true, () => false);
+  const showsHeading = (/** @type {import("playwright-core").Page} */ p, /** @type {string} */ text) => p.locator("main h1", { hasText: text }).waitFor({ timeout: 3000 }).then(() => true, () => false);
   await page.goto(optionsUrl);
   await page.locator("main h1").waitFor();
 
@@ -82,8 +83,8 @@ await main(async () => {
   ok("options: every autofill row has a help line", helps.length === AUTOFILL_ROWS.length && helps.every((t) => t.trim()), `helps=${helps.length}`);
 
   const box = await page.evaluate(() => {
-    const left = document.querySelector("aside").getBoundingClientRect().left;
-    const right = document.querySelector("main").getBoundingClientRect().right;
+    const left = /** @type {Element} */ (document.querySelector("aside")).getBoundingClientRect().left;
+    const right = /** @type {Element} */ (document.querySelector("main")).getBoundingClientRect().right;
     return { left, right: document.documentElement.clientWidth - right, width: right - left };
   });
   ok("options: the page is a centered card, not full width", Math.abs(box.left - box.right) <= 2 && box.width <= 960, JSON.stringify(box));
@@ -111,7 +112,7 @@ await main(async () => {
   ok("options: a tab link moves the hash", (await showsHeading(page, "Appearance")) && new URL(page.url()).hash === "#appearance", page.url());
   await row("Fill animation").locator('[role="switch"]').click();
   await page.waitForTimeout(900);
-  const saved = await sw.evaluate(() => chrome.storage.sync.get(["showAnimations", "excludedDomains"]));
+  const saved = await sw.evaluate(() => chrome.storage.sync.get(["showAnimations", "excludedDomains"]).then((o) => /** @type {{ showAnimations?: boolean, excludedDomains?: string[] }} */ (o)));
   ok("options: a switch saves to sync", saved.showAnimations === false, JSON.stringify(saved));
   ok("options: a list saves its cleaned domains to sync", (saved.excludedDomains || []).join() === "bank.example", JSON.stringify(saved));
   await page.goBack();
@@ -149,14 +150,14 @@ await main(async () => {
   }, longHost);
   await page.locator('[data-row="Activity"] table').waitFor();
   const activity = await row("Activity").evaluate((el, host) => {
-    const box = el.querySelector("table").parentElement;
-    const resultHead = [...el.querySelectorAll("th")].pop();
-    const rows = [...el.querySelectorAll("tbody tr")];
+    const box = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (el.querySelector("table")).parentElement);
+    const resultHead = /** @type {HTMLElement} */ ([...el.querySelectorAll("th")].pop());
+    const rows = /** @type {HTMLTableRowElement[]} */ ([...el.querySelectorAll("tbody tr")]);
     return {
       rows: rows.length,
       boxHeight: box.clientHeight,
       isBoxScrolling: box.scrollHeight > box.clientHeight,
-      isHeadSticky: getComputedStyle(resultHead).position === "sticky" || getComputedStyle(resultHead.parentElement.parentElement).position === "sticky",
+      isHeadSticky: getComputedStyle(resultHead).position === "sticky" || getComputedStyle(/** @type {HTMLElement} */ (/** @type {HTMLElement} */ (resultHead.parentElement).parentElement)).position === "sticky",
       isResultInView: resultHead.getBoundingClientRect().right <= box.getBoundingClientRect().right + 1,
       tallestRow: Math.max(...rows.map((r) => r.getBoundingClientRect().height)),
       firstTime: rows[0].cells[0].textContent,
@@ -192,7 +193,7 @@ await main(async () => {
   const pending = await ctx.newPage();
   await pending.addInitScript(() => {
     const send = chrome.runtime.sendNativeMessage.bind(chrome.runtime);
-    chrome.runtime.sendNativeMessage = (host, msg, cb) => (host === "com.passbridge.policy" ? undefined : send(host, msg, cb));
+    chrome.runtime.sendNativeMessage = /** @type {any} */ ((/** @type {string} */ host, /** @type {object} */ msg, /** @type {(response: any) => void} */ cb) => (host === "com.passbridge.policy" ? undefined : send(host, msg, cb)));
   });
   await pending.goto(optionsUrl);
   await pending.locator("main h1").waitFor();
@@ -206,13 +207,13 @@ await main(async () => {
     await page.locator("main h1").waitFor();
     const narrow = await page.evaluate(() => ({
       isFlat: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-      navDir: getComputedStyle(document.querySelector("nav ul")).flexDirection,
+      navDir: getComputedStyle(/** @type {Element} */ (document.querySelector("nav ul"))).flexDirection,
     }));
     ok(`options: narrow ${id} keeps the tabs on top with no sideways scroll`, narrow.isFlat && narrow.navDir === "row", JSON.stringify(narrow));
   }
 
   const themed = await ctx.newPage();
-  const scheme = (/** @type {string} */ p) => p.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+  const scheme = (/** @type {import("playwright-core").Page} */ p) => p.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   await themed.goto(`${optionsUrl}#appearance`);
   await themed.locator("main h1", { hasText: "Appearance" }).waitFor();
   const themeRow = themed.locator('[data-row="Theme"]');
@@ -248,7 +249,7 @@ await main(async () => {
   };
   const frameSchemes = async (/** @type {import("playwright-core").Frame} */ f) => ({
     page: await f.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
-    element: await (await f.frameElement()).evaluate((el) => getComputedStyle(el).colorScheme),
+    element: await (await f.frameElement()).evaluate((/** @type {Element} */ el) => getComputedStyle(el).colorScheme),
   });
   await site.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   await site.waitForTimeout(400);
@@ -268,7 +269,7 @@ await main(async () => {
 
   await sw.evaluate(async () => {
     const tab = (await chrome.tabs.query({})).find((t) => t.url?.includes("/login-standard.html"));
-    await chrome.tabs.sendMessage(tab.id, { type: "showTotpBar", mode: "error", error: "Theme check." }, { frameId: 0 });
+    await chrome.tabs.sendMessage(/** @type {number} */ (/** @type {chrome.tabs.Tab} */ (tab).id), { type: "showTotpBar", mode: "error", error: "Theme check." }, { frameId: 0 });
   });
   const totpBar = await frameOf("overlay/totp-bar.html");
   const totpSchemes = totpBar ? await frameSchemes(totpBar) : null;
@@ -279,14 +280,14 @@ await main(async () => {
   const helped = await ctx.newPage();
   await helped.addInitScript(() => {
     const send = chrome.runtime.sendNativeMessage.bind(chrome.runtime);
-    chrome.runtime.sendNativeMessage = (host, msg, cb) => {
+    chrome.runtime.sendNativeMessage = /** @type {any} */ ((/** @type {string} */ host, /** @type {any} */ msg, /** @type {(response: any) => void} */ cb) => {
       if (host !== "com.passbridge.policy") return send(host, msg, cb);
       setTimeout(() => cb(msg.action === "get" ? { ok: true, hidden: false } : { ok: true, hidden: false, needsApproval: true }), 0);
-    };
+    });
   });
   const helpedRow = (/** @type {string} */ label) => helped.locator(`[data-row="${label}"]`);
   const allowedSites = () => helpedRow("Allowed sites").locator("textarea");
-  const savedAllowlist = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowlist").then((o) => (o.agentAllowlist || []).join()));
+  const savedAllowlist = () => sw.evaluate(() => chrome.storage.sync.get("agentAllowlist").then((o) => (/** @type {string[]} */ (o.agentAllowlist) || []).join()));
 
   await helped.goto(`${optionsUrl}#browser`);
   const policyRow = helpedRow("Hide the browser's password manager");
