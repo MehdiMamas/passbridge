@@ -9,23 +9,17 @@ import { serveHelper } from "../fake-apple-helper/serve.ts";
 import { HERE, build, clickMenu, launchExtension, onCleanup, typeInMenu } from "./lib.ts";
 
 export const AGENT_CLI = join(HERE, "..", "..", "native", "passbridge-agent-cli.py");
-/** @type {("mac" | "win")[]} */
-export const PLATFORMS = ["mac", "win"];
+export const PLATFORMS: ("mac" | "win")[] = ["mac", "win"];
 const HOST = join(HERE, "..", "fake-apple-helper", "host.ts");
 const AGENT = join(HERE, "..", "..", "native", "passbridge-agent.py");
 
 // platform: "mac" or "win". Returns the browser context, the helper and the folders it uses.
-/**
- * @param {"mac" | "win"} platform
- * @param {{ agent?: boolean, vault?: ReturnType<typeof seedVault> }} [opts]
- */
-export async function startE2E(platform, { agent = false, vault } = {}) {
+export async function startE2E(platform: "mac" | "win", { agent = false, vault }: { agent?: boolean, vault?: ReturnType<typeof seedVault> } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "pb-e2e-"));
   const helper = new FakeHelper({ style: platform, vault: vault ?? seedVault() });
   const sock = await serveHelper(helper, join(dir, "helper.sock"));
   const appDir = join(dir, "agent");
-  /** @type {Record<string, string>} */
-  const hosts = { "com.apple.passwordmanager": HOST };
+  const hosts: Record<string, string> = { "com.apple.passwordmanager": HOST };
   if (agent) {
     // the relay is not an executable file in the repo, so the browser starts it through a small launcher
     const launcher = join(dir, "agent-host.sh");
@@ -45,12 +39,7 @@ export async function startE2E(platform, { agent = false, vault } = {}) {
 }
 
 // pair from a login page's menu: click "Unlock to autofill", then type the code the helper is showing
-/**
- * @param {import("playwright").Page} page
- * @param {FakeHelper} helper
- * @param {string} [field]
- */
-export async function pairFromMenu(page, helper, field = 'input[name="username"]') {
+export async function pairFromMenu(page: import("playwright").Page, helper: FakeHelper, field: string = 'input[name="username"]') {
   await page.focus(field);
   await page.waitForTimeout(600);
   await clickMenu(page, "Unlock to autofill");

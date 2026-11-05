@@ -17,8 +17,7 @@ import { HERE, main, ok } from "./lib.ts";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const EXT = join(HERE, ".builds", "update-e2e");
 const manifest = JSON.parse(await readFile(join(HERE, "..", "..", "manifest.json"), "utf8"));
-/** @param {number} n */
-const v = (n) => `${manifest.version}.${n}`;
+const v = (n: number) => `${manifest.version}.${n}`;
 
 // the manifest key pins the id: the first 32 hex digits of its SHA-256, written with a-p
 const EXT_ID = [...createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest("hex").slice(0, 32)]
@@ -26,12 +25,7 @@ const EXT_ID = [...createHash("sha256").update(Buffer.from(manifest.key, "base64
   .join("");
 const UPDATE_PAGE = `chrome-extension://${EXT_ID}/src/update.html`;
 
-/**
- * @param {string} dir
- * @param {string} [prefix]
- * @returns {Promise<Map<string, string>>}
- */
-async function tree(dir, prefix = "") {
+async function tree(dir: string, prefix: string = ""): Promise<Map<string, string>> {
   const out = new Map();
   for (const ent of await readdir(dir, { withFileTypes: true })) {
     if (ent.name === ".DS_Store") continue;
@@ -42,8 +36,7 @@ async function tree(dir, prefix = "") {
   return out;
 }
 
-/** @param {string} dir @param {string} expectedDir */
-async function differences(dir, expectedDir) {
+async function differences(dir: string, expectedDir: string) {
   const [a, b] = await Promise.all([tree(dir), tree(expectedDir)]);
   return [...new Set([...a.keys(), ...b.keys()])].filter((k) => a.get(k) !== b.get(k));
 }
@@ -54,10 +47,9 @@ await main(async () => {
   const work = await mkdtemp(join(tmpdir(), "pb-update-e2e-"));
   const profile = join(work, "profile");
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  /** @type {any} */
-  let latest = null;
+  let latest: any = null;
   const server = createServer(async (req, res) => {
-    const path = new URL(/** @type {string} */ (req.url), "http://x").pathname;
+    const path = new URL((req.url as string), "http://x").pathname;
     const headers = { "cache-control": "no-store" };
     if (path === "/releases/latest") return latest ? res.writeHead(200, { ...headers, "content-type": "application/json" }).end(JSON.stringify(latest)) : res.writeHead(404).end();
     const file = /^\/dl\/(\d+)\/(passbridge\.zip(?:\.sig)?)$/.exec(path);
@@ -66,41 +58,34 @@ await main(async () => {
     res.writeHead(200, headers).end(body);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(undefined)));
-  const origin = `http://127.0.0.1:${/** @type {import("net").AddressInfo} */ (server.address()).port}`;
+  const origin = `http://127.0.0.1:${(server.address() as import("net").AddressInfo).port}`;
   // buildExtension types releaseSource as null, so this is cast
-  const releaseSource = /** @type {any} */ ({ latestUrl: `${origin}/releases/latest`, publicKey: publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("base64") });
+  const releaseSource = ({ latestUrl: `${origin}/releases/latest`, publicKey: publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("base64") } as any);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  /** @type {import("child_process").ChildProcess[]} */
-  const chromes = [];
-  /** @param {string} url */
-  const startChrome = (url) => {
+  const chromes: import("child_process").ChildProcess[] = [];
+  const startChrome = (url: string) => {
     const p = spawn(CHROME, [`--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", url], { detached: true, stdio: "ignore" });
     p.unref();
     chromes.push(p);
   };
-  /** @param {string} title @param {string[]} lines */
-  const step = async (title, lines) => {
+  const step = async (title: string, lines: string[]) => {
     console.log(`\n=== ${title} ===\n${lines.map((l) => `  - ${l}`).join("\n")}`);
     await rl.question("  Press Enter when done. ");
   };
-  /** @param {string} name @param {string} question */
-  const asked = async (name, question) => ok(name, (await rl.question(`  ${question} [y/n] `)).trim().toLowerCase().startsWith("y"));
+  const asked = async (name: string, question: string) => ok(name, (await rl.question(`  ${question} [y/n] `)).trim().toLowerCase().startsWith("y"));
 
-  /** @param {number} n */
-  const build = async (n) => {
+  const build = async (n: number) => {
     const out = join(work, "builds", String(n));
     await buildExtension({ out, mockKind: "unlocked", quiet: true, releaseSource, version: v(n) });
     return out;
   };
   // zip -r like release.yml; signature "bad" flips a bit, "none" leaves the .sig off the release
-  /** @param {number} n @param {string} dir @param {string} [signature] */
-  const publish = async (n, dir, signature = "good") => {
+  const publish = async (n: number, dir: string, signature: string = "good") => {
     const zipPath = join(work, "dl", String(n), "passbridge.zip");
     await mkdir(dirname(zipPath), { recursive: true });
     execFileSync("zip", ["-qr", zipPath, "."], { cwd: dir });
     const zip = await readFile(zipPath);
-    /** @param {string} name @param {object} extra */
-    const asset = (name, extra) => ({ name, browser_download_url: `${origin}/dl/${n}/${name}`, ...extra });
+    const asset = (name: string, extra: object) => ({ name, browser_download_url: `${origin}/dl/${n}/${name}`, ...extra });
     const assets = [asset("passbridge.zip", { size: zip.length, digest: `sha256:${createHash("sha256").update(zip).digest("hex")}` })];
     if (signature !== "none") {
       const sig = sign(null, zip, privateKey);
@@ -110,8 +95,7 @@ await main(async () => {
     }
     latest = { tag_name: `v${v(n)}`, html_url: `https://github.com/MehdiMamas/passbridge/releases/tag/v${v(n)}`, assets };
   };
-  /** @param {string} name @param {string} dir */
-  const folderIs = async (name, dir) => {
+  const folderIs = async (name: string, dir: string) => {
     const diff = await differences(EXT, dir);
     ok(name, diff.length === 0, diff.slice(0, 5).join(", "));
   };
@@ -120,8 +104,7 @@ await main(async () => {
     console.log("Building the installed version and five updates…");
     await buildExtension({ out: EXT, mockKind: "unlocked", quiet: true, releaseSource, version: v(0) });
     ok("the test build reads releases from the local server", (await readFile(join(EXT, "src", "update.js"), "utf8")).includes(releaseSource.latestUrl));
-    /** @type {Record<number, string>} */
-    const builds = {};
+    const builds: Record<number, string> = {};
     for (const n of [1, 2, 3, 4, 5]) builds[n] = await build(n);
     // round 2 drops a file and a folder and adds one
     await rm(join(builds[2], "NOTICE"));

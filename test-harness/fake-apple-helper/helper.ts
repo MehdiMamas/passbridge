@@ -22,10 +22,8 @@ export function seedVault() {
   };
 }
 
-/** @type {(site: string, host: string) => boolean} */
-const hostMatches = (site, host) => host === site || host.endsWith("." + site);
-/** @param {string} u */
-const hostOf = (u) => {
+const hostMatches: (site: string, host: string) => boolean = (site, host) => host === site || host.endsWith("." + site);
+const hostOf = (u: string) => {
   try {
     return new URL(u).hostname.toLowerCase();
   } catch {
@@ -33,11 +31,19 @@ const hostOf = (u) => {
   }
 };
 
-/** @typedef {{ send: (reply: any) => void, server: any, live: boolean, paired: boolean, username: string, closed: boolean }} Conn */
+type Conn = { send: (reply: any) => void, server: any, live: boolean, paired: boolean, username: string, closed: boolean };
 
 export class FakeHelper {
-  /** @param {{ style?: "mac" | "win", vault?: ReturnType<typeof seedVault> }} [opts] */
-  constructor({ style = "mac", vault = seedVault() } = {}) {
+  style: "mac" | "win";
+  vault: ReturnType<typeof seedVault>;
+  state: string;
+  auth: string;
+  authPrompts: number;
+  codesShown: string[];
+  saved: any[];
+  launched: any[];
+  conns: Set<Conn>;
+  constructor({ style = "mac", vault = seedVault() }: { style?: "mac" | "win", vault?: ReturnType<typeof seedVault> } = {}) {
     this.style = style;
     this.vault = vault;
     /** "ok", "relogin" (RELOGIN_NEEDED) or "disabled" (PASSWORDS_DISABLED) */
@@ -45,13 +51,9 @@ export class FakeHelper {
     /** what Touch ID / Windows Hello does for password and code reads: "approve", "deny" or "timeout" (never answers) */
     this.auth = "approve";
     this.authPrompts = 0;
-    /** @type {string[]} */
     this.codesShown = [];
-    /** @type {any[]} */
     this.saved = [];
-    /** @type {any[]} */
     this.launched = [];
-    /** @type {Set<Conn>} */
     this.conns = new Set();
   }
 
@@ -60,16 +62,12 @@ export class FakeHelper {
     return this.codesShown[this.codesShown.length - 1];
   }
 
-  /**
-   * a new browser connection; send(reply) delivers a reply to it, the return value takes its messages
-   * @param {(reply: any) => void} send
-   */
-  connect(send) {
-    /** @type {Conn} */
-    const conn = { send, server: null, live: false, paired: false, username: "", closed: false };
+  /** a new browser connection; send(reply) delivers a reply to it, the return value takes its messages */
+  connect(send: (reply: any) => void) {
+    const conn: Conn = { send, server: null, live: false, paired: false, username: "", closed: false };
     this.conns.add(conn);
     return {
-      receive: (/** @type {any} */ msg) => this._handle(conn, msg),
+      receive: (msg: any) => this._handle(conn, msg),
       close: () => {
         conn.closed = true;
         this.conns.delete(conn);
@@ -88,8 +86,7 @@ export class FakeHelper {
   }
 
   /** the helper asks to sign in again (relogin) or says Passwords is off (disabled); "ok" undoes it */
-  /** @param {"ok" | "relogin" | "disabled"} state */
-  setState(state) {
+  setState(state: "ok" | "relogin" | "disabled") {
     this.state = state;
     const cmd = state === "relogin" ? Cmd.RELOGIN_NEEDED : state === "disabled" ? Cmd.PASSWORDS_DISABLED : 0;
     if (cmd) for (const c of this.conns) c.send({ cmd });
@@ -104,24 +101,19 @@ export class FakeHelper {
   get win() {
     return this.style === "win";
   }
-  /** @param {number} n */
-  _msg(n) {
+  _msg(n: number) {
     return this.win ? String(n) : n;
   }
-  /** @param {any} obj */
-  _pake(obj) {
+  _pake(obj: any) {
     return Buffer.from(JSON.stringify(obj), "utf8").toString("base64");
   }
-  /** @param {string} s */
-  _unpake(s) {
+  _unpake(s: string) {
     return JSON.parse(Buffer.from(s, "base64").toString("utf8"));
   }
-  /** @param {Uint8Array} b */
-  _wire(b) {
+  _wire(b: Uint8Array) {
     return "0x" + Buffer.from(b).toString("hex");
   }
-  /** @param {string} s */
-  _unwire(s) {
+  _unwire(s: string) {
     return Buffer.from(String(s).replace(/^0x/, ""), "hex");
   }
 
@@ -133,8 +125,7 @@ export class FakeHelper {
   }
 
   // AES-128-GCM under the first half of K. In: ciphertext || tag || iv. Out: iv || ciphertext || tag.
-  /** @param {Conn} conn @param {string} sdata */
-  _open(conn, sdata) {
+  _open(conn: Conn, sdata: string) {
     const raw = this._unwire(sdata);
     const iv = raw.subarray(raw.length - 16);
     const tag = raw.subarray(raw.length - 32, raw.length - 16);
@@ -142,8 +133,7 @@ export class FakeHelper {
     d.setAuthTag(tag);
     return JSON.parse(Buffer.concat([d.update(raw.subarray(0, raw.length - 32)), d.final()]).toString("utf8"));
   }
-  /** @param {Conn} conn @param {any} obj */
-  _seal(conn, obj) {
+  _seal(conn: Conn, obj: any) {
     const iv = randomBytes(16);
     const c = createCipheriv("aes-128-gcm", conn.server.K.subarray(0, 16), iv);
     const ct = Buffer.concat([c.update(JSON.stringify({ TID: conn.username, ...obj }), "utf8"), c.final()]);
@@ -151,8 +141,7 @@ export class FakeHelper {
     return this.win ? JSON.stringify(smsg) : smsg;
   }
 
-  /** @param {Conn} conn @param {any} msg */
-  async _handle(conn, msg) {
+  async _handle(conn: Conn, msg: any) {
     if (conn.closed) return;
     switch (msg.cmd) {
       case Cmd.GET_CAPABILITIES:
@@ -173,10 +162,9 @@ export class FakeHelper {
     }
   }
 
-  /** @param {Conn} conn @param {any} msg */
-  _handshake(conn, msg) {
+  _handshake(conn: Conn, msg: any) {
     const pake = this._unpake(msg.msg.PAKE);
-    const reply = (/** @type {any} */ fields) => conn.send({ cmd: Cmd.HANDSHAKE, payload: { QID: msg.msg.QID, PAKE: this._pake({ TID: pake.TID, ...fields }) } });
+    const reply = (fields: any) => conn.send({ cmd: Cmd.HANDSHAKE, payload: { QID: msg.msg.QID, PAKE: this._pake({ TID: pake.TID, ...fields }) } });
     if (msg.msg.QID === "m0") {
       if (this.state === "relogin") return conn.send({ cmd: Cmd.RELOGIN_NEEDED });
       if (this.state === "disabled") return conn.send({ cmd: Cmd.PASSWORDS_DISABLED });
@@ -198,14 +186,13 @@ export class FakeHelper {
     return reply(this.win ? { ErrCode: 5 } : { MSG: 3, ErrCode: 1 });
   }
 
-  /** @param {Conn} conn @param {any} msg */
-  async _query(conn, msg) {
+  async _query(conn: Conn, msg: any) {
     if (!conn.paired) return; // not paired yet: the real helper stays silent
     const sent = JSON.parse(msg.payload.SMSG);
     if (sent.TID !== conn.username) return;
     const q = this._open(conn, sent.SDATA);
-    const answer = (/** @type {number} */ cmd, /** @type {any} */ obj) => conn.send({ cmd, payload: { SMSG: this._seal(conn, obj) } });
-    const entry = (/** @type {{ sites: string[], username: string, password: string }} */ l) => ({ HLD: l.sites[0] || "", customTitle: "", USR: l.username, PWD: l.password, ModDate: "", CDate: "", sites: l.sites, NOTES: "", TOTP: "0" });
+    const answer = (cmd: number, obj: any) => conn.send({ cmd, payload: { SMSG: this._seal(conn, obj) } });
+    const entry = (l: { sites: string[], username: string, password: string }) => ({ HLD: l.sites[0] || "", customTitle: "", USR: l.username, PWD: l.password, ModDate: "", CDate: "", sites: l.sites, NOTES: "", TOTP: "0" });
 
     if (msg.cmd === Cmd.SET_PASSWORD) {
       const host = q.NURL;
@@ -233,8 +220,7 @@ export class FakeHelper {
     }
 
     // codes: for the frames asked about, the rows whose domain is one of those hosts (or has none, like a text message)
-    /** @type {string[]} */
-    const hosts = (q.frameURLs || []).map(hostOf);
+    const hosts: string[] = (q.frameURLs || []).map(hostOf);
     let rows = this.vault.otps.filter((r) => !r.domain || hosts.some((h) => hostMatches(r.domain, h)));
     if (msg.cmd === Cmd.DID_FILL_OTP && q.username) rows = rows.filter((r) => r.username === q.username);
     const out = rows.map((r) => ({ ...r, duration: 22, period: 30 }));

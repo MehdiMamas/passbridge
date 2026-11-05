@@ -17,15 +17,10 @@ export const GROUP_3072 = {
   g: 5n,
 };
 
-/** @param {Uint8Array} buf */
-export const big = (buf) => (buf.length ? BigInt("0x" + Buffer.from(buf).toString("hex")) : 0n);
+export const big = (buf: Uint8Array) => (buf.length ? BigInt("0x" + Buffer.from(buf).toString("hex")) : 0n);
 
 // minimal big-endian, or left-padded with zeros to len
-/**
- * @param {bigint} n
- * @param {number} [len]
- */
-export function bytes(n, len = 0) {
+export function bytes(n: bigint, len: number = 0) {
   let h = n.toString(16);
   if (h.length % 2) h = "0" + h;
   const b = Buffer.from(h, "hex");
@@ -33,8 +28,7 @@ export function bytes(n, len = 0) {
   return len ? Buffer.concat([Buffer.alloc(len - b.length), b]) : b;
 }
 
-/** @param {bigint} base @param {bigint} exp @param {bigint} m */
-export function modPow(base, exp, m) {
+export function modPow(base: bigint, exp: bigint, m: bigint) {
   let r = 1n;
   base %= m;
   if (base < 0n) base += m;
@@ -46,19 +40,12 @@ export function modPow(base, exp, m) {
   return r;
 }
 
-/**
- * @param {{ N: bigint, g: bigint }} grp
- * @param {string} hash
- */
-export function group({ N, g }, hash) {
+export function group({ N, g }: { N: bigint, g: bigint }, hash: string) {
   const NB = bytes(N).length;
-  /** @param {...(Uint8Array | string)} parts */
-  const H = (...parts) => createHash(hash).update(Buffer.concat(parts.map((p) => Buffer.from(p)))).digest();
-  /** @param {bigint} n */
-  const PAD = (n) => bytes(n, NB);
+  const H = (...parts: (Uint8Array | string)[]) => createHash(hash).update(Buffer.concat(parts.map((p) => Buffer.from(p)))).digest();
+  const PAD = (n: bigint) => bytes(n, NB);
   const k = big(H(bytes(N), PAD(g)));
-  /** @type {(I: string, P: string, s: Uint8Array) => bigint} */
-  const x = (I, P, s) => big(H(s, H(Buffer.from(`${I}:${P}`, "utf8"))));
+  const x: (I: string, P: string, s: Uint8Array) => bigint = (I, P, s) => big(H(s, H(Buffer.from(`${I}:${P}`, "utf8"))));
   return {
     N,
     g,
@@ -66,25 +53,18 @@ export function group({ N, g }, hash) {
     PAD,
     k,
     x,
-    /** @type {(I: string, P: string, s: Uint8Array) => bigint} */
-    verifier: (I, P, s) => modPow(g, x(I, P, s), N),
-    /** @type {(a: bigint) => bigint} */
-    publicA: (a) => modPow(g, a, N),
-    /** @type {(b: bigint, v: bigint) => bigint} */
-    publicB: (b, v) => (k * v + modPow(g, b, N)) % N,
-    /** @type {(A: bigint, B: bigint) => bigint} */
-    u: (A, B) => big(H(PAD(A), PAD(B))),
-    /** @type {(a: bigint, B: bigint, xv: bigint, u: bigint) => bigint} */
-    clientS: (a, B, xv, u) => modPow((((B - k * modPow(g, xv, N)) % N) + N) % N, a + u * xv, N),
-    /** @type {(A: bigint, v: bigint, u: bigint, b: bigint) => bigint} */
-    serverS: (A, v, u, b) => modPow((A * modPow(v, u, N)) % N, b, N),
+    verifier: (I: string, P: string, s: Uint8Array): bigint => modPow(g, x(I, P, s), N),
+    publicA: (a: bigint): bigint => modPow(g, a, N),
+    publicB: (b: bigint, v: bigint): bigint => (k * v + modPow(g, b, N)) % N,
+    u: (A: bigint, B: bigint): bigint => big(H(PAD(A), PAD(B))),
+    clientS: (a: bigint, B: bigint, xv: bigint, u: bigint): bigint => modPow((((B - k * modPow(g, xv, N)) % N) + N) % N, a + u * xv, N),
+    serverS: (A: bigint, v: bigint, u: bigint, b: bigint): bigint => modPow((A * modPow(v, u, N)) % N, b, N),
   };
 }
 
 // Apple's variant over the 3072-bit group: K = H(S) as a 32-byte digest,
 // M = H(H(N) xor H(PAD(g)) | H(I) | s | A | B | K), HAMK = H(A | M | K), A and B minimal bytes.
-/** @param {{ username: string, pin: string, salt: Uint8Array, A: bigint, b: bigint }} opts */
-export function appleServer({ username, pin, salt, A, b }) {
+export function appleServer({ username, pin, salt, A, b }: { username: string, pin: string, salt: Uint8Array, A: bigint, b: bigint }) {
   const G = group(GROUP_3072, "sha256");
   const v = G.verifier(username, pin, salt);
   const B = G.publicB(b, v);

@@ -4,12 +4,10 @@
 import { createCipheriv, randomBytes, webcrypto } from "node:crypto";
 import { appleServer, big, bytes } from "./srp-reference.ts";
 
-if (!globalThis.crypto) globalThis.crypto = /** @type {any} */ (webcrypto);
+if (!globalThis.crypto) globalThis.crypto = (webcrypto as any);
 
-/** @type {{ name: string, cond: unknown }[]} */
-const results = [];
-/** @param {string} name @param {unknown} cond @param {string} [detail] */
-const ok = (name, cond, detail = "") => {
+const results: { name: string, cond: unknown }[] = [];
+const ok = (name: string, cond: unknown, detail: string = "") => {
   results.push({ name, cond });
   console.log(`${cond ? "PASS" : "FAIL"} ${name}${cond ? "" : " -> " + detail}`);
 };
@@ -18,46 +16,34 @@ const SRC = new URL("../../src/apple/", import.meta.url);
 
 // verify: "check" grades M, or forces a reply: { ErrCode, HAMK: "valid" | "forged" }
 // noMsg: the verify reply carries no MSG key (#116)
-/** @param {{ pin: string, salt: Uint8Array, verify?: "check" | { ErrCode: string, HAMK: string }, noMsg?: boolean }} opts */
-function makeWindowsHost({ pin, salt, verify = "check", noMsg = false }) {
-  /** @type {{ server: any, live: boolean, username: string }} */
-  const state = { server: null, live: false, username: "" };
+function makeWindowsHost({ pin, salt, verify = "check", noMsg = false }: { pin: string, salt: Uint8Array, verify?: "check" | { ErrCode: string, HAMK: string }, noMsg?: boolean }) {
+  const state: { server: any, live: boolean, username: string } = { server: null, live: false, username: "" };
   const port = {
-    onMessage: { addListener: (/** @type {(m: any) => void} */ fn) => port._listeners.push(fn) },
+    onMessage: { addListener: (fn: (m: any) => void) => port._listeners.push(fn) },
     onDisconnect: { addListener: () => {} },
-    /** @type {((m: any) => void)[]} */
-    _listeners: [],
+    _listeners: [] as ((m: any) => void)[],
     disconnect() {},
-    /** @param {any} msg */
-    postMessage(msg) {
+    postMessage(msg: any) {
       setTimeout(() => void handle(msg), 0);
     },
   };
-  /** @param {any} m */
-  const reply = (m) => port._listeners.forEach((fn) => fn(m));
-  /** @param {object} o */
-  const b64 = (o) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
-  /** @param {string} s */
-  const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
-  /** @param {Uint8Array} b */
-  const wire = (b) => "0x" + Buffer.from(b).toString("hex");
-  /** @param {string} s */
-  const unwire = (s) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
-  /** @param {any} pake @param {object} fields */
-  const verdict = (pake, fields) =>
+  const reply = (m: any) => port._listeners.forEach((fn) => fn(m));
+  const b64 = (o: object) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
+  const unb64 = (s: string) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
+  const wire = (b: Uint8Array) => "0x" + Buffer.from(b).toString("hex");
+  const unwire = (s: string) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
+  const verdict = (pake: any, fields: object) =>
     reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, ...(noMsg ? {} : { MSG: "3" }), ...fields }) } });
 
   // AES-128-GCM under the first half of K, sent as iv || ciphertext || tag
-  /** @param {object} obj */
-  function encryptReply(obj) {
+  function encryptReply(obj: object) {
     const iv = randomBytes(16);
     const c = createCipheriv("aes-128-gcm", state.server.K.subarray(0, 16), iv);
     const ct = Buffer.concat([c.update(JSON.stringify(obj), "utf8"), c.final()]);
     return Buffer.concat([iv, ct, c.getAuthTag()]);
   }
 
-  /** @param {any} msg */
-  async function handle(msg) {
+  async function handle(msg: any) {
     if (msg.cmd === 14) {
       return reply({
         cmd: 14,
@@ -107,7 +93,7 @@ function makeWindowsHost({ pin, salt, verify = "check", noMsg = false }) {
     return verdict(pake, { ErrCode: "0", HAMK: wire(state.server.HAMK) });
   }
 
-  globalThis.chrome = /** @type {any} */ ({ runtime: { connectNative: () => port, lastError: undefined } });
+  globalThis.chrome = ({ runtime: { connectNative: () => port, lastError: undefined } } as any);
   return state;
 }
 
@@ -117,21 +103,18 @@ const plainSalt = () => {
   return s;
 };
 
-/** @param {{ verify?: "check" | { ErrCode: string, HAMK: string }, noMsg?: boolean }} [opts] */
-async function freshClient(opts) {
+async function freshClient(opts?: { verify?: "check" | { ErrCode: string, HAMK: string }, noMsg?: boolean }) {
   makeWindowsHost({ pin: "123456", salt: plainSalt(), ...opts });
-  const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?windows=${Math.random()}`, SRC)));
+  const { ApplePasswords } = await import((new URL(`protocol.ts?windows=${Math.random()}`, SRC) as any));
   const client = new ApplePasswords();
   await client.connect();
   await client.requestChallenge();
   return client;
 }
 
-/** @param {any} client @param {string} pin */
-async function verify(client, pin) {
-  /** @type {any} */
-  let err = null;
-  await client.verifyPin(pin).catch((/** @type {unknown} */ e) => (err = e));
+async function verify(client: any, pin: string) {
+  let err: any = null;
+  await client.verifyPin(pin).catch((e: unknown) => (err = e));
   return err;
 }
 
@@ -145,8 +128,7 @@ async function verify(client, pin) {
   ok("string MSG and string ErrCode still unlock", client.state === "unlocked" && !err, String(err?.message));
 
   let names = null;
-  /** @type {any} */
-  let listErr = null;
+  let listErr: any = null;
   try {
     names = await client.getLoginNamesForURL(1, "https://example.com/login");
   } catch (e) {

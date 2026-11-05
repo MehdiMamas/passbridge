@@ -5,17 +5,12 @@
 import { createServer } from "node:net";
 import { rm } from "node:fs/promises";
 
-/**
- * @param {import("./helper.ts").FakeHelper} helper
- * @param {string} sockPath
- */
-export async function serveHelper(helper, sockPath) {
+export async function serveHelper(helper: import("./helper.ts").FakeHelper, sockPath: string) {
   await rm(sockPath, { force: true });
-  /** @type {Set<import("node:net").Socket>} */
-  const sockets = new Set();
+  const sockets: Set<import("node:net").Socket> = new Set();
   const server = createServer((socket) => {
     sockets.add(socket);
-    const link = helper.connect((/** @type {unknown} */ reply) => {
+    const link = helper.connect((reply: unknown) => {
       if (!socket.destroyed) socket.write(JSON.stringify({ reply }) + "\n");
     });
     let buf = "";

@@ -3,23 +3,19 @@
 import { randomBytes, webcrypto } from "node:crypto";
 import { GROUP_1024, GROUP_3072, appleServer, big, bytes, group } from "./srp-reference.ts";
 
-if (!globalThis.crypto) globalThis.crypto = /** @type {any} */ (webcrypto);
+if (!globalThis.crypto) globalThis.crypto = (webcrypto as any);
 
-/** @type {{ name: string, cond: unknown }[]} */
-const results = [];
-/** @param {string} name @param {unknown} cond @param {string} [detail] */
-const ok = (name, cond, detail = "") => {
+const results: { name: string, cond: unknown }[] = [];
+const ok = (name: string, cond: unknown, detail: string = "") => {
   results.push({ name, cond });
   console.log(`${cond ? "PASS" : "FAIL"} ${name}${cond ? "" : " -> " + detail}`);
 };
 
 const SRC = new URL("../../src/apple/", import.meta.url);
-const { SRPSession } = await import(/** @type {any} */ (new URL("srp.ts", SRC)));
+const { SRPSession } = await import((new URL("srp.ts", SRC) as any));
 
-/** @param {bigint | Uint8Array} n */
-const hex = (n) => (typeof n === "bigint" ? n.toString(16) : Buffer.from(n).toString("hex")).toUpperCase();
-/** @param {Uint8Array} a @param {Uint8Array} b */
-const same = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
+const hex = (n: bigint | Uint8Array) => (typeof n === "bigint" ? n.toString(16) : Buffer.from(n).toString("hex")).toUpperCase();
+const same = (a: Uint8Array, b: Uint8Array) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
 
 // RFC 5054 appendix B (SHA-1, 1024-bit group): proves the reference before it grades anything
 {
@@ -44,59 +40,49 @@ const same = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
   const B = G.publicB(b, v);
   const u = G.u(A, B);
   const got = { k: G.k, x, v, A, B, u, S: G.clientS(a, B, x, u) };
-  const off = Object.keys(want).filter((key) => hex(/** @type {Record<string, any>} */ (got)[key]) !== /** @type {Record<string, string>} */ (want)[key]);
+  const off = Object.keys(want).filter((key) => hex((got as Record<string, any>)[key]) !== (want as Record<string, string>)[key]);
   ok("reference SRP matches RFC 5054 appendix B (k, x, v, A, B, u, S)", off.length === 0, `differs: ${off.join(", ")}`);
   ok("reference server and client agree on S", G.serverS(A, v, u, b) === got.S);
 }
 
 // salt is bytes and K a 32-byte digest, both hashed as-is never as trimmed bigints
 class SrpServer {
-  /** @param {{ pin: string, salt: Uint8Array }} opts */
-  constructor({ pin, salt }) {
+  pin: string;
+  salt: Uint8Array;
+  r: ReturnType<typeof appleServer> | undefined;
+  constructor({ pin, salt }: { pin: string, salt: Uint8Array }) {
     this.pin = pin;
     this.salt = salt;
   }
-  /** @param {string} username @param {bigint} A */
-  start(username, A) {
+  start(username: string, A: bigint) {
     this.r = appleServer({ username, pin: this.pin, salt: this.salt, A, b: big(randomBytes(32)) });
     return { B: this.r.B, s: this.salt };
   }
 }
 
 // one code per challenge, a failed verify burns it like the real helper
-/** @param {{ salts: Uint8Array[], pins: string[] }} opts */
-function makeHost({ salts, pins }) {
-  /** @type {{ codesShown: string[], challenges: number, server: any, live: boolean }} */
-  const state = { codesShown: [], challenges: 0, server: null, live: false };
+function makeHost({ salts, pins }: { salts: Uint8Array[], pins: string[] }) {
+  const state: { codesShown: string[], challenges: number, server: any, live: boolean } = { codesShown: [], challenges: 0, server: null, live: false };
   let saltIdx = 0;
   let pinIdx = 0;
 
   const port = {
-    /** @type {((m: any) => void)[]} */
-    _listeners: [],
-    /** @type {(() => void)[]} */
-    _disc: [],
-    onMessage: { addListener: (/** @type {(m: any) => void} */ fn) => port._listeners.push(fn) },
-    onDisconnect: { addListener: (/** @type {() => void} */ fn) => port._disc.push(fn) },
+    _listeners: [] as ((m: any) => void)[],
+    _disc: [] as (() => void)[],
+    onMessage: { addListener: (fn: (m: any) => void) => port._listeners.push(fn) },
+    onDisconnect: { addListener: (fn: () => void) => port._disc.push(fn) },
     disconnect() {},
-    /** @param {any} msg */
-    postMessage(msg) {
+    postMessage(msg: any) {
       setTimeout(() => void handle(msg), 0);
     },
   };
-  /** @param {any} m */
-  const reply = (m) => port._listeners.forEach((fn) => fn(m));
-  /** @param {object} o */
-  const b64 = (o) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
-  /** @param {string} s */
-  const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
-  /** @param {Uint8Array} b */
-  const wire = (b) => "0x" + Buffer.from(b).toString("hex");
-  /** @param {string} s */
-  const unwire = (s) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
+  const reply = (m: any) => port._listeners.forEach((fn) => fn(m));
+  const b64 = (o: object) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
+  const unb64 = (s: string) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
+  const wire = (b: Uint8Array) => "0x" + Buffer.from(b).toString("hex");
+  const unwire = (s: string) => Buffer.from(String(s).replace(/^0x/, ""), "hex");
 
-  /** @param {any} msg */
-  async function handle(msg) {
+  async function handle(msg: any) {
     if (msg.cmd === 14) return reply({ cmd: 14, capabilities: { shouldUseBase64: false } });
     if (msg.cmd !== 2) return;
     const pake = unb64(msg.msg.PAKE);
@@ -123,7 +109,7 @@ function makeHost({ salts, pins }) {
     return reply({ cmd: 2, payload: { PAKE: b64({ TID: pake.TID, MSG: 3, ErrCode: 0, HAMK: wire(state.server.r.HAMK) }) } });
   }
 
-  globalThis.chrome = /** @type {any} */ ({ runtime: { connectNative: () => port, lastError: undefined } });
+  globalThis.chrome = ({ runtime: { connectNative: () => port, lastError: undefined } } as any);
   return state;
 }
 
@@ -140,7 +126,7 @@ const plainSalt = () => {
 
 async function freshClient() {
   // re-import per test so each run gets its own module-level client state
-  const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?${Math.random()}`, SRC)));
+  const { ApplePasswords } = await import((new URL(`protocol.ts?${Math.random()}`, SRC) as any));
   const c = new ApplePasswords();
   await c.connect();
   return c;
@@ -150,9 +136,8 @@ async function freshClient() {
   const host = makeHost({ salts: [plainSalt()], pins: ["123456"] });
   const c = await freshClient();
   await c.requestChallenge();
-  /** @type {any} */
-  let err = null;
-  await c.verifyPin(host.codesShown[0]).catch((/** @type {unknown} */ e) => (err = e));
+  let err: any = null;
+  await c.verifyPin(host.codesShown[0]).catch((e: unknown) => (err = e));
   ok("the code shown on the Mac unlocks", c.state === "unlocked" && !err, String(err?.message));
 }
 
@@ -161,9 +146,8 @@ async function freshClient() {
   const host = makeHost({ salts: [leadingZeroSalt()], pins: ["123456"] });
   const c = await freshClient();
   await c.requestChallenge();
-  /** @type {any} */
-  let err = null;
-  await c.verifyPin(host.codesShown[0]).catch((/** @type {unknown} */ e) => (err = e));
+  let err: any = null;
+  await c.verifyPin(host.codesShown[0]).catch((e: unknown) => (err = e));
   ok("leading-zero salt still unlocks", c.state === "unlocked" && !err, String(err?.message));
 }
 
@@ -204,9 +188,8 @@ async function freshClient() {
   await c.requestChallenge({ ifNeeded: true });
   await c.requestChallenge({ ifNeeded: true });
   ok("ifNeeded reuses the live challenge (one code, not three)", host.challenges === 1, `challenges=${host.challenges}`);
-  /** @type {any} */
-  let err = null;
-  await c.verifyPin(host.codesShown[0]).catch((/** @type {unknown} */ e) => (err = e));
+  let err: any = null;
+  await c.verifyPin(host.codesShown[0]).catch((e: unknown) => (err = e));
   ok("the first code still works after ifNeeded calls", c.state === "unlocked" && !err, String(err?.message));
 }
 
@@ -223,14 +206,12 @@ async function freshClient() {
   await c.requestChallenge();
   const firstCode = host.codesShown[0];
   await c.requestChallenge();
-  /** @type {any} */
-  let err = null;
-  await c.verifyPin(firstCode).catch((/** @type {unknown} */ e) => (err = e));
+  let err: any = null;
+  await c.verifyPin(firstCode).catch((e: unknown) => (err = e));
   ok("stale code fails as a wrong code, not a crash", !!err && c.state !== "unlocked", String(err?.message));
   await c.requestChallenge();
-  /** @type {any} */
-  let err2 = null;
-  await c.verifyPin(host.codesShown[host.codesShown.length - 1]).catch((/** @type {unknown} */ e) => (err2 = e));
+  let err2: any = null;
+  await c.verifyPin(host.codesShown[host.codesShown.length - 1]).catch((e: unknown) => (err2 = e));
   ok("the newest code unlocks right after a stale one", c.state === "unlocked" && !err2, String(err2?.message));
 }
 
@@ -239,16 +220,13 @@ async function freshClient() {
   const host = makeHost({ salts: [plainSalt(), plainSalt()], pins: ["111111", "222222"] });
   const c = await freshClient();
   await c.requestChallenge();
-  /** @type {any} */
-  let bad = null;
-  await c.verifyPin("000000").catch((/** @type {unknown} */ e) => (bad = e));
+  let bad: any = null;
+  await c.verifyPin("000000").catch((e: unknown) => (bad = e));
   ok("wrong code is rejected", !!bad && c.state !== "unlocked", String(bad?.message));
   ok("a spent challenge is not reusable", c.hasChallenge === false);
 
-  /** @type {any} */
-
-  let stale = null;
-  await c.verifyPin("000000").catch((/** @type {unknown} */ e) => (stale = e));
+  let stale: any = null;
+  await c.verifyPin("000000").catch((e: unknown) => (stale = e));
   ok(
     "next attempt asks for the NEW code instead of grading the old one",
     stale?.code === "challenge_reissued",
@@ -256,10 +234,8 @@ async function freshClient() {
   );
   ok("and a fresh code is on screen for it", c.hasChallenge === true && host.challenges === 2, `challenges=${host.challenges}`);
 
-  /** @type {any} */
-
-  let err = null;
-  await c.verifyPin(host.codesShown[host.codesShown.length - 1]).catch((/** @type {unknown} */ e) => (err = e));
+  let err: any = null;
+  await c.verifyPin(host.codesShown[host.codesShown.length - 1]).catch((e: unknown) => (err = e));
   ok("typing that new code unlocks (no infinite incorrect loop)", c.state === "unlocked" && !err, String(err?.message));
 }
 
@@ -268,9 +244,8 @@ async function freshClient() {
   const c = await freshClient();
   await c.requestChallenge();
   c._challengeAt = Date.now() - 10 * 60_000;
-  /** @type {any} */
-  let err = null;
-  await c.verifyPin(host.codesShown[0]).catch((/** @type {unknown} */ e) => (err = e));
+  let err: any = null;
+  await c.verifyPin(host.codesShown[0]).catch((e: unknown) => (err = e));
   ok("an expired code re-prompts", err?.code === "challenge_reissued" && host.challenges === 2, `${err?.code} challenges=${host.challenges}`);
 }
 

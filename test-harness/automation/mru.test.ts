@@ -1,26 +1,23 @@
 let failed = 0;
-/** @param {string} name @param {unknown} cond */
-function ok(name, cond) {
+function ok(name: string, cond: unknown) {
   if (!cond) failed++;
   console.log(`${cond ? "ok  " : "FAIL"} ${name}`);
 }
 
-/** @type {Map<string, any>} */
-const data = new Map();
-globalThis.chrome = /** @type {any} */ ({
+const data: Map<string, any> = new Map();
+globalThis.chrome = ({
   storage: {
     local: {
-      get: async (/** @type {string} */ k) => (data.has(k) ? { [k]: structuredClone(data.get(k)) } : {}),
-      set: async (/** @type {Record<string, any>} */ o) => { for (const [k, v] of Object.entries(o)) data.set(k, structuredClone(v)); },
-      remove: async (/** @type {string} */ k) => { data.delete(k); },
+      get: async (k: string) => (data.has(k) ? { [k]: structuredClone(data.get(k)) } : {}),
+      set: async (o: Record<string, any>) => { for (const [k, v] of Object.entries(o)) data.set(k, structuredClone(v)); },
+      remove: async (k: string) => { data.delete(k); },
     },
   },
-});
+} as any);
 
 const path = "../../src/session/mru.js";
 const { recordUse, orderByUse } = await import(path);
-/** @param {{ username: string }[]} l */
-const names = (l) => l.map((x) => x.username).join(",");
+const names = (l: { username: string }[]) => l.map((x) => x.username).join(",");
 const logins = ["ann", "Bob", "cy"].map((username) => ({ username }));
 
 ok("empty state keeps helper order", names(await orderByUse("a.com", logins)) === "ann,Bob,cy");
@@ -52,7 +49,7 @@ await Promise.all([fresh.recordUse("d.com", "p"), fresh.recordUse("d.com", "q"),
 const other = await import(path + "?other");
 ok("concurrent first use yields one key and keeps both", names(await other.orderByUse("d.com", [{ username: "p" }, { username: "q" }])) === "q,p");
 
-const broken = /** @type {any} */ ({ storage: { local: { get: async () => { throw new Error("x"); } } } });
+const broken = ({ storage: { local: { get: async () => { throw new Error("x"); } } } } as any);
 const saved = globalThis.chrome;
 globalThis.chrome = broken;
 const b = await import(path + "?broken");
