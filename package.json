@@ -8,13 +8,13 @@
   },
   "license": "GPL-3.0-only",
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "node scripts/build.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tools.json",
-    "test": "node scripts/test.mjs",
-    "test:unit": "node test-harness/automation/unit.test.mjs",
-    "sync": "node scripts/sync-upstream.mjs",
-    "upstream:check": "node scripts/upstream-check.mjs",
-    "sync:bitwarden": "node scripts/sync-upstream.mjs bitwarden"
+    "test": "node scripts/test.ts",
+    "test:unit": "node test-harness/automation/unit.test.ts",
+    "sync": "node scripts/sync-upstream.ts",
+    "upstream:check": "node scripts/upstream-check.ts",
+    "sync:bitwarden": "node scripts/sync-upstream.ts bitwarden"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.3.3",

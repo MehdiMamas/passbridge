@@ -54,6 +54,6 @@ Legend: ✅ fixed · 🟡 partial · ⛔ inherent (no extension can fix)
 
 Every ✅ above is backed by an automated test in `test-harness/automation/`: the
 adversarial, UI, multi-account, input-events (#9) and clickjacking (#18) suites, run
-with `node test-harness/automation/run-all.mjs`, and the PIN session test
-(`pin-session.test.mjs`, 14/14). The adversarial and UI totals quoted above are from
+with `node test-harness/automation/run-all.ts`, and the PIN session test
+(`pin-session.test.ts`, 14/14). The adversarial and UI totals quoted above are from
 an earlier run; run-all prints the current ones.

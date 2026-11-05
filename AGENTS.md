@@ -5,17 +5,17 @@ PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Ap
 
 ## Setup, build, test
 - Needs Node.js 22.18 or newer. `npm install`, then `npm run build` (output in `dist/`; load that folder unpacked from `chrome://extensions`). Local builds add `version_name` (`<version>+<short sha>`, `-dirty` if uncommitted; omitted without git) shown in `chrome://extensions` and the Options sidebar; `PASSBRIDGE_RELEASE=1` (set in `release.yml`) skips it. Update code keeps reading `version`.
-- `npm run typecheck` (also covers `scripts/` and `test-harness/` through `tsconfig.tools.json`), `npm test` (`scripts/test.mjs`), `npm run test:unit`.
-- Browser tests (CI): `npx playwright install --with-deps chromium`, `node test-harness/automation/build-test-extensions.mjs`, `node test-harness/automation/run-all.mjs`.
+- `npm run typecheck` (also covers `scripts/` and `test-harness/` through `tsconfig.tools.json`), `npm test` (`scripts/test.ts`), `npm run test:unit`.
+- Browser tests (CI): `npx playwright install --with-deps chromium`, `node test-harness/automation/build-test-extensions.ts`, `node test-harness/automation/run-all.ts`.
 - macOS helper install: `sh native/install.sh` (Windows scripts are in `native/windows`).
 
 ## End-to-end suite
-`node test-harness/automation/build-test-extensions.mjs`, then `xvfb-run -a node test-harness/automation/run-all.mjs` runs every browser driver, including `drive-e2e-*.mjs`: the real extension builds (`.builds/real-mac`, `.builds/real-win`) against a simulated Apple helper (`test-harness/fake-apple-helper`) and the agent relay. No Apple account, no person. Use `node`, never `npx`; on WSL run `env -u WAYLAND_DISPLAY xvfb-run -a ...`. `drive-e2e-auth.mjs` takes about two minutes (it waits out an unanswered approval). Details: `test-harness/automation/README.md`.
+`node test-harness/automation/build-test-extensions.ts`, then `xvfb-run -a node test-harness/automation/run-all.ts` runs every browser driver, including `drive-e2e-*.ts`: the real extension builds (`.builds/real-mac`, `.builds/real-win`) against a simulated Apple helper (`test-harness/fake-apple-helper`) and the agent relay. No Apple account, no person. Use `node`, never `npx`; on WSL run `env -u WAYLAND_DISPLAY xvfb-run -a ...`. `drive-e2e-auth.ts` takes about two minutes (it waits out an unanswered approval). Details: `test-harness/automation/README.md`.
 
 ## Where things live
 - `src/`: extension code (`background.js`, `content.js`, `menu.js`, `autofill/`, `apple/`, `ui/`, `update/`, popup/options pages).
 - `overlay/`: save and TOTP bar pages. `native/`: Python helper agent and install scripts. `manifest.json`: extension manifest (its key fixes the extension id).
-- `vendor/`, `upstreams.json`, `UPSTREAMS.md`, `scripts/sync-upstream.mjs`: pinned upstream code and how to update it (`npm run sync -- <name> [commit]`, add `--accept` only after tests agree). `patches/site-fixes.md`: site-specific fixes.
+- `vendor/`, `upstreams.json`, `UPSTREAMS.md`, `scripts/sync-upstream.ts`: pinned upstream code and how to update it (`npm run sync -- <name> [commit]`, add `--accept` only after tests agree). `patches/site-fixes.md`: site-specific fixes.
 - `test-harness/`: test pages and automated Playwright tests. `docs/`: agent protocol, releasing, Windows findings. `VERIFICATION.md`, `COMPLAINTS.md`: audit logs.
 
 ## CI and release

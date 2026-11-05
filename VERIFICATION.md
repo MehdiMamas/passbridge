@@ -43,19 +43,19 @@ with the real helper.
 ## Verified vs not
 
 Verified (automated, in `test-harness/automation/`):
-- `windows-host.test.mjs`: a full SRP handshake and unlock against a server simulation
+- `windows-host.test.ts`: a full SRP handshake and unlock against a server simulation
   that hard-codes the RFC 5054 prime and sends IV-first AES-GCM replies, including the
   Windows string `MSG` and `ErrCode` quirks
-- `pin-session.test.mjs`: a code is only accepted for the challenge it was
+- `pin-session.test.ts`: a code is only accepted for the challenge it was
   shown for, and spent or expired codes re-prompt
 - `npm run test:unit`: site matching, fill scripts, otpauth parsing, password generation
 - `srp.ts` refuses to load if the prime is not 768 hex digits (a load-time check, not a test)
 - the update without the helper: zip reading, staging and swap, rollback and recovery, and the folder
   permission flow in `npm run test:unit`; the same engine on Chrome's own File System Access code (OPFS)
-  in `drive-update-fs.mjs`
+  in `drive-update-fs.ts`
 
 Verified by hand, because Playwright intercepts the folder picker (Chrome 156, macOS, unpacked build).
-`test-harness/automation/update-e2e.mjs` repeats these runs and checks the folder after each one:
+`test-harness/automation/update-e2e.ts` repeats these runs and checks the folder after each one:
 - the running extension can replace its own files through a picked folder, and `chrome.runtime.reload()`
   comes back as the new version
 - the folder handle survives a browser restart. After an extension reload, `requestPermission` on it only

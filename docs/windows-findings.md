@@ -61,7 +61,7 @@ A client-hello (`m0`) was accepted. The server hello PAKE fields were:
 | `B`, `s` | hex strings with a `0x` prefix | `shouldUseBase64` was absent, so hex is correct |
 | `ErrCode` | absent on success | |
 
-The PIN itself never travels in this reply. The helper shows it in the Windows UI. This probe did not type the code, so it did not unlock the vault, fill a login, or observe a Windows Hello prompt. `test-harness/automation/windows-host.test.mjs` (part of `npm test`) replays these string fields against a mock helper and covers the verify step: a wrong PIN (`ErrCode: "1"`), any other `ErrCode` even with a valid `HAMK`, and a forged `HAMK` are all rejected.
+The PIN itself never travels in this reply. The helper shows it in the Windows UI. This probe did not type the code, so it did not unlock the vault, fill a login, or observe a Windows Hello prompt. `test-harness/automation/windows-host.test.ts` (part of `npm test`) replays these string fields against a mock helper and covers the verify step: a wrong PIN (`ErrCode: "1"`), any other `ErrCode` even with a valid `HAMK`, and a forged `HAMK` are all rejected.
 
 ## Policy key
 

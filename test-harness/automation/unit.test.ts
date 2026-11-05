@@ -1,0 +1,1610 @@
+import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.ts";
+import { isBareCodeOtp } from "../../src/otp-field.js";
+import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
+import { parseSetupInput, totpHandoff, withAccount } from "../../src/totp-setup.js";
+import { loginAction, menuItems } from "../../src/menu.js";
+import { generateApplePassword } from "../../src/password-generate.js";
+import { hostsRelated, passwordSearchSteps } from "../../src/session/password-search.js";
+import { addToAllowlist, agentHostFor, agentOfferFor } from "../../src/session/agent-allow.js";
+import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
+import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
+import { newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
+import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
+import { frameUrlsFor } from "../../src/session/frame-urls.js";
+import { createLimiter, handleAgentRequest, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
+import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
+import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
+import { digestHex, verifyRelease } from "../../src/update/verify.js";
+import { downloadRelease, latestRelease } from "../../src/update/release.js";
+import { autoInstallUpdate, installUpdate, updateHelper } from "../../src/update/install.js";
+import { isWindows, updateRoute } from "../../src/update/platform.js";
+import { manifestProblem, readZip } from "../../src/update/zip.js";
+import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
+import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
+import { withUpdateLock } from "../../src/update/lock.js";
+import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
+import { OPTION_TABS, helperView, passkeyImportSummary, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.ts";
+import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.ts";
+import { createPasskeyProxy } from "../../src/passkeys/proxy.ts";
+import { isPasskeyLogin } from "../../src/passkeys/record.ts";
+import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "../../src/passkeys/store.ts";
+import { createMockClient } from "../../src/session/mock-client.js";
+import { parseBitwarden, parseCxf, parseExport } from "../../src/passkeys/import.ts";
+import { codesForLogins, filterByUsername } from "../../src/ui/username-filter.js";
+import { buildExtension, buildStamp } from "../../scripts/build.ts";
+import { changeCount, issueBody, issueTitle, samePin, summarize, titlePrefix } from "../../scripts/upstream-check.ts";
+
+let failed = 0;
+function ok(/** @type {any} */ name, /** @type {any} */ cond) {
+  console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
+  if (!cond) failed++;
+}
+
+{
+  const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const other = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const b64 = async (/** @type {any} */ k) => Buffer.from(await crypto.subtle.exportKey("raw", k.publicKey)).toString("base64");
+  const zip = new TextEncoder().encode("pretend zip bytes");
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
+  const key = await b64(kp);
+  ok("verify: a good signature and digest pass", (await verifyRelease(zip, sig, hex, key)) === true);
+  const bad = sig.slice();
+  bad[0] ^= 1;
+  ok("verify: a flipped signature bit fails", (await verifyRelease(zip, bad, hex, key)) === false);
+  ok("verify: a changed zip fails", (await verifyRelease(new TextEncoder().encode("pretend zip bytez"), sig, hex, key)) === false);
+  ok("verify: a wrong digest fails", (await verifyRelease(zip, sig, "0".repeat(64), key)) === false);
+  ok("verify: a missing digest fails", (await verifyRelease(zip, sig, "", key)) === false);
+  ok("verify: a signature from another key fails", (await verifyRelease(zip, sig, hex, await b64(other))) === false);
+  ok("verify: an empty pinned key always fails", (await verifyRelease(zip, sig, hex, "")) === false);
+  ok("verify: the shipped key rejects a signature made by a test key", (await verifyRelease(zip, sig, hex)) === false);
+  ok("verify: a short signature fails", (await verifyRelease(zip, sig.slice(0, 63), hex, key)) === false);
+  ok("verify: a garbage key fails without throwing", (await verifyRelease(zip, sig, hex, "!!!")) === false);
+  ok("verify: digest field parsing", digestHex("sha256:" + hex) === hex && digestHex(undefined) === null && digestHex("sha1:abc") === null);
+}
+
+ok("report: query values and fragments are dropped, keys stay", scrubUrl("https://idmsa.apple.com/signin?widgetKey=abc&lang=en#x") === "https://idmsa.apple.com/signin?widgetKey=…&lang=…#…");
+ok("report: a relative link keeps its path", scrubUrl("/olympus/v1/terms/ASC?t=1") === "/olympus/v1/terms/ASC?t=…");
+ok("report: long data URIs are cut", scrubUrl(`data:image/png;base64,${"A".repeat(500)}`).endsWith("[data removed]"));
+ok("report: emails are replaced in text", scrubText("signed in as jane.doe+x@gmail.com") === "signed in as [email]");
+ok("report: an email in a path is replaced", scrubUrl("https://mail.example.com/u/jane@example.com/") === "https://mail.example.com/u/[email]/");
+ok("report: long tokens in attributes are replaced, short words stay", scrubAttr(`login-form ${"a1B2".repeat(10)}`) === "login-form [token]");
+{
+  const rep = { url: "https://appstoreconnect.apple.com/login", version: "9.9.9", browser: "x", createdAt: "2026-10-25T00:00:00Z",
+    frames: [{ top: true, url: "https://appstoreconnect.apple.com/login", safe: true, fields: [], html: "<html></html>" },
+      { top: false, url: "https://idmsa.apple.com/appleauth/auth/signin", safe: false, fields: [{ tag: "input", type: "text", name: "", id: "account_name_text_field", autocomplete: "", visible: true, login: true, otp: false }], html: "<html>x</html>" }] };
+  const url = new URL(reportIssueUrl(rep, "no menu"));
+  ok("report: the issue goes to the PassBridge repo", url.origin + url.pathname === "https://github.com/MehdiMamas/passbridge/issues/new");
+  ok("report: the issue body names the untrusted frame", (url.searchParams.get("body") || "").includes("idmsa.apple.com/appleauth/auth/signin · PassBridge stays silent"));
+  ok("report: the file carries each frame's HTML", reportText(rep).includes("<html>x</html>") && reportText(rep).includes("account_name_text_field"));
+}
+
+const moodle = "moodle.augustana.edu";
+const google = "accounts.google.com";
+const moodleSteps = passwordSearchSteps(moodle, [google, moodle]);
+ok(
+  "multi-site login retries the record's first website then its other hosts",
+  moodleSteps.map((s) => `${s.envelope}|${s.search}`).join(",") ===
+    `${moodle}|${moodle},${google}|${moodle},${google}|${google}`,
+);
+ok(
+  "a host the helper did not return is not queried",
+  moodleSteps.every((s) => s.search === moodle || s.search === google) &&
+    moodleSteps.every((s) => s.envelope === moodle || s.envelope === google),
+);
+ok("parent of the page host still matches", hostsRelated("login.augustana.edu", "augustana.edu"));
+ok("an unrelated extra website is not a parent or child", !hostsRelated(moodle, google));
+const childSteps = passwordSearchSteps("login.augustana.edu", ["augustana.edu"]);
+ok(
+  "parent host is searched with the frame as the outer url after the record's own sites",
+  childSteps.some((s) => s.envelope === "login.augustana.edu" && s.search === "augustana.edu") &&
+    childSteps.some((s) => s.envelope === "augustana.edu" && s.search === "login.augustana.edu"),
+);
+
+ok("a subdomain also looks up its site", siteLookupHosts("account.apple.com").join(",") === "account.apple.com,apple.com");
+ok("deep subdomains walk up to the site and stop", siteLookupHosts("a.b.example.com").join(",") === "a.b.example.com,b.example.com,example.com");
+ok("a site host looks up only itself", siteLookupHosts("apple.com").join(",") === "apple.com");
+ok("never save on a subdomain covers the whole site", registrableDomain("login.example.com") === "example.com" && registrableDomain("www.example.com") === "example.com");
+ok("a two-label public suffix is never queried", siteLookupHosts("account.bbc.co.uk").join(",") === "account.bbc.co.uk,bbc.co.uk" && registrableDomain("bbc.co.uk") === "bbc.co.uk");
+ok("an IP address is not split", siteLookupHosts("192.168.1.10").join(",") === "192.168.1.10");
+const viaSteps = passwordSearchSteps("account.apple.com", ["apple.com"], undefined, "apple.com");
+ok(
+  "a login listed under the parent site is searched there first",
+  viaSteps[0].search === "apple.com" && viaSteps[0].envelope === "apple.com" &&
+    viaSteps[1].search === "apple.com" && viaSteps[1].envelope === "account.apple.com",
+);
+
+const otp = /** @type {any} */ (parseOtpAuth("otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"));
+ok("otpauth keeps issuer and account and hides the secret from the label", otp?.issuer === "GitHub" && otp?.account === "alice@example.com" && !("secret" in otp));
+ok("setup key is the base32 secret without padding", otpAuthSecret(otp.uri) === "JBSWY3DPEHPK3PXP" && otpAuthSecret("otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP====") === "JBSWY3DPEHPK3PXP");
+ok("a non-setup link has no setup key", otpAuthSecret("https://example.com/?secret=JBSWY3DPEHPK3PXP") === "");
+ok("wifi and migration QR codes are not setup links", parseOtpAuth("WIFI:S:cafe;T:WPA;P:secret;;") === null && parseOtpAuth("otpauth-migration://offline?data=abc") === null);
+ok("a grouped setup key with spaces is accepted", otpAuthSecret("otpauth://totp/Work?secret=JBSW%20Y3DP%20EHPK%203PXP") === "JBSWY3DPEHPK3PXP");
+{
+  const pasted = /** @type {any} */ (parseSetupInput("jbsw y3dp ehpk 3pxp", "chatgpt.com"));
+  ok("a pasted grouped setup key becomes an otpauth link", otpAuthSecret(pasted?.uri) === "JBSWY3DPEHPK3PXP" && pasted.account === "chatgpt.com");
+  ok("a pasted otpauth link inside text is found", parseSetupInput("scan: otpauth://totp/A:b?secret=JBSWY3DPEHPK3PXP&issuer=A ok")?.issuer === "A");
+  ok("junk and short keys are refused", parseSetupInput("not a key!") === null && parseSetupInput("ABC") === null && parseSetupInput("") === null);
+  const linked = withAccount(pasted.uri, { username: "me@x.com", issuer: "ChatGPT" });
+  const lp = parseOtpAuth(linked);
+  ok("the chosen login becomes the account and the secret is kept", lp?.account === "me@x.com" && lp?.issuer === "ChatGPT" && otpAuthSecret(linked) === "JBSWY3DPEHPK3PXP");
+  ok("the client message carries only the link and the page", JSON.stringify(Object.keys(totpHandoff(/** @type {any} */ (linked), "https://chatgpt.com/connector/mfa")).sort()) === '["totpPageUrl","totpUri"]');
+}
+ok("apple-otpauth totp is accepted", parseOtpAuth("apple-otpauth://totp/Work?secret=JBSWY3DPEHPK3PXP&issuer=Work")?.account === "Work");
+const [scanned, synced] = normalizeOtpEntries([
+  { source: "totp", domain: "7E8A4488-FB35-4AC8-B885-3CB52740EFBB", customTitle: "Cashapp", username: "a" },
+  { source: "totp", domain: "github.com", customTitle: "GitHub", username: "b" },
+]);
+ok("a code keyed by a record id is labelled with its title, a real domain is kept", scanned.domain === "Cashapp" && synced.domain === "github.com");
+const generated = generateApplePassword();
+ok("generated password is three hyphenated groups", /^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/.test(generated));
+
+// a fake native port: the helper never answers until the test says so
+function fakeNative() {
+  const port = /** @type {any} */ ({ sent: [], msg: [], gone: [], disconnected: false });
+  port.postMessage = (/** @type {any} */ m) => port.sent.push(/** @type {any} */ (m));
+  port.disconnect = () => { port.disconnected = true; };
+  port.onMessage = { addListener: (/** @type {any} */ fn) => port.msg.push(/** @type {any} */ (fn)) };
+  port.onDisconnect = { addListener: (/** @type {any} */ fn) => port.gone.push(/** @type {any} */ (fn)) };
+  port.reply = (/** @type {any} */ m) => port.msg.forEach((/** @type {any} */ fn) => /** @type {any} */ (fn)(m));
+  port.drop = () => port.gone.forEach((/** @type {any} */ fn) => /** @type {any} */ (fn)());
+  return port;
+}
+async function settles(/** @type {any} */ promise) {
+  try {
+    await promise;
+    return "resolved";
+  } catch (e) {
+    return `rejected: ${e.message}`;
+  }
+}
+async function connectedClient() {
+  const port = /** @type {any} */ (fakeNative());
+  /** @type {any} */ (globalThis).chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  const client = new ApplePasswords();
+  const connecting = client.connect();
+  port.reply({ cmd: Command.GET_CAPABILITIES, capabilities: {} });
+  await connecting;
+  return { client, port };
+}
+{
+  const port = /** @type {any} */ (fakeNative());
+  /** @type {any} */ (globalThis).chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  const client = new ApplePasswords();
+  const connecting = client.connect();
+  port.drop();
+  ok("a helper that exits mid-request rejects the request", (await settles(connecting)) === "rejected: connection closed" && client._waiters.size === 0);
+}
+{
+  const { client } = await connectedClient();
+  // no timeout, the way a Touch ID read used to wait
+  const stuck = client._withLock(() => client._send(Command.GET_PASSWORD_FOR_LOGIN_NAME, {}, null));
+  await Promise.resolve();
+  client.disconnect();
+  const next = client._withLock(async () => "ran");
+  ok("disconnect rejects the pending read and frees the lock", (await settles(stuck)) === "rejected: connection closed" && (await next) === "ran");
+}
+{
+  const { client, port } = await connectedClient();
+  const stuck = client._send(Command.GET_LOGIN_NAMES_FOR_URL, {}, null);
+  client._dropNativePort();
+  ok("a dropped session rejects the pending request", (await settles(stuck)) === "rejected: connection closed" && port.disconnected);
+}
+delete /** @type {any} */ (globalThis).chrome;
+
+ok(
+  "a site lookup carries only its own url",
+  JSON.stringify(frameUrlsFor({ url: "https://acme.example/" })) === '["https://acme.example/"]',
+);
+ok(
+  "an inline frame still carries its tab's url",
+  JSON.stringify(frameUrlsFor({ url: "https://login.acme.example/frame", tab: { url: "https://acme.example/" } })) ===
+    '["https://login.acme.example/frame","https://acme.example/"]',
+);
+ok(
+  "a chrome url is never asked of the helper",
+  frameUrlsFor({ url: "chrome://extensions/", tab: { url: "https://acme.example/" } }).length === 1,
+);
+
+ok("username matcher: case-insensitive exact", usernameMatchesPage("Me@Gmail.com", " me@gmail.com "));
+ok("username matcher: bare name matches by local part", usernameMatchesPage("me", "me@gmail.com") && usernameMatchesPage("me@gmail.com", "me"));
+ok("username matcher: different domains do not match", !usernameMatchesPage("me@a.com", "me@b.com"));
+ok("username matcher: empty never matches", !usernameMatchesPage("", "me") && !usernameMatchesPage("me", ""));
+ok(
+  "matching login is ordered first, others keep order",
+  orderByPageUsername([{ username: "a@x.com" }, { username: "me@gmail.com" }, { username: "b@x.com" }], "ME@gmail.com")
+    .map((l) => l.username)
+    .join() === "me@gmail.com,a@x.com,b@x.com",
+);
+ok("no match keeps the order", orderByPageUsername([{ username: "a" }, { username: "b" }], "zzz")[0].username === "a");
+
+ok("agent: relay events set the state", relayEvent({ event: "standby" }) === "standby" && relayEvent({ event: "active" }) === "active");
+ok("agent: requests and odd messages are not relay events", relayEvent({ id: "1", event: "standby" }) === null && relayEvent({ id: "1", op: "status" }) === null && relayEvent({ event: "x" }) === null && relayEvent(null) === null);
+
+const agentList = ["github.com", "google.com"];
+ok("agent: the exact host is allowed", hostAllowed("github.com", agentList));
+ok("agent: a subdomain is allowed", hostAllowed("gist.github.com", agentList));
+ok("agent: github.com.evil.io is refused", !hostAllowed("github.com.evil.io", agentList));
+ok("agent: evilgithub.com is refused", !hostAllowed("evilgithub.com", agentList));
+ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []));
+{
+  const lim = createLimiter(3, 1000);
+  ok("agent: rate limiter allows up to the max", lim.take(0) && lim.take(1) && lim.take(2));
+  ok("agent: rate limiter refuses the next", !lim.take(3));
+  ok("agent: rate limiter frees up after the window", lim.take(1001));
+}
+{
+  const dirty = { ok: true, password: "p", code: "123456", nested: { Password: "x", list: [{ otp: "1", username: "me" }], domain: "a.com" } };
+  const clean = sanitizeReply(dirty);
+  ok("agent: sanitizer drops password and code at any depth", !JSON.stringify(clean).match(/password|"code"|otp|"p"|123456/i));
+  ok("agent: sanitizer keeps usernames and domains", clean.nested.list[0].username === "me" && clean.nested.domain === "a.com");
+}
+{
+  const deps = (over = {}) => ({
+    client: { ready: true },
+    getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }),
+    getTab: async () => ({ id: 1, url: "https://github.com/login" }),
+    hostnameOf: (/** @type {any} */ u) => new URL(u).hostname,
+    isFillUrlAllowed: async () => true,
+    siteLogins: async () => [{ username: "a@x.com" }, { username: "b@x.com" }],
+    uniqueByUsername: (/** @type {any} */ l) => l,
+    fillLoginOnTab: async (/** @type {any} */ tab, /** @type {any} */ username) => ({ filled: true, username, password: "leak" }),
+    ...over,
+  });
+  const run = (/** @type {any} */ msg, d = deps(), lim = createLimiter()) => handleAgentRequest(msg, /** @type {any} */ (d), lim);
+  ok("agent: disabled refuses", (await run({ op: "logins", tabId: 1 }, deps({ getSettings: async () => ({ agentSignIn: false }) }))).reply.error === "not_enabled");
+  ok("agent: a host off the list is not_allowed", (await run({ op: "logins", tabId: 1 }, deps({ getTab: async () => ({ id: 1, url: "https://github.com.evil.io/" }) }))).reply.error === "not_allowed");
+  ok("agent: a missing tab is no_tab", (await run({ op: "logins", tabId: 9 }, deps({ getTab: async () => { throw new Error("x"); } }))).reply.error === "no_tab");
+  ok("agent: several logins need a choice", (await run({ op: "sign_in", tabId: 1 })).reply.error === "choose_login");
+  const r = await run({ op: "sign_in", tabId: 1, username: "B@x.com" });
+  ok("agent: sign_in replies domain and username only", r.reply.ok && r.reply.username === "b@x.com" && r.reply.domain === "github.com" && !("password" in r.reply));
+  ok("agent: an unpaired client is needs_user", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ client: { ready: false } }))).reply.error === "needs_user");
+  ok("agent: a refused read is needs_user", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ fillLoginOnTab: async () => { throw new Error("timeout"); } }))).reply.error === "needs_user");
+  const lim = createLimiter(1, 1000);
+  await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), lim);
+  ok("agent: the second fill in the window is rate_limited", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), lim)).reply.error === "rate_limited");
+  ok("agent: fill_code is gone", (await run({ op: "fill_code", tabId: 1 })).reply.error === "unknown_op");
+  const fr = pickAllowedFrames(
+    [
+      { frameId: 0, url: "https://account.apple.com/" },
+      { frameId: 3, url: "https://idmsa.apple.com/appleauth" },
+      { frameId: 4, url: "https://apple.com.evil.io/x" },
+      { frameId: 5, url: "https://evilapple.com/" },
+    ],
+    ["apple.com"],
+    (u) => new URL(u).hostname,
+  );
+  ok("agent: frame choice keeps allowlisted subdomain frames only", fr.length === 1 && fr[0].frameId === 3 && fr[0].host === "idmsa.apple.com");
+  ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
+
+  // every-site: the host is off the list and the setting decides
+  const isDev = (/** @type {any} */ h) => h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost") || h.endsWith(".test");
+  const saved = (/** @type {any[]} */ ...sites) => ({ username: "u@x.com", sites, saved: sites });
+  const all = (over = {}, settings = {}) =>
+    deps({
+      getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true, ...settings }),
+      getTab: async () => ({ id: 1, url: "https://shop.example.org/login" }),
+      isLocalDevHost: isDev,
+      siteLogins: async () => [saved("example.org")],
+      ...over,
+    });
+  const tabAt = (/** @type {any} */ url) => ({ getTab: async () => ({ id: 1, url }) });
+  const logins = (/** @type {any} */ d, msg = {}) => run({ op: "logins", tabId: 1, ...msg }, d);
+  ok("every-site: default off refuses an unlisted host", (await logins(all({}, { agentAllowAll: false }))).reply.error === "not_allowed");
+  ok("every-site: a missing setting refuses", (await logins(all({}, { agentAllowAll: undefined }))).reply.error === "not_allowed");
+  ok("every-site: on allows an unlisted https host", (await logins(all())).reply.usernames?.join() === "u@x.com");
+  ok("every-site: http with canFillOnHttp is refused", (await logins(all(tabAt("http://shop.example.org/"), { canFillOnHttp: true }))).reply.error === "not_allowed");
+  ok("every-site: https://localhost is refused", (await logins(all(tabAt("https://localhost/")))).reply.error === "not_allowed");
+  ok("every-site: a .test host is refused", (await logins(all(tabAt("https://shop.example.test/")))).reply.error === "not_allowed");
+  ok("every-site: a lookalike saved site is refused", (await logins(all({ siteLogins: async () => [saved("evilexample.org")] }))).reply.usernames?.length === 0);
+  ok("every-site: a login saved for another domain is filtered out", (await logins(all({ siteLogins: async () => [saved("college.edu"), saved("example.org")] }))).reply.usernames?.length === 1);
+  ok("every-site: a login with no sites is filtered out", (await logins(all({ siteLogins: async () => [{ username: "n@x.com", sites: [], saved: [] }, { username: "m@x.com", sites: ["shop.example.org"] }] }))).reply.usernames?.length === 0);
+  ok("every-site: sign_in with nothing saved is no_login", (await run({ op: "sign_in", tabId: 1 }, all({ siteLogins: async () => [saved("college.edu")] }))).reply.error === "no_login");
+  let seen = /** @type {any} */ (null);
+  const fillSeen = async (/** @type {any} */ tab, /** @type {any} */ username, /** @type {any} */ opts) => ((seen = opts), { filled: true, username });
+  const filled = await run({ op: "sign_in", tabId: 1 }, all({ fillLoginOnTab: fillSeen }));
+  ok("every-site: sign_in fills with savedOnly and no frame allowlist", filled.reply.ok && seen?.savedOnly === true && !("frameAllowlist" in seen));
+  ok("every-site: a request carrying agentAllowAll changes nothing", (await logins(all({}, { agentAllowAll: false }), { agentAllowAll: true, settings: { agentAllowAll: true } })).reply.error === "not_allowed");
+  ok("every-site: a listed site is unchanged with the setting on", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true }), fillLoginOnTab: fillSeen }))).reply.ok && Array.isArray(seen?.frameAllowlist) && !seen.savedOnly);
+  ok("every-site: a blocked domain is refused", (await logins(all({}, { blockedDomains: ["example.org"] }))).reply.error === "not_allowed");
+  ok("every-site: a blocked domain is refused on a listed site too", (await logins(deps({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], blockedDomains: ["github.com"] }) }))).reply.error === "not_allowed");
+  ok("every-site: status reports allowAll", (await run({ op: "status" }, all())).allowAll === true && (await run({ op: "status" })).allowAll === false);
+  ok("every-site: no password in any reply", !/leak|password/i.test(JSON.stringify([filled.reply, await logins(all()), await run({ op: "status" }, all())])));
+
+  // the site field
+  const withSite = (/** @type {any} */ site, d = deps()) => logins(d, { site });
+  ok("site: the exact host matches", (await withSite("github.com")).reply.ok === true);
+  ok("site: a URL matches", (await withSite("https://github.com/login")).reply.ok === true);
+  ok("site: a subdomain of the site matches", (await withSite("github.com", deps(tabAt("https://gist.github.com/")))).reply.ok === true);
+  const mismatch = await withSite("example.org");
+  ok("site: a different site is site_mismatch", mismatch.reply.error === "not_allowed" && mismatch.reply.reason === "site_mismatch");
+  ok("site: the parent of the tab host does not match a deeper site", (await withSite("gist.github.com")).reply.reason === "site_mismatch");
+  ok("site: a lookalike is site_mismatch", (await withSite("hub.com")).reply.reason === "site_mismatch");
+  ok("site: absent still works", (await logins(deps())).reply.ok === true);
+  ok("site: a bad value is site_mismatch", (await withSite("")).reply.reason === "site_mismatch" && (await withSite("http://")).reply.reason === "site_mismatch" && (await withSite(42)).reply.reason === "site_mismatch");
+  ok("site: the guard applies to every-site too", (await logins(all(), { site: "github.com" })).reply.reason === "site_mismatch");
+
+  ok("site helpers: onSiteOrSubdomain", onSiteOrSubdomain("a.b.com", "b.com") && onSiteOrSubdomain("b.com", "b.com") && !onSiteOrSubdomain("ab.com", "b.com") && !onSiteOrSubdomain("a.com", "com") && onSiteOrSubdomain("localhost", "localhost"));
+  ok("site helpers: loginSavedFor", loginSavedFor("x.org", ["https://www.x.org/"]) && loginSavedFor("sub.x.org", ["x.org"]) && !loginSavedFor("x.org", ["evilx.org"]) && !loginSavedFor("x.org", []) && !loginSavedFor("x.org", undefined) && !loginSavedFor("www.x.org", ["y.org"]));
+}
+ok("update: a higher release tag is newer", isNewerVersion("v1.4.0", "1.3.1") && isNewerVersion("1.3.10", "1.3.9"));
+ok("update: the same or an older release is not newer", !isNewerVersion("v1.3.1", "1.3.1") && !isNewerVersion("1.3", "1.3.0") && !isNewerVersion("v1.2.9", "1.3.0"));
+ok("update: a tag that is no version is never newer", !isNewerVersion("desktop-preview", "1.3.1") && !isNewerVersion(undefined, "1.3.1"));
+
+// chrome.storage.local in memory, callback and promise forms, plus a fetch that counts its calls
+const realFetch = globalThis.fetch;
+const signedAssets = [
+  { name: "passbridge.zip", size: 1, digest: `sha256:${"a".repeat(64)}`, browser_download_url: "https://dl.test/passbridge.zip" },
+  { name: "passbridge.zip.sig", browser_download_url: "https://dl.test/passbridge.zip.sig" },
+];
+/** @param {any} [seed] @param {any} [reply] */
+function fakeUpdateEnv(seed = {}, reply = { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets }) }) {
+  const data = /** @type {any} */ ({ ...seed });
+  const pick = (/** @type {any} */ keys) => {
+    if (typeof keys === "string") keys = [keys];
+    if (Array.isArray(keys)) return Object.fromEntries(keys.filter((k) => k in data).map((k) => [k, data[k]]));
+    return { ...keys, ...data };
+  };
+  const local = {
+    get: (/** @type {any} */ keys, /** @type {any} */ cb) => (cb ? cb(pick(keys)) : Promise.resolve(pick(keys))),
+    set: (/** @type {any} */ o, /** @type {any} */ cb) => {
+      Object.assign(data, o);
+      cb?.();
+      return Promise.resolve();
+    },
+    remove: (/** @type {any} */ keys) => {
+      for (const k of [keys].flat()) delete data[k];
+      return Promise.resolve();
+    },
+  };
+  // settings live in sync, machine state in local; one in-memory map serves both
+  /** @type {any} */ (globalThis).chrome = { storage: { local, sync: local }, runtime: { lastError: undefined } };
+  const env = /** @type {any} */ ({ data, fetched: [], inits: [] });
+  globalThis.fetch = /** @type {any} */ (async (/** @type {any} */ url, /** @type {any} */ init) => {
+    env.fetched.push(/** @type {any} */ (String(url)));
+    env.inits.push(/** @type {any} */ (init));
+    if (reply instanceof Error) throw reply;
+    return reply;
+  });
+  return env;
+}
+const NOW = Date.UTC(2026, 9, 25);
+{
+  const env = fakeUpdateEnv();
+  await checkForUpdate(NOW);
+  ok("update: a first check asks GitHub for the latest release", env.fetched.join() === "https://api.github.com/repos/MehdiMamas/passbridge/releases/latest");
+  ok("update: the check keeps the tag and the time", /** @type {any} */ (env.data).latestRelease === "v1.4.0" && /** @type {any} */ (env.data).updateCheckedAt === NOW);
+  const update = await availableUpdate("1.3.1");
+  ok("update: a newer release is offered with its release page", update?.version === "1.4.0" && update?.url === "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.0");
+  ok("update: the installed version is not offered", (await availableUpdate("1.4.0")) === null);
+  await dismissUpdate();
+  ok("update: a dismissed release is not offered again", (await availableUpdate("1.3.1")) === null);
+  /** @type {any} */ (env.data).latestRelease = "v1.5.0";
+  ok("update: a release after the dismissed one is offered", (await availableUpdate("1.3.1"))?.version === "1.5.0");
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: NOW - UPDATE_CHECK_MS + 60_000 });
+  await checkForUpdate(NOW);
+  ok("update: no second request inside the interval", env.fetched.length === 0);
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: NOW - 60_000 });
+  const reached = await checkForUpdate(NOW, { force: true });
+  ok("update: force skips the wait", env.fetched.length === 1 && reached === true && /** @type {any} */ (env.data).updateCheckedAt === NOW);
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: NOW - 60_000 });
+  const reached = await checkForUpdate(NOW, { force: false });
+  ok("update: without force the wait still applies", env.fetched.length === 0 && reached === false);
+}
+{
+  const env = fakeUpdateEnv({ canCheckForUpdates: false, updateCheckedAt: 0 });
+  await checkForUpdate(NOW, { force: true });
+  ok("update: force still respects the setting", env.fetched.length === 0);
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: NOW + 3_600_000 });
+  await checkForUpdate(NOW);
+  ok("update: a check stamped in the future does not block forever", env.fetched.length === 1);
+}
+{
+  const env = fakeUpdateEnv({ canCheckForUpdates: false, latestRelease: "v1.4.0" });
+  await checkForUpdate(NOW);
+  ok("update: turned off, nothing is requested", env.fetched.length === 0);
+  ok("update: turned off, nothing is offered", (await availableUpdate("1.3.1")) === null);
+}
+{
+  const env = fakeUpdateEnv({}, /** @type {any} */ (new Error("offline")));
+  await checkForUpdate(NOW);
+  ok("update: a failed request is retried on the next alarm", /** @type {any} */ (env.data).updateCheckedAt === undefined);
+}
+{
+  const env = fakeUpdateEnv({ latestRelease: "v1.4.0" }, { ok: false, status: 403, json: async () => /** @type {any} */ (({ message: "rate limited" })) });
+  await checkForUpdate(NOW);
+  ok("update: a refused request is retried on the next alarm and keeps the last tag", /** @type {any} */ (env.data).updateCheckedAt === undefined && /** @type {any} */ (env.data).latestRelease === "v1.4.0");
+}
+{
+  const unsigned = fakeUpdateEnv({}, { ok: true, json: async () => ({ tag_name: "v1.4.0", assets: signedAssets.slice(0, 1) }) });
+  await checkForUpdate(NOW);
+  ok("update: a newer release without its .sig is not offered", (await availableUpdate("1.3.1")) === null && /** @type {any} */ (unsigned.data).latestRelease === "v1.4.0");
+  fakeUpdateEnv();
+  await checkForUpdate(NOW);
+  ok("update: a newer release with its .sig is offered", (await availableUpdate("1.3.1"))?.version === "1.4.0");
+}
+{
+  const env = fakeUpdateEnv({ updateCheckedAt: 5 }, { ok: false, status: 403, json: async () => /** @type {any} */ (({})) });
+  await checkForUpdate(NOW, { force: true });
+  ok("update: a refused request does not stamp the check time", /** @type {any} */ (env.data).updateCheckedAt === 5);
+}
+{
+  const env = fakeUpdateEnv();
+  await checkForUpdate(NOW, { force: true });
+  ok("update: the check bypasses the HTTP cache", /** @type {any} */ (env.inits[0])?.cache === "no-store");
+}
+{
+  const env = fakeUpdateEnv();
+  await Promise.all([checkForUpdate(NOW), checkForUpdate(NOW)]);
+  ok("update: overlapping checks share one request", env.fetched.length === 1);
+}
+{
+  fakeUpdateEnv();
+  // what chrome answers while the worker is shutting down for a reload
+  /** @type {any} */ (globalThis).chrome.storage.local.get = (/** @type {any} */ keys, /** @type {any} */ cb) => (cb ? cb({}) : Promise.reject(new Error("No SW")));
+  ok("update: a check while the worker shuts down settles quietly", (await settles(checkForUpdate(NOW))) === "resolved");
+}
+
+{
+  // two areas this time, so a move from local to sync shows
+  const area = (/** @type {any} */ data) => ({
+    data,
+    get: async (/** @type {any} */ keys) => Object.fromEntries(keys.filter((/** @type {any} */ k) => k in data).map((/** @type {any} */ k) => [k, data[k]])),
+    set: async (/** @type {any} */ o) => void Object.assign(data, o),
+    remove: async (/** @type {any} */ keys) => keys.forEach((/** @type {any} */ k) => delete data[k]),
+  });
+  const local = area({ askToSave: false, updateCheckedAt: 5 });
+  const sync = area({});
+  /** @type {any} */ (globalThis).chrome = { storage: { local, sync }, runtime: {} };
+  await migrateSettingsToSync();
+  ok("settings: a machine's local settings move to sync once", sync.data.askToSave === false && !("askToSave" in local.data));
+  ok("settings: machine state stays in local", local.data.updateCheckedAt === 5 && !("updateCheckedAt" in sync.data));
+  local.data.askToSave = true;
+  sync.data.askToSave = false;
+  await migrateSettingsToSync();
+  ok("settings: values already in sync win over a second machine's", sync.data.askToSave === false && !("askToSave" in local.data));
+}
+
+function fakePage() {
+  const win = /** @type {any} */ (new EventTarget());
+  const hosts = [{ removed: false, remove() { this.removed = true; } }, { removed: false, remove() { this.removed = true; } }];
+  win.document = { querySelectorAll: () => hosts };
+  return { win, hosts };
+}
+{
+  const { win, hosts } = fakePage();
+  const runtime = /** @type {any} */ ({ id: "abc" });
+  const life = createLifecycle(/** @type {any} */ ({ win, runtime }));
+  let fired = 0;
+  life.listen(win, "ping", () => fired++);
+  let cleaned = 0;
+  life.onTeardown(() => cleaned++);
+  win.dispatchEvent(new Event("ping"));
+  ok("lifecycle: a fresh copy is alive and keeps its own listeners", life.alive() && !life.isDead() && fired === 1);
+  ok("lifecycle: invalidated errors are recognised", isInvalidated(new Error("Extension context invalidated.")) && !isInvalidated(new Error("boom")));
+  life.noteError(new Error("boom"));
+  ok("lifecycle: an unrelated error leaves the copy running", !life.isDead());
+  delete runtime.id;
+  ok("lifecycle: a dead runtime id means not alive", life.alive() === false);
+  life.noteError(new Error("Extension context invalidated."));
+  win.dispatchEvent(new Event("ping"));
+  ok("lifecycle: teardown removes injected hosts, runs cleanups and drops listeners", life.isDead() && hosts.every((h) => h.removed) && cleaned === 1 && fired === 1);
+  life.teardown();
+  ok("lifecycle: a second teardown is harmless", cleaned === 1);
+  let late = 0;
+  life.listen(win, "ping", () => late++);
+  win.dispatchEvent(new Event("ping"));
+  ok("lifecycle: nothing is registered after teardown", late === 0);
+}
+{
+  const { win, hosts } = fakePage();
+  const old = createLifecycle(/** @type {any} */ ({ win, runtime: { id: "abc" } }));
+  ok("lifecycle: the first copy does not tear itself down", !old.isDead());
+  const fresh = createLifecycle(/** @type {any} */ ({ win, runtime: { id: "abc" } }));
+  ok("lifecycle: a newer copy replaces the older one", old.isDead() && hosts.every((h) => h.removed));
+  ok("lifecycle: the newer copy survives its own event", !fresh.isDead() && fresh.alive());
+  ok("lifecycle: the replaced event name is stable", REPLACED_EVENT === "passbridge:replaced");
+}
+{
+  const calls = /** @type {any[]} */ ([]);
+  const runtime = { getManifest: () => ({ content_scripts: [{ js: ["src/content.js"] }] }) };
+  const tabs = { query: async (/** @type {any} */ q) => (calls.push(["query", q]), [{ id: 1, url: "https://a.test/" }, { id: 2, url: "https://locked.test/" }, { id: 3, url: "http://b.test/" }, { url: "https://noid.test/" }]) };
+  const scripting = {
+    executeScript: async (/** @type {any} */ o) => {
+      calls.push(["inject", o.target.tabId, o.target.allFrames, o.files]);
+      if (o.target.tabId === 2) throw new Error("Cannot access contents of the page");
+    },
+  };
+  const n = await reinjectContentScripts({ tabs, scripting, runtime });
+  const injected = calls.filter((c) => c[0] === "inject");
+  ok("reinject: queries only http and https tabs", JSON.stringify(calls[0][1].url) === JSON.stringify(["http://*/*", "https://*/*"]));
+  ok("reinject: injects every frame with the manifest's script path", injected.length === 3 && injected.every((c) => c[2] === true && c[3][0] === "src/content.js"));
+  ok("reinject: a refused page does not stop the others", n === 2 && injected.map((c) => c[1]).join() === "1,2,3");
+  ok("reinject: a failing tab query injects nothing", (await reinjectContentScripts({ tabs: { query: async () => { throw new Error("x"); } }, scripting, runtime })) === 0);
+  const real = JSON.parse((await import("node:fs")).readFileSync(new URL("../../manifest.json", import.meta.url), "utf8"));
+  ok("manifest: asks for scripting and lists a content script to inject", real.permissions.includes("scripting") && real.content_scripts[0].js[0] === "src/content.js");
+}
+delete /** @type {any} */ (globalThis).chrome;
+globalThis.fetch = realFetch;
+
+// a zip built in the test: stored or deflated entries, with optional flags, unix mode and a wrong declared size
+async function makeZip(/** @type {any} */ entries) {
+  const enc = new TextEncoder();
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = enc.encode(e.name);
+    const raw = e.dir ? new Uint8Array() : enc.encode(e.data ?? "");
+    const method = e.dir ? 0 : e.method ?? 8;
+    const body = method === 8 ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer()) : raw;
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(6, e.flags ?? 0, true);
+    local.setUint16(8, method, true);
+    local.setUint32(18, body.length, true);
+    local.setUint32(22, e.size ?? raw.length, true);
+    local.setUint16(26, name.length, true);
+    const central = new DataView(new ArrayBuffer(46));
+    central.setUint32(0, 0x02014b50, true);
+    central.setUint16(4, 3 << 8, true);
+    central.setUint16(8, e.flags ?? 0, true);
+    central.setUint16(10, method, true);
+    central.setUint32(20, body.length, true);
+    central.setUint32(24, e.size ?? raw.length, true);
+    central.setUint16(28, name.length, true);
+    central.setUint32(38, ((e.mode ?? (e.dir ? 0o40755 : 0o100644)) << 16) >>> 0, true);
+    central.setUint32(42, offset, true);
+    locals.push(new Uint8Array(local.buffer), name, body);
+    centrals.push(new Uint8Array(central.buffer), name);
+    offset += 30 + name.length + body.length;
+  }
+  const cdSize = centrals.reduce((n, c) => n + c.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, entries.length, true);
+  end.setUint16(10, entries.length, true);
+  end.setUint32(12, cdSize, true);
+  end.setUint32(16, offset, true);
+  return new Uint8Array(await new Blob([...locals, ...centrals, new Uint8Array(end.buffer)]).arrayBuffer());
+}
+{
+  const zip = await makeZip([
+    { name: "manifest.json", data: '{"version":"1.4.2"}', method: 0 },
+    { name: "src/", dir: true },
+    { name: "src/a.js", data: "A".repeat(500) },
+  ]);
+  const files = await readZip(zip);
+  const text = (/** @type {any} */ f) => new TextDecoder().decode(f.data);
+  ok("zip: stored and deflated files come out with their paths", files.map((f) => f.path).join() === "manifest.json,src/a.js" && text(files[0]) === '{"version":"1.4.2"}' && text(files[1]) === "A".repeat(500));
+  const bad = ["../x", "/x", "a\\b", "C:/x", "a//b", "./x", ".update-staging/x"];
+  const refused = await Promise.all(bad.map(async (name) => (await settles(readZip(await makeZip([{ name, data: "x" }])))).startsWith("rejected")));
+  ok("zip: unsafe paths and our own work folders are refused", refused.every(Boolean));
+  ok("zip: a link is refused", (await settles(readZip(await makeZip([{ name: "l", data: "/etc", mode: 0o120777 }])))).startsWith("rejected"));
+  ok("zip: an encrypted entry is refused", (await settles(readZip(await makeZip([{ name: "a", data: "x", flags: 1 }])))).startsWith("rejected"));
+  ok("zip: a size that does not match is refused", (await settles(readZip(await makeZip([{ name: "a", data: "abc", size: 9 }])))).startsWith("rejected"));
+  ok("zip: bytes that are no zip are refused", (await settles(readZip(new Uint8Array([1, 2, 3])))).startsWith("rejected"));
+  const pkg = (/** @type {any} */ manifest) => [{ path: "manifest.json", data: new TextEncoder().encode(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }];
+  const want = { key: "K", version: "1.4.2" };
+  ok("zip: a manifest with this install's key and the expected version passes", manifestProblem(pkg({ key: "K", version: "1.4.2" }), want) === null);
+  ok("zip: a different key is refused", manifestProblem(pkg({ key: "X", version: "1.4.2" }), want) === "key");
+  ok("zip: an unexpected version is refused", manifestProblem(pkg({ key: "K", version: "1.4.3" }), want) === "version");
+  ok("zip: no manifest or an unreadable one is refused", manifestProblem([], want) === "manifest" && manifestProblem(pkg("{nope"), want) === "manifest");
+}
+
+// FileSystemDirectoryHandle in memory. failAt(op, path) makes the next matching call throw; noMove drops move() like an older Chrome
+function fakeFs({ noMove = false } = {}) {
+  const faults = /** @type {any[]} */ ([]);
+  const join = (/** @type {any} */ a, /** @type {any} */ b) => (a ? `${a}/${b}` : b);
+  const trip = (/** @type {any} */ op, /** @type {any} */ path) => {
+    const i = faults.findIndex((f) => f.op === op && f.path === path);
+    if (i >= 0) {
+      faults.splice(i, 1);
+      throw new Error(`fault ${op} ${path}`);
+    }
+  };
+  const missing = () => new DOMException("not found", "NotFoundError");
+  function file(/** @type {any} */ name, /** @type {any} */ parent) {
+    const f = /** @type {any} */ ({
+      kind: "file",
+      name,
+      parent,
+      data: new Uint8Array(),
+      path: () => join(f.parent.path, f.name),
+      async getFile() {
+        const data = f.data;
+        return { size: data.length, text: async () => new TextDecoder().decode(data), arrayBuffer: async () => data.slice().buffer };
+      },
+      async createWritable() {
+        let next = new Uint8Array();
+        return {
+          write: async (/** @type {any} */ d) => {
+            trip("write", f.path());
+            next = typeof d === "string" ? new TextEncoder().encode(d) : new Uint8Array(d);
+          },
+          close: async () => {
+            f.data = next;
+          },
+        };
+      },
+    });
+    if (!noMove) {
+      f.move = async (/** @type {any} */ a, /** @type {any} */ b) => {
+        const [dest, nextName] = typeof a === "string" ? [f.parent, a] : [a, b ?? f.name];
+        trip("move", f.path());
+        f.parent.kids.delete(f.name);
+        dest.kids.set(nextName, f);
+        f.parent = dest;
+        f.name = nextName;
+      };
+    }
+    return f;
+  }
+  function dir(/** @type {any} */ name, /** @type {any} */ parent) {
+    const d = {
+      kind: "directory",
+      name,
+      kids: new Map(),
+      get path() {
+        return parent ? join(parent.path, name) : "";
+      },
+      async getDirectoryHandle(/** @type {any} */ n, { create = false } = {}) {
+        const k = d.kids.get(n);
+        if (k?.kind === "directory") return k;
+        if (k || !create) throw missing();
+        const sub = dir(n, d);
+        d.kids.set(n, sub);
+        return sub;
+      },
+      async getFileHandle(/** @type {any} */ n, { create = false } = {}) {
+        const k = d.kids.get(n);
+        if (k?.kind === "file") return k;
+        if (k || !create) throw missing();
+        const f = file(n, d);
+        d.kids.set(n, f);
+        return f;
+      },
+      async removeEntry(/** @type {any} */ n, { recursive = false } = {}) {
+        const k = d.kids.get(n);
+        if (!k) throw missing();
+        if (k.kind === "directory" && k.kids.size && !recursive) throw new DOMException("not empty", "InvalidModificationError");
+        trip("remove", join(d.path, n));
+        d.kids.delete(n);
+      },
+      async *entries() {
+        for (const entry of [...d.kids]) yield entry;
+      },
+    };
+    return d;
+  }
+  const root = dir("otp", null);
+  return { root, failAt: (/** @type {any} */ op, /** @type {any} */ path) => faults.push({ op, path }) };
+}
+async function put(/** @type {any} */ root, /** @type {any} */ path, /** @type {any} */ text) {
+  const parts = path.split("/");
+  let d = root;
+  for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
+  const w = await (await d.getFileHandle(parts.at(-1), { create: true })).createWritable();
+  await w.write(text);
+  await w.close();
+}
+/** @param {any} d @param {string} [prefix] @returns {Promise<string[]>} */
+async function snapshot(d, prefix = "") {
+  const out = [];
+  for await (const [name, h] of d.entries()) {
+    if (h.kind === "directory") {
+      const inner = await snapshot(h, `${prefix}${name}/`);
+      out.push(...(inner.length ? inner : [`${prefix}${name}/`]));
+    } else out.push(`${prefix}${name}=${await (await h.getFile()).text()}`);
+  }
+  return out.sort();
+}
+const newFile = (/** @type {any} */ path, /** @type {any} */ text) => ({ path, data: new TextEncoder().encode(text) });
+/** @param {any} [opts] */
+async function oldInstall(opts) {
+  const fs = fakeFs(opts);
+  await put(fs.root, "manifest.json", "v1");
+  await put(fs.root, "src/a.js", "A1");
+  await put(fs.root, "src/old.js", "O");
+  await put(fs.root, "legacy/x.js", "X");
+  return fs;
+}
+const OLD = ["legacy/x.js=X", "manifest.json=v1", "src/a.js=A1", "src/old.js=O"].join();
+const NEXT = [newFile("manifest.json", "v2"), newFile("src/a.js", "A2"), newFile("src/new/n.js", "N")];
+const NEW = ["manifest.json=v2", "src/a.js=A2", "src/new/n.js=N"].join();
+{
+  const fs = await oldInstall();
+  const steps = /** @type {any[]} */ ([]);
+  await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2", onProgress: (done, total) => steps.push([done, total]) });
+  ok("files: the folder ends up holding exactly the new release", (await snapshot(fs.root)).join() === NEW);
+  ok("files: progress climbs one step at a time to the total", steps.length === 8 && steps.every(([d, t], i) => d === i + 1 && t === 8));
+}
+{
+  const fs = await oldInstall();
+  fs.failAt("write", ".update-staging/src/a.js");
+  const err = await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
+  ok("files: a failed write while staging leaves the old install untouched", err?.restored === false && (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await oldInstall();
+  fs.failAt("move", ".update-staging/src/new/n.js");
+  const err = await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" }).then(() => null, (e) => e);
+  ok("files: a failed move halfway puts the old install back", err?.restored === true && (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await oldInstall();
+  fs.failAt("move", "legacy/x.js");
+  await settles(applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" }));
+  ok("files: a failure while setting aside a dropped file also puts the old install back", (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await oldInstall({ noMove: true });
+  await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" });
+  ok("files: without move() the files are copied and the result is the same", (await snapshot(fs.root)).join() === NEW);
+}
+// the state a crash leaves: everything staged, the journal written, a.js swapped and n.js moved in
+async function crashedHalfway() {
+  const fs = await oldInstall();
+  for (const f of NEXT) await put(fs.root, `.update-staging/${f.path}`, new TextDecoder().decode(f.data));
+  await put(fs.root, ".update-journal.json", JSON.stringify({ version: "1.4.2", added: ["src/new/n.js"], removed: ["legacy/x.js", "src/old.js"] }));
+  await put(fs.root, ".update-backup/src/a.js", "A1");
+  await put(fs.root, "src/a.js", "A2");
+  await put(fs.root, "src/new/n.js", "N");
+  return fs;
+}
+{
+  const fs = await crashedHalfway();
+  const first = await recoverUpdate(/** @type {any} */ (fs.root));
+  ok("files: an interrupted update is rolled back to the old install", first === true && (await snapshot(fs.root)).join() === OLD);
+  ok("files: a second recovery finds nothing to do", (await recoverUpdate(/** @type {any} */ (fs.root))) === false);
+}
+{
+  const fs = await oldInstall();
+  await put(fs.root, ".update-staging/src/a.js", "A2");
+  ok("files: staging left without a journal is only cleaned up", (await recoverUpdate(/** @type {any} */ (fs.root))) === false && (await snapshot(fs.root)).join() === OLD);
+}
+{
+  const fs = await crashedHalfway();
+  await applyUpdate(/** @type {any} */ (fs.root), NEXT, { version: "1.4.2" });
+  ok("files: a new update first recovers an interrupted one", (await snapshot(fs.root)).join() === NEW);
+}
+{
+  const fs = await oldInstall();
+  const other = await oldInstall();
+  const readFrom = (/** @type {any} */ root) => async (/** @type {any} */ name) => (await snapshot(root)).find((/** @type {any} */ l) => l.startsWith(`${name}=`))?.slice(name.length + 1) ?? null;
+  ok("files: the folder the extension runs from is recognised", (await isOwnFolder(/** @type {any} */ (fs.root), readFrom(fs.root))) === true);
+  ok("files: a copy elsewhere is not", (await isOwnFolder(/** @type {any} */ (fs.root), readFrom(other.root))) === false);
+  ok("files: the probe file is removed afterwards", (await snapshot(fs.root)).join() === OLD);
+}
+
+{
+  const journalEnv = (/** @type {any} */ journal) => {
+    const env = fakeUpdateEnv();
+    /** @type {any} */ (globalThis).chrome.runtime.getURL = (/** @type {any} */ p) => `chrome-extension://pb/${p}`;
+    globalThis.fetch = async (/** @type {any} */ url) => {
+      env.fetched.push(/** @type {any} */ (String(url)));
+      if (!journal) throw new TypeError("Failed to fetch");
+      return new Response("{}");
+    };
+    return env;
+  };
+  let env = journalEnv(true);
+  ok("interrupted: nothing is looked up when no update was running", (await hasInterruptedUpdate()) === false && env.fetched.length === 0);
+  await setUpdating(true);
+  ok("interrupted: a run that left its journal is found", (await hasInterruptedUpdate()) === true && env.fetched.join() === "chrome-extension://pb/.update-journal.json");
+  env = journalEnv(false);
+  await setUpdating(true);
+  ok("interrupted: a run that left no journal is forgotten", (await hasInterruptedUpdate()) === false && /** @type {any} */ (env.data).isUpdating === undefined);
+  await setUpdating(true);
+  await setUpdating(false);
+  ok("interrupted: a finished run clears its mark", /** @type {any} */ (env.data).isUpdating === undefined);
+  delete /** @type {any} */ (globalThis).chrome;
+  globalThis.fetch = realFetch;
+}
+
+// a saved folder handle with scripted permission answers, counting what the user would be asked
+function savedFolder(/** @type {any} */ query, request = "granted") {
+  const h = /** @type {any} */ ({ asked: 0 });
+  h.queryPermission = async () => query;
+  h.requestPermission = async () => {
+    h.asked++;
+    return request;
+  };
+  return h;
+}
+function folderEnv(/** @type {any} */ saved, { own = true, source = true, pickThrows = false } = {}) {
+  const env = /** @type {any} */ ({ picked: 0, startIn: [], store: { value: saved, get: async () => env.store.value, set: async (/** @type {any} */ v) => (env.store.value = v) } });
+  env.picked_handle = savedFolder("granted");
+  env.deps = {
+    store: env.store,
+    pick: async (/** @type {any} */ startIn) => {
+      env.picked++;
+      env.startIn.push(/** @type {any} */ (startIn));
+      if (pickThrows) throw new DOMException("cancelled", "AbortError");
+      return env.picked_handle;
+    },
+    isSource: async () => source,
+    isOwn: async () => own,
+  };
+  return env;
+}
+{
+  const env = /** @type {any} */ (folderEnv(null));
+  const r = await folderForUpdate(env.deps);
+  ok("folder: the first update asks for the folder once and keeps it", r.ok && r.folder === env.picked_handle && env.picked === 1 && env.startIn[0] === undefined && env.store.value === env.picked_handle);
+}
+{
+  const saved = savedFolder("prompt", "granted");
+  const env = /** @type {any} */ (folderEnv(saved));
+  const r = await folderForUpdate(env.deps);
+  // only a folder that comes through the picker gets chrome's "allow on every visit"; requestPermission offers two buttons
+  ok("folder: after a restart the picker opens at the kept folder instead of the bare permission prompt", r.ok && env.picked === 1 && env.startIn[0] === saved && saved.asked === 0 && env.store.value === env.picked_handle);
+}
+{
+  const saved = savedFolder("granted");
+  const env = /** @type {any} */ (folderEnv(saved));
+  const r = await folderForUpdate(env.deps);
+  ok("folder: with allow on every visit nothing is asked", r.ok && saved.asked === 0 && env.picked === 0);
+}
+{
+  const saved = savedFolder("denied");
+  const env = /** @type {any} */ (folderEnv(saved));
+  const r = await folderForUpdate(env.deps);
+  ok("folder: a refused permission opens the picker at the kept folder again", r.ok && env.picked === 1 && env.startIn[0] === saved);
+}
+{
+  const env = /** @type {any} */ (folderEnv(null, { own: false }));
+  const r = /** @type {any} */ (await folderForUpdate(env.deps));
+  ok("folder: a folder that is not this install is refused and not kept", r.error === "notown" && env.store.value === null);
+}
+{
+  const env = /** @type {any} */ (folderEnv(null, { source: false }));
+  const r = /** @type {any} */ (await folderForUpdate(env.deps));
+  ok("folder: a folder without the PassBridge manifest is refused and not kept", r.error === "notsource" && env.store.value === null);
+}
+{
+  const env = /** @type {any} */ (folderEnv(savedFolder("granted"), { source: false }));
+  ok("folder: a kept folder that lost the PassBridge manifest is refused", /** @type {any} */ ((await folderForUpdate(env.deps))).error === "notsource");
+}
+{
+  // the same lock semantics as navigator.locks with ifAvailable: the second request gets null while the first runs
+  let held = false;
+  const locks = { request: async (/** @type {any} */ name, /** @type {any} */ opts, /** @type {any} */ cb) => (held ? cb(null) : ((held = true), cb({ name }).finally(() => (held = false)))) };
+  let release;
+  const first = withUpdateLock(() => new Promise((r) => (release = r)), locks);
+  let ran = false;
+  const second = await withUpdateLock(async () => (ran = true), locks);
+  ok("lock: a second update started while one runs is refused and never runs", second.ok === false && second.error === "busy" && !ran);
+  /** @type {any} */ (release)("done");
+  ok("lock: the first update still finishes", /** @type {any} */ ((await first)).value === "done");
+  ok("lock: after it finishes a new update can start", (await withUpdateLock(async () => 1, locks)).ok === true);
+}
+{
+  const env = /** @type {any} */ (folderEnv(null, { pickThrows: true }));
+  ok("folder: closing the picker is reported as cancelled", /** @type {any} */ ((await folderForUpdate(env.deps))).error === "cancelled");
+}
+{
+  const env = /** @type {any} */ (folderEnv(savedFolder("granted"), { own: false }));
+  ok("folder: a kept folder that no longer holds this install is reported", /** @type {any} */ ((await folderForUpdate(env.deps))).error === "notown");
+}
+{
+  const env = /** @type {any} */ (folderEnv(savedFolder("granted")));
+  const r = await pickFolder(env.deps);
+  ok("folder: change folder always opens the picker", r.ok && env.picked === 1 && env.store.value === env.picked_handle);
+}
+
+{
+  const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const publicKey = Buffer.from(await crypto.subtle.exportKey("raw", kp.publicKey)).toString("base64");
+  const zip = new TextEncoder().encode("release zip bytes ".repeat(4000));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
+  const asset = (/** @type {any} */ name, /** @type {any} */ extra) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
+  const releaseJson = (/** @type {any} */ assets) => ({ tag_name: "v1.4.2", assets });
+  const full = [asset("passbridge.zip", { size: zip.length, digest: `sha256:${hex}` }), asset("passbridge.zip.sig", { size: 64 })];
+  const cacheModes = new Set();
+  const serve = (/** @type {any} */ json, files = {}) => {
+    globalThis.fetch = async (url, init) => {
+      cacheModes.add(init?.cache);
+      url = String(url);
+      if (url.startsWith("https://api.github.com/")) return json instanceof Error ? Promise.reject(json) : new Response(JSON.stringify(json), { status: 200 });
+      const body = /** @type {any} */ (files)[url.slice("https://dl.test/".length)];
+      return body ? new Response(body) : new Response("missing", { status: 404 });
+    };
+  };
+  serve(releaseJson(full));
+  const release = await latestRelease("1.4.1");
+  ok("release: a newer signed release is described", release.ok && release.version === "1.4.2" && release.size === zip.length && release.pageUrl === "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.2");
+  serve(releaseJson([full[0]]));
+  const unsigned = /** @type {any} */ (await latestRelease("1.4.1"));
+  ok("release: no .sig means unsigned, with the version and the page to download by hand", !unsigned.ok && unsigned.error === "unsigned" && unsigned.version === "1.4.2" && unsigned.pageUrl.endsWith("/v1.4.2"));
+  serve(releaseJson([asset("passbridge.zip", { size: zip.length }), full[1]]));
+  ok("release: no digest also means unsigned", /** @type {any} */ ((await latestRelease("1.4.1"))).error === "unsigned");
+  serve(releaseJson(full));
+  ok("release: the installed version is reported as current", /** @type {any} */ ((await latestRelease("1.4.2"))).error === "current");
+  serve(new Error("offline"));
+  ok("release: no answer from GitHub is a network error", /** @type {any} */ ((await latestRelease("1.4.1"))).error === "network");
+
+  serve(releaseJson(full), { "passbridge.zip": zip, "passbridge.zip.sig": sig });
+  const seen = /** @type {any[]} */ ([]);
+  const got = await downloadRelease(/** @type {any} */ (release), { publicKey, onProgress: (n, total) => seen.push([n, total]) });
+  ok("release: the download is verified and handed back", got.ok && got.zip.length === zip.length);
+  ok("release: download progress reaches the full size", seen.length > 0 && seen.at(-1)[0] === zip.length && seen.at(-1)[1] === zip.length);
+  const tampered = zip.slice();
+  tampered[10] ^= 1;
+  serve(releaseJson(full), { "passbridge.zip": tampered, "passbridge.zip.sig": sig });
+  ok("release: a changed zip fails verification", /** @type {any} */ ((await downloadRelease(/** @type {any} */ (release), { publicKey }))).error === "verify");
+  serve(releaseJson(full), { "passbridge.zip.sig": sig });
+  ok("release: a missing file is a download error", /** @type {any} */ ((await downloadRelease(/** @type {any} */ (release), { publicKey }))).error === "download");
+  ok("release: the lookup and the downloads skip the browser cache", cacheModes.size === 1 && cacheModes.has("no-store"));
+
+  serve(releaseJson([full[0]]));
+  const helper = await installUpdate("1.4.1");
+  ok("helper update: an unsigned release says so instead of blaming the download", !helper.ok && /isn't signed/.test(/** @type {any} */ (helper.error)));
+
+  const heldLocks = { request: async (/** @type {any} */ name, /** @type {any} */ opts, /** @type {any} */ cb) => cb(null) };
+  const busy = await installUpdate("1.4.1", { publicKey, locks: heldLocks });
+  ok("helper update: refused with the plain message while another update holds the lock", !busy.ok && busy.error === "An update is already running in another PassBridge page.");
+
+  // the updater host answering, with storage and reload stubbed
+  const helperEnv = (/** @type {any} */ hostReply) => {
+    const env = /** @type {any} */ (fakeUpdateEnv());
+    env.sent = [];
+    env.reloads = 0;
+    Object.assign(/** @type {any} */ (globalThis).chrome.runtime, {
+      sendNativeMessage: async (/** @type {any} */ host, /** @type {any} */ msg) => (env.sent.push(msg), hostReply),
+      reload: () => env.reloads++,
+    });
+    serve(releaseJson(full), { "passbridge.zip": zip, "passbridge.zip.sig": sig });
+    return env;
+  };
+  let env = /** @type {any} */ (helperEnv({ ok: true }));
+  const installed = await installUpdate("1.4.1", { publicKey });
+  await new Promise((r) => setTimeout(r, 350));
+  ok("helper update: a finished install marks the version for the result page, then reloads", installed.ok && env.sent.some((/** @type {any} */ m) => m.op === "install") && /** @type {any} */ (env.data).updatedTo === "1.4.2" && env.reloads === 1);
+  env = helperEnv({ ok: false, error: "disk full" });
+  const refused = await installUpdate("1.4.1", { publicKey });
+  await new Promise((r) => setTimeout(r, 350));
+  ok("helper update: a refused install marks nothing and does not reload", !refused.ok && /** @type {any} */ (env.data).updatedTo === undefined && env.reloads === 0);
+  delete /** @type {any} */ (globalThis).chrome;
+}
+{
+  const env = fakeUpdateEnv();
+  await markUpdatedTo("1.4.2");
+  const first = await takeUpdatedTo();
+  ok("update: the marked version is handed over once", first === "1.4.2" && /** @type {any} */ (env.data).updatedTo === undefined && (await takeUpdatedTo()) === null);
+  delete /** @type {any} */ (globalThis).chrome;
+}
+globalThis.fetch = realFetch;
+
+{
+  // automatic install: the setting, the host and the failed-once memory decide
+  const setup = (/** @type {any} */ seed) => {
+    const env = /** @type {any} */ (fakeUpdateEnv({ latestRelease: "v1.5.0", ...seed }));
+    /** @type {any} */ (globalThis).chrome.runtime.getManifest = () => ({ version: "1.4.0" });
+    env.installs = [];
+    env.helpers = 0;
+    env.deps = (/** @type {any} */ host, installReply = { ok: true }) => ({
+      available: async () => host,
+      install: async (/** @type {any} */ v, /** @type {any} */ o) => (env.installs.push(o), installReply),
+      helper: async () => (env.helpers++, { ok: true }),
+    });
+    return env;
+  };
+  let env = /** @type {any} */ (setup({}));
+  let r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: a newer release with the host present and the setting on installs by itself", r.ok && env.installs.length === 1 && env.installs[0].auto === true);
+  env = setup({ autoInstallUpdates: false });
+  r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: the setting off means nothing is installed", !r.ran && env.installs.length === 0);
+  env = setup({});
+  r = await autoInstallUpdate(env.deps(false));
+  ok("auto update: no updater host means nothing is installed", !r.ran && r.why === "no-host" && env.installs.length === 0);
+  env = setup({ canCheckForUpdates: false });
+  ok("auto update: with update checks off nothing is installed", !(await autoInstallUpdate(env.deps(true))).ran);
+  env = setup({});
+  r = await autoInstallUpdate(env.deps(true, { ok: false, error: "x" }));
+  ok("auto update: a failed install is remembered for that version", !r.ok && /** @type {any} */ (env.data).autoInstallFailed === "1.5.0");
+  r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: the same version is not retried after a failure", !r.ran && r.why === "failed-before" && env.installs.length === 1);
+  env = setup({ latestRelease: "v1.4.0" });
+  r = await autoInstallUpdate(env.deps(true));
+  ok("auto update: no newer extension release installs nothing but checks the helper", !r.ran && env.installs.length === 0 && env.helpers === 1);
+  delete /** @type {any} */ (globalThis).chrome;
+}
+{
+  // helper update: only when the helper is older than the release, verified like the extension zip
+  const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const publicKey = Buffer.from(await crypto.subtle.exportKey("raw", kp.publicKey)).toString("base64");
+  const zip = new TextEncoder().encode("helper zip bytes ".repeat(500));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, zip));
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", zip)).toString("hex");
+  /** @param {any} name @param {any} [extra] */
+  const asset = (name, extra) => ({ name, browser_download_url: `https://dl.test/${name}`, ...extra });
+  const json = { tag_name: "v1.5.0", assets: ["passbridge-macos-helper.zip", "passbridge-windows-helper.zip"].flatMap((n) => [asset(n, { size: zip.length, digest: `sha256:${hex}` }), asset(`${n}.sig`)]) };
+  const run = async (/** @type {any} */ status, platform = "macOS", tamper = false) => {
+    const env = /** @type {any} */ (fakeUpdateEnv({ latestRelease: "v1.5.0" }));
+    env.sent = [];
+    env.urls = [];
+    const bad = zip.slice();
+    bad[3] ^= 1;
+    globalThis.fetch = async (/** @type {any} */ url) => {
+      url = String(url);
+      env.urls.push(url);
+      if (url.startsWith("https://api.github.com/")) return new Response(JSON.stringify(json));
+      return new Response(url.endsWith(".sig") ? sig : tamper ? bad : zip);
+    };
+    const send = async (/** @type {any} */ m) => (env.sent.push(m), m.op === "status" ? status : { ok: true });
+    env.res = await updateHelper({ publicKey, send, platform });
+    return env;
+  };
+  let e = /** @type {any} */ (await run({ ok: true, helperVersion: "1.4.5" }));
+  const inst = e.sent.find((/** @type {any} */ m) => m.op === "install-helper");
+  ok("helper update: an older helper is replaced with the verified macOS zip", e.res.ok && inst?.version === "1.5.0" && e.urls.some((/** @type {any} */ u) => u.endsWith("/passbridge-macos-helper.zip")) && inst.zip.length > 0);
+  e = await run({ ok: true, helperVersion: "1.5.0" });
+  ok("helper update: a helper at the release version is left alone", e.res.skipped && !e.sent.some((/** @type {any} */ m) => m.op === "install-helper") && e.urls.length === 0);
+  e = await run({ ok: true, helperVersion: null }, "Windows");
+  ok("helper update: an unknown helper version gets the Windows zip", e.sent.some((/** @type {any} */ m) => m.op === "install-helper") && e.urls.some((/** @type {any} */ u) => u.endsWith("/passbridge-windows-helper.zip")));
+  e = await run({ ok: true, helperVersion: "1.4.5" }, "macOS", true);
+  ok("helper update: a zip that fails verification is never sent", !e.res.ok && e.res.error === "verify" && !e.sent.some((/** @type {any} */ m) => m.op === "install-helper"));
+  e = await run({ ok: true });
+  ok("helper update: an old helper without install-helper gets a one-time note and no download", e.res.error === "old-helper" && /** @type {any} */ (e.data).helperOutdatedNote === true && e.urls.length === 0);
+  delete /** @type {any} */ (e.data).helperOutdatedNote; // the popup took the note
+  await updateHelper({ publicKey, send: async () => ({ ok: true }), platform: "macOS" });
+  ok("helper update: the old-helper note is not set again on the next check", !("helperOutdatedNote" in e.data));
+  delete /** @type {any} */ (globalThis).chrome;
+  globalThis.fetch = realFetch;
+}
+
+{
+  const { mkdtempSync, readdirSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const out = mkdtempSync(join(tmpdir(), "pb-build-guard-"));
+  const source = { latestUrl: "http://127.0.0.1:1/releases/latest", publicKey: "AAAA" };
+  ok("build: a release build refuses a test release source", (await settles(buildExtension({ out, releaseSource: /** @type {any} */ (source) }))).startsWith("rejected"));
+  ok("build: a release build refuses a test version", (await settles(buildExtension({ out, version: "9.9.9.1" }))).startsWith("rejected"));
+  ok("build: a refused build writes nothing", readdirSync(out).length === 0);
+  rmSync(out, { recursive: true, force: true });
+}
+{
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { execFileSync } = await import("node:child_process");
+  const repo = mkdtempSync(join(tmpdir(), "pb-stamp-repo-"));
+  const git = (/** @type {any[]} */ ...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd: repo, stdio: "ignore" });
+  git("init", "-q");
+  writeFileSync(join(repo, "a.txt"), "a");
+  git("add", ".");
+  git("commit", "-qm", "init");
+  ok("build stamp: a clean repo gives the short sha", /^[0-9a-f]{7,}$/.test(buildStamp(repo)));
+  writeFileSync(join(repo, "new.txt"), "n");
+  ok("build stamp: an untracked file alone stays clean", /^[0-9a-f]{7,}$/.test(buildStamp(repo)));
+  writeFileSync(join(repo, "a.txt"), "b");
+  ok("build stamp: uncommitted changes add -dirty", /^[0-9a-f]{7,}-dirty$/.test(buildStamp(repo)));
+  rmSync(repo, { recursive: true, force: true });
+  const plain = mkdtempSync(join(tmpdir(), "pb-stamp-plain-"));
+  ok("build stamp: a folder without git gives an empty stamp", buildStamp(plain) === "");
+  rmSync(plain, { recursive: true, force: true });
+  // each build runs tailwind and esbuild, so these two take a few seconds
+  const manifestOf = (/** @type {any} */ dir) => JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
+  const off = mkdtempSync(join(tmpdir(), "pb-stamp-off-"));
+  await buildExtension({ out: off, quiet: true, stamp: false });
+  ok("build stamp: stamp false leaves version_name out", !("version_name" in manifestOf(off)));
+  rmSync(off, { recursive: true, force: true });
+  const on = mkdtempSync(join(tmpdir(), "pb-stamp-on-"));
+  await buildExtension({ out: on, quiet: true, stamp: true });
+  const m = manifestOf(on);
+  ok("build stamp: stamp true sets version_name to version+sha", /^\d+\.\d+\.\d+\+[0-9a-f]{7,}/.test(m.version_name) && m.version_name.startsWith(`${m.version}+`));
+  rmSync(on, { recursive: true, force: true });
+}
+{
+  ok("upstream: a short pin matches the full latest sha", samePin("fc5de86", "fc5de86abc1234") === true);
+  ok("upstream: a different sha does not match", samePin("fc5de86", "0123456abc") === false);
+  ok("upstream: an empty pin never matches", samePin("", "abc") === false);
+  const s = summarize({
+    name: "bitwarden",
+    repo: "bitwarden/clients",
+    pinned: "fc5de86",
+    latest: "aaaa111",
+    diffs: /** @type {any} */ ([{ rel: "a.ts", kind: "changed" }, { rel: "b.ts", kind: "new" }]),
+    missing: /** @type {any} */ ([{ path: "gone.ts", status: 404 }, { path: "x.ts", status: 500 }]),
+  });
+  ok("upstream: summary splits changed, new, removed and failed", s.changed.join() === "a.ts,b.ts" && s.new.join() === "b.ts" && s.removed.join() === "gone.ts" && s.failed.join() === "500 x.ts");
+  ok("upstream: compare link uses pinned and latest", s.compare === "https://github.com/bitwarden/clients/compare/fc5de86...aaaa111");
+  ok("upstream: a 404 counts as a change", changeCount(s) === 3);
+  ok("upstream: title starts with the upstream prefix", issueTitle(s) === "Upstream: bitwarden changed 3 tracked file(s)" && issueTitle(s).startsWith(titlePrefix("bitwarden")));
+  const body = issueBody(s);
+  ok("upstream: body has commits, compare link, files and steps", body.includes("fc5de86") && body.includes("aaaa111") && body.includes(s.compare) && body.includes("`gone.ts`") && body.includes("npm run sync -- bitwarden aaaa111 --accept"));
+}
+
+
+{
+  // sign-release.ts signs a helper zip and the result verifies
+  const { execFileSync } = await import("node:child_process");
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { mkdtempSync, writeFileSync, readFileSync } = await import("node:fs"); const path = await import("node:path"); const os = await import("node:os");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "pb-sign-"));
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  writeFileSync(path.join(dir, "k.pem"), privateKey.export({ type: "pkcs8", format: "pem" }));
+  const zipPath = path.join(dir, "passbridge-macos-helper.zip");
+  writeFileSync(zipPath, "helper zip bytes");
+  const raw = publicKey.export({ type: "spki", format: "der" }).subarray(-32).toString("base64");
+  execFileSync("node", ["scripts/sign-release.ts", "sign", zipPath, "--key", path.join(dir, "k.pem"), "--pub", raw], { stdio: "pipe" });
+  const sigBytes = readFileSync(`${zipPath}.sig`);
+  const hex = Buffer.from(await crypto.subtle.digest("SHA-256", readFileSync(zipPath))).toString("hex");
+  ok("sign-release: a helper zip gets a .sig that verifies", sigBytes.length === 64 && (await verifyRelease(readFileSync(zipPath), sigBytes, hex, raw)));
+}
+
+ok("update page: Windows with the helper installs through it, never a folder write", updateRoute({ windows: true, helper: true }) === "native");
+ok("update page: Windows without the helper offers the helper step first", updateRoute({ windows: true, helper: false }) === "helper");
+ok("update page: Windows without the helper can choose the folder update instead", updateRoute({ windows: true, helper: false, noHelper: true }) === "folder");
+ok("update page: Windows with the helper always installs through it", updateRoute({ windows: true, helper: true, noHelper: true }) === "native");
+ok("update page: other systems keep the folder update", updateRoute({ windows: false, helper: false }) === "folder" && updateRoute({ windows: false, helper: true }) === "folder");
+ok("update page: Windows is read from userAgentData or platform", isWindows({ userAgentData: { platform: "Windows" } }) && isWindows({ platform: "Win32" }) && !isWindows({ platform: "MacIntel" }) && !isWindows({}));
+
+{
+  const ids = (/** @type {any} */ state) => menuItems(state).map((i) => i.id);
+  const locked = ids({ ready: false, logins: [{ username: "a" }], hasCode: true });
+  ok("menu: locked shows Unlock and no login or code items", locked.includes("pb-unlock") && !locked.some((id) => /^pb-(fill|user|pass|otp)/.test(/** @type {any} */ (id))));
+  const offSite = ids({ ready: true, onSite: false, logins: [], hasCode: false });
+  ok("menu: unlocked on a non-web page (settings, chrome://) has no Unlock and no login lines", !offSite.includes("pb-unlock") && !offSite.includes("pb-none") && !offSite.some((id) => /^pb-(fill|user|pass|otp)/.test(/** @type {any} */ (id))));
+  ok("menu: locked on a non-web page still offers Unlock", ids({ ready: false, onSite: false, logins: [], hasCode: false }).includes("pb-unlock"));
+  const none = menuItems({ ready: true, logins: [], hasCode: false });
+  ok("menu: no logins shows a greyed note", none.find((i) => i.id === "pb-none")?.enabled === false && !none.some((i) => /^pb-(fill|user|pass)-/.test(/** @type {any} */ (i.id))));
+  const one = menuItems({ ready: true, logins: [{ username: "me@x.com" }], hasCode: false });
+  ok("menu: one login is flat and named", one.find((i) => i.id === "pb-fill-0")?.title === "Fill me@x.com" && one.find((i) => i.id === "pb-pass-0")?.parentId === "pb-root");
+  ok("menu: no code item without a code", !one.some((i) => i.id === "pb-otp"));
+  const noName = ids({ ready: true, logins: [{ username: "" }], hasCode: false });
+  ok("menu: a login without a username has no Copy username", !noName.includes("pb-user-0"));
+  const two = menuItems({ ready: true, logins: [{ username: "a" }, { username: "b" }], hasCode: true });
+  ok("menu: several logins get one submenu each", two.filter((i) => i.parentId === "pb-acct-1").map((i) => i.id).join() === "pb-fill-1,pb-user-1,pb-pass-1");
+  ok("menu: a submenu parent is not also an action", two.every((i) => !String(i.id).startsWith("pb-acct-") || !loginAction(i.id)));
+  ok("menu: code item shows when the site has a code", two.some((i) => i.id === "pb-otp"));
+  const gen = /** @type {any} */ (one.find((i) => i.id === "pb-gen")), genCopy = /** @type {any} */ (one.find((i) => i.id === "pb-gen-copy"));
+  ok("menu: fill a password only on fields, copy one only on pages", gen.contexts.join() === "editable" && genCopy.contexts.join() === "page");
+  const alnum = /** @type {any} */ (one.find((i) => i.id === "pb-gen-alnum")), alnumCopy = /** @type {any} */ (one.find((i) => i.id === "pb-gen-copy-alnum"));
+  ok("menu: no-special-characters fill on fields, copy on pages", alnum?.contexts.join() === "editable" && alnumCopy?.contexts.join() === "page");
+  ok("menu: copy generated password only when one is held", !one.some((i) => i.id === "pb-gen-last") && menuItems({ ready: true, logins: [], hasCode: false, hasGenerated: true }).some((i) => i.id === "pb-gen-last"));
+  ok("menu: ids are unique", new Set(two.map((i) => i.id)).size === two.length);
+  ok("menu: loginAction reads the id", JSON.stringify(loginAction("pb-pass-2")) === '{"action":"pass","index":2}' && loginAction("pb-acct-1") === null && loginAction("pb-otp") === null);
+}
+
+const backblazeForm = "Two-Factor Verification Enter the 6-digit verification code from your authentication application Code Enter Code";
+ok("backblaze two-factor code field is a one-time code", isBareCodeOtp(["code-field", "code-field", "Code"], backblazeForm));
+ok("a coupon code field is not a one-time code", !isBareCodeOtp(["coupon-code", "coupon-code", "Coupon code"], "Apply a coupon Coupon code Apply"));
+ok("a bare code field with no two-factor text is not a one-time code", !isBareCodeOtp(["code", "code", "Code"], "Redeem your code Code Redeem"));
+ok("a zip code field on a verification form is not a one-time code", !isBareCodeOtp(["zip-code", "zip", "Zip code"], backblazeForm));
+ok("a big page around a bare code field is not used as context", !isBareCodeOtp(["code"], backblazeForm + " x".repeat(400)));
+
+{
+  ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
+  ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
+  const sum = passkeyImportSummary(/** @type {any} */ ([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }]));
+  ok("options: passkey import summary counts each outcome", sum.total === 5 && sum.saved === 2 && sum.exists === 1 && sum.skipped === 1 && sum.failed === 1);
+  ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));
+  ok("options: tabs in order", OPTION_TABS.map((t) => t.id).join() === "autofill,appearance,browser,agents,updates");
+  ok("options: hash opens its tab", tabFromHash("#updates") === "updates");
+  ok("options: odd hashes open autofill", ["", "#", "#AGENTS", "#agents?x", "#%E2"].every((h) => tabFromHash(h) === "autofill"));
+  const view = (/** @type {any} */ policy, /** @type {any} */ updater, isWindows = false, canCheckForUpdates = true) => helperView({ helpers: { policy, updater }, isWindows, canCheckForUpdates });
+  const all = view("present", "present");
+  ok("options: helpers present, nothing locked or noticed", Object.values(all.rows).every((r) => r === "ready") && Object.values(all.notices).every((n) => n === null));
+  const checking = view("checking", "checking");
+  ok("options: checking locks nothing and shows no notice", checking.rows.policy === "checking" && checking.rows.autoInstall === "checking" && Object.values(checking.notices).every((n) => n === null));
+  const noPolicy = view("missing", "present");
+  ok("options: missing policy locks password manager and agents", noPolicy.rows.policy === "locked" && noPolicy.rows.agents === "locked" && noPolicy.rows.autoInstall === "ready");
+  ok("options: missing policy links the macOS helper setup", noPolicy.notices.browser?.text === "Greyed-out settings need the PassBridge helper." && noPolicy.notices.browser.href === "https://github.com/MehdiMamas/passbridge/blob/main/SETUP.md#optional-macos-helper" && !!noPolicy.notices.agents?.href?.endsWith("#agent-sign-in-macos"));
+  ok("options: missing updater on macOS links the one-click update", !!view("present", "missing").notices.updates?.href?.endsWith("#one-click-update-macos"));
+  const win = view("present", "missing", true);
+  ok("options: windows agents row is open while the helper is present", win.rows.agents === "ready" && win.notices.agents === null);
+  const winNoPolicy = view("missing", "present", true);
+  ok("options: windows agents row is locked without the helper and links the windows setup", winNoPolicy.rows.agents === "locked" && !!winNoPolicy.notices.agents?.href?.endsWith("#agent-sign-in-windows"));
+  ok("options: standby relay shows the other-browser line", /another browser or profile/.test(helperView({ helpers: { policy: "present", updater: "present" }, isWindows: false, canCheckForUpdates: true, relay: "standby" }).notices.agents?.text || ""));
+  ok("options: active relay shows no agents notice", helperView({ helpers: { policy: "present", updater: "present" }, isWindows: false, canCheckForUpdates: true, relay: "active" }).notices.agents === null);
+  ok("options: windows updater notice links the windows setup", win.rows.autoInstall === "locked" && !!win.notices.updates?.href?.endsWith("#automatic-updates-windows"));
+  ok("options: windows policy notice links the windows setup", !!view("missing", "present", true).notices.browser?.href?.endsWith("#windows"));
+  ok("options: recheck waits for the 5 s gap", !shouldRecheck(1000, 5999) && shouldRecheck(1000, 6000));
+  ok("options: a recheck that finds the helper clears the notice", view("missing", "missing").notices.browser !== null && view("present", "present").notices.browser === null && view("present", "present").notices.updates === null);
+  {
+    const { readFileSync, existsSync } = await import("node:fs");
+    const rel = readFileSync(new URL("../../.github/workflows/release.yml", import.meta.url), "utf8");
+    ok("release: windows helper zip gets the .cmd files", rel.includes("native/windows/install.cmd") && rel.includes("native/windows/uninstall.cmd"));
+    for (const n of ["install", "uninstall"]) {
+      const u = new URL(`../../native/windows/${n}.cmd`, import.meta.url);
+      ok(`windows: ${n}.cmd runs ${n}.ps1`, existsSync(u) && readFileSync(u, "utf8").includes(`%~dp0${n}.ps1`));
+    }
+  }
+  ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);
+  ok("options: a toggle with no helper note still says to restart", policyMessage(/** @type {any} */ ({ ok: true, hidden: false, needsApproval: true }), true) === "Fully quit and reopen the browser to apply this.");
+  ok("options: a toggle shows the helper's own note", policyMessage(/** @type {any} */ ({ ok: true, hidden: true, note: "Approve it in Windows." }), true) === "Approve it in Windows.");
+  ok("options: a failed toggle shows the error or a fallback", policyMessage({ ok: false, error: "denied" }, true) === "denied" && policyMessage({ ok: false }, true) === "Couldn't change the policy.");
+  ok("theme: system is the default", SETTINGS_DEFAULTS.theme === "system");
+  ok("theme: light and dark force one scheme", colorSchemeFor("light") === "light" && colorSchemeFor("dark") === "dark");
+  ok("theme: system or an unknown value follows the computer", ["system", undefined, null, "", "blue"].every((t) => colorSchemeFor(t) === "light dark"));
+  ok("options: reading the policy shows only an error", policyMessage(/** @type {any} */ ({ ok: true, hidden: true }), false) === "" && policyMessage({ ok: false, error: "no reply" }, false) === "no reply");
+}
+  {
+    const on = { agentSignIn: true, agentAllowAll: false, agentAllowlist: ["github.com"] };
+    const list = addToAllowlist(["github.com"], "Amazon.jobs");
+    ok("agent allow: adds a host once, lowercase", list.join() === "github.com,amazon.jobs" && addToAllowlist(list, "amazon.jobs").join() === list.join());
+    ok("agent allow: a Workday tenant host stays whole", agentHostFor("acme.wd5.myworkdayjobs.com") === "acme.wd5.myworkdayjobs.com");
+    ok("agent allow: a normal site gives its registrable domain", agentHostFor("www.amazon.jobs") === "amazon.jobs");
+    ok("agent allow: offer hidden with agentSignIn off", !agentOfferFor({ ...on, agentSignIn: false }, "amazon.jobs", true).show);
+    ok("agent allow: offer hidden with allow every site on", !agentOfferFor({ ...on, agentAllowAll: true }, "amazon.jobs", true).show);
+    ok("agent allow: offer hidden for an allowed host", !agentOfferFor(on, "gist.github.com", true).show);
+    ok("agent allow: suggested follows generated", agentOfferFor(on, "amazon.jobs", true).suggested === true && agentOfferFor(on, "amazon.jobs", false).suggested === false && agentOfferFor(on, "amazon.jobs", true).show);
+  }
+{
+  const run = (/** @type {any} */ script, { before = 0, ready = /** @type {() => boolean} */ (() => true) } = {}) => {
+    let t = 0;
+    let i = 0;
+    const lookup = async () => {
+      const step = script[Math.min(i++, script.length - 1)];
+      if (step === "throw") throw new Error("busy");
+      return step;
+    };
+    return confirmLoginAdded({ lookup, username: " Me@X.com ", before, isReady: ready, now: () => t, sleep: async (ms) => { t += ms; } });
+  };
+  const me = { username: "me@x.com" };
+  ok("add login: found on the 2nd poll is saved", (await run([[], [me]])) === "saved");
+  ok("add login: never found times out", (await run([[]])) === "timeout");
+  ok("add login: a throw then found is saved", (await run(["throw", [me]])) === "saved");
+  ok("add login: an old entry that stays is not saved", (await run([[me]], { before: 1 })) === "timeout");
+  let calls = 0;
+  ok("add login: locked mid-check stops", (await run([[]], { ready: () => ++calls < 3 })) === "locked");
+}
+{
+  // passkeys: record, webauthn, import (synthetic keys only)
+  const rec = makeRecord({ rpId: "example.test", credentialId: "AbCdEfGh1234", userHandle: "dXNlcg", userName: "ann · test", key: "a2V5" });
+  ok("passkey record: encode then decode round-trips", JSON.stringify(decodeRecord(encodeRecord(rec))) === JSON.stringify(rec));
+  ok("passkey record: a newer version is refused", decodeRecord(pkB64u(new TextEncoder().encode(JSON.stringify({ ...rec, v: 2 })))) === null);
+  ok("passkey record: garbage and missing fields are refused", decodeRecord("!!") === null && decodeRecord(pkB64u(new TextEncoder().encode('{"v":1}'))) === null);
+  ok("passkey record: username holds site, user and 8 chars of the id", recordUsername(rec) === "example.test · ann · test · AbCdEfGh");
+  const parsed = /** @type {any} */ (parseUsername(recordUsername(rec)));
+  ok("passkey record: username parses back", parsed.rpId === "example.test" && parsed.userName === "ann · test" && parsed.idPrefix === "AbCdEfGh");
+  ok("passkey record: a normal login name is not a passkey", !isPasskeyName("me@example.com") && !isPasskeyName("a · b") && isPasskeyName(recordUsername(rec)));
+  ok("passkey record: the dedicated host is recognised", isPasskeyHost(`https://${PASSKEY_HOST}/`) && isPasskeyHost(PASSKEY_HOST) && !isPasskeyHost("https://example.com"));
+
+  const origin = "https://login.example.test";
+  const getDetails = (over = {}) => ({ rpId: "example.test", challenge: "Y2hhbGxlbmdl", allowCredentials: [], userVerification: "preferred", extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
+  const createDetails = (over = {}) => ({ rp: { id: "example.test", name: "Example" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2hhbGxlbmdl", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } }, ...over });
+  const derToRaw = (/** @type {any} */ der) => {
+    let i = 3;
+    const rl = der[i++];
+    let r = der.slice(i, i + rl);
+    i += rl + 1;
+    const sl = der[i++];
+    let s = der.slice(i, i + sl);
+    const fix = (/** @type {any} */ x) => (x.length > 32 ? x.slice(x.length - 32) : Uint8Array.from([...new Array(32 - x.length).fill(0), ...x]));
+    return Uint8Array.from([...fix(r), ...fix(s)]);
+  };
+  const sha = async (/** @type {any} */ d) => new Uint8Array(await crypto.subtle.digest("SHA-256", d));
+  const verifyWith = async (/** @type {any} */ spki, /** @type {any} */ authData, /** @type {any} */ cdj, /** @type {any} */ derSig) => {
+    const pub = await crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const msg = new Uint8Array([...authData, ...(await sha(cdj))]);
+    return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, derToRaw(derSig), msg);
+  };
+
+  const made = await createPasskey(createDetails());
+  const cr = JSON.parse(made.responseJson);
+  const crAd = pkUnb64u(cr.response.authenticatorData);
+  const crCdj = JSON.parse(new TextDecoder().decode(pkUnb64u(cr.response.clientDataJSON)));
+  const rpHash = await sha(new TextEncoder().encode("example.test"));
+  ok("passkey create: clientDataJSON has type, challenge and the page origin", crCdj.type === "webauthn.create" && crCdj.challenge === "Y2hhbGxlbmdl" && crCdj.origin === origin);
+  ok("passkey create: rpIdHash, flags UP+BE+BS+AT without UV, counter 0", Buffer.from(crAd.slice(0, 32)).equals(Buffer.from(rpHash)) && crAd[32] === 0x59 && crAd.slice(33, 37).every((b) => b === 0));
+  const idLen = (crAd[53] << 8) | crAd[54];
+  ok("passkey create: attested data carries the credential id and an ES256 COSE key", pkB64u(crAd.slice(55, 55 + idLen)) === cr.id && crAd.slice(55 + idLen).length === 77 && crAd[55 + idLen] === 0xa5);
+  ok("passkey create: the stored record matches the answer", made.record.credentialId === cr.rawId && made.record.rpId === "example.test" && made.record.userName === "ann" && made.record.userHandle === "dXNlcjE");
+  ok("passkey create: UV flag set only when asked", ((await createPasskey(createDetails(), { userVerified: true }).then((m) => pkUnb64u(JSON.parse(m.responseJson).response.authenticatorData)))[32] & 0x04) === 0x04 && (crAd[32] & 0x04) === 0);
+  ok("passkey create: the attestation object is CBOR with fmt none", Buffer.from(pkUnb64u(cr.response.attestationObject)).toString("latin1").includes("fmtdnone"));
+
+  const spki = pkUnb64u(cr.response.publicKey);
+  /** @param {any} [opts] */
+  const sign = async (opts) => {
+    const g = JSON.parse(await signAssertion(getDetails(), made.record, opts));
+    return { g, ad: pkUnb64u(g.response.authenticatorData), cdj: pkUnb64u(g.response.clientDataJSON), sig: pkUnb64u(g.response.signature) };
+  };
+  const got = await sign();
+  ok("passkey get: the signature verifies with the public key from create", await verifyWith(spki, got.ad, got.cdj, got.sig));
+  ok("passkey get: flags UP+BE+BS without UV, counter 0", got.ad[32] === 0x19 && got.ad.length === 37 && got.ad.slice(33).every((b) => b === 0));
+  ok("passkey get: UV flag set when the vault read verified the user", (await sign({ userVerified: true })).ad[32] === 0x1d);
+  ok("passkey get: a signature over other data does not verify", !(await verifyWith(spki, got.ad, new TextEncoder().encode("{}"), got.sig)));
+  ok("passkey get: answer carries id, user handle and clientDataJSON origin", got.g.id === made.record.credentialId && got.g.response.userHandle === "dXNlcjE" && JSON.parse(new TextDecoder().decode(got.cdj)).origin === origin);
+  const refused = async (/** @type {any} */ fn) => {
+    try {
+      await fn();
+      return null;
+    } catch (e) {
+      return e.name;
+    }
+  };
+  ok("passkey get: another site's origin is refused", (await refused(() => signAssertion(getDetails({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }), made.record))) === "SecurityError");
+  ok("passkey get: a missing origin is refused", (await refused(() => signAssertion(getDetails({ extensions: {} }), made.record))) === "SecurityError");
+  ok("passkey get: a credential not on the allow list is refused", (await refused(() => signAssertion(getDetails({ allowCredentials: [{ type: "public-key", id: "b3RoZXI" }] }), made.record))) === "NotAllowedError");
+  ok("passkey get: a listed credential is allowed", !!(await signAssertion(getDetails({ allowCredentials: [{ type: "public-key", id: made.record.credentialId }] }), made.record)));
+  ok("passkey create: an rp id that is not the page's site is refused", (await refused(() => createPasskey(createDetails({ rp: { id: "other.test" } })))) === "SecurityError");
+  ok("passkey create: no ES256 offered is refused", (await refused(() => createPasskey(createDetails({ pubKeyCredParams: [{ type: "public-key", alg: -257 }] })))) === "NotSupportedError");
+
+  // import
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const k256 = pkB64u(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+  const kp384 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-384" }, true, ["sign", "verify"]);
+  const k384 = pkB64u(await crypto.subtle.exportKey("pkcs8", kp384.privateKey));
+  const guid = "e8d88789-e916-e196-3cbd-81dafae71bbc";
+  const bw = {
+    encrypted: false,
+    items: [
+      { login: { username: "x", fido2Credentials: [
+        { credentialId: guid, keyType: "public-key", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "example.test", userHandle: "dXNlcjE", userName: "ann", counter: "0", discoverable: "true" },
+        { credentialId: "b64.AAECAwQFBgcICQoLDA0ODw", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "two.example.test", userName: "bob", counter: "0" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-384", keyValue: k384, rpId: "p384.example.test", userName: "cy", counter: "0" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: "", rpId: "nokey.example.test", userName: "di" },
+        { credentialId: "not-a-guid", keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: k256, rpId: "badid.example.test" },
+        { credentialId: guid, keyAlgorithm: "ECDSA", keyCurve: "P-256", keyValue: "AAECAwQFBg", rpId: "badkey.example.test" },
+      ] } },
+      { login: { username: "plain" } },
+      { card: {} },
+    ],
+  };
+  const bwOut = await parseBitwarden(bw);
+  ok("import bitwarden: the two good P-256 passkeys are kept", bwOut.records.length === 2 && bwOut.records[0].rpId === "example.test" && bwOut.records[1].rpId === "two.example.test");
+  ok("import bitwarden: a GUID credential id becomes the raw id in base64url", bwOut.records[0].credentialId === "6NiHiekW4ZY8vYHa-ucbvA" && bwOut.records[1].credentialId === "AAECAwQFBgcICQoLDA0ODw");
+  ok("import bitwarden: fields map to the record", bwOut.records[0].userName === "ann" && bwOut.records[0].userHandle === "dXNlcjE" && bwOut.records[0].v === 1 && bwOut.records[1].userHandle === "");
+  ok("import bitwarden: four skipped, each with a reason", bwOut.skipped.length === 4 && bwOut.skipped.every((s) => s.label && s.reason) && bwOut.skipped[0].reason.includes("P-256") && bwOut.skipped[1].reason.includes("key") && bwOut.skipped[2].reason.includes("credential id"));
+  const imported = bwOut.records[0];
+  const sigRec = JSON.parse(await signAssertion(getDetails(), imported));
+  const importedPub = await crypto.subtle.importKey("jwk", { ...(await crypto.subtle.exportKey("jwk", kp.publicKey)) }, { name: "ECDSA", namedCurve: "P-256" }, true, ["verify"]);
+  ok("import bitwarden: an imported key signs and verifies against its public key", await verifyWith(new Uint8Array(await crypto.subtle.exportKey("spki", importedPub)), pkUnb64u(sigRec.response.authenticatorData), pkUnb64u(sigRec.response.clientDataJSON), pkUnb64u(sigRec.response.signature)));
+  ok("import bitwarden: an encrypted export is refused with a reason", (await parseBitwarden({ encrypted: true, items: [] })).skipped[0].reason.includes("encrypted"));
+  const cxf = { version: { major: 1, minor: 0 }, accounts: [{ id: "a", items: [{ id: "i", title: "Ex", credentials: [
+    { type: "basic-auth", username: { fieldType: "string", value: "x" } },
+    { type: "passkey", credentialId: "AAECAwQFBgcICQoLDA0ODw", rpId: "example.test", username: "ann", userDisplayName: "Ann", userHandle: "dXNlcjE", key: k256 },
+    { type: "passkey", credentialId: "AAECAwQFBgcICQoLDA0ODw", rpId: "p384.example.test", username: "cy", userDisplayName: "Cy", userHandle: "dXNlcjE", key: k384 },
+  ] }] }] };
+  const cxfOut = await parseCxf(cxf);
+  ok("import cxf: the P-256 passkey is kept, the P-384 one skipped with a reason", cxfOut.records.length === 1 && cxfOut.records[0].userName === "ann" && cxfOut.skipped.length === 1 && cxfOut.skipped[0].reason.includes("P-256"));
+  ok("import: parseExport reads a Credential Exchange file only", (await parseExport(JSON.stringify(cxf))).records.length === 1 && (await refused(() => parseExport(JSON.stringify(bw)))) === "Error");
+  ok("import: not JSON and unknown JSON give a plain error", (await refused(() => parseExport("nope"))) === "Error" && (await refused(() => parseExport("{}"))) === "Error");
+}
+{
+  // passkeys: store over the mock client
+  const client = createMockClient("unlocked");
+  const rec = (/** @type {any} */ rpId, /** @type {any} */ id, name = "ann") => makeRecord({ rpId, credentialId: id, userHandle: "dXNlcjE", userName: name, key: "a2V5" });
+  const a = rec("example.test", "AAAAAAAAAAAA");
+  ok("passkey store: nothing listed at first", (await listPasskeys(client, 1)).length === 0);
+  ok("passkey store: save is confirmed from the vault", (await savePasskey(client, 1, a, { pollMs: 1 })) === "saved");
+  ok("passkey store: saving the same passkey again writes nothing", (await savePasskey(client, 1, a, { pollMs: 1 })) === "exists" && (await listPasskeys(client, 1)).length === 1);
+  await savePasskey(client, 1, rec("other.test", "BBBBBBBBBBBB", "bo"), { pollMs: 1 });
+  const list = await listPasskeys(client, 1);
+  ok("passkey store: list parses the names", list.length === 2 && list[0].rpId === "example.test" && list[0].userName === "ann");
+  ok("passkey store: a site sees its own passkeys and its parent domain's", passkeysForHost(list, "login.example.test").length === 1 && passkeysForHost(list, "example.test").length === 1 && passkeysForHost(list, "badexample.test").length === 0 && passkeysForHost(list, "none.test").length === 0);
+  const read = /** @type {any} */ (await readPasskey(client, 1, list[0]));
+  ok("passkey store: read returns the saved record, UV off by default", JSON.stringify(read.record) === JSON.stringify(a) && read.userVerified === false);
+  /** @type {any} */ (globalThis).__mockVerified = true;
+  ok("passkey store: UV is reported only when the client says it verified", /** @type {any} */ ((await readPasskey(client, 1, list[0]))).userVerified === true);
+  delete /** @type {any} */ (globalThis).__mockVerified;
+  const locked = createMockClient("locked");
+  ok("passkey store: a locked vault throws on list and save", (await Promise.all([listPasskeys(locked, 1).then(() => "ok", () => "throw"), savePasskey(locked, 1, a).then(() => "ok", () => "throw")])).join() === "throw,throw");
+  const unreadable = { getPasswordForLoginName: async () => ({ username: "x", password: "not a record" }) };
+  ok("passkey store: a password that is not a record reads as null", (await readPasskey(unreadable, 1, list[0])) === null);
+}
+{
+  // passkeys: proxy (attach rules and request handling) with a fake chrome.webAuthenticationProxy
+  const origin = "https://login.example.test";
+  const ext = { remoteDesktopClientOverride: { origin, sameOriginWithAncestors: true } };
+  const getJson = (o = {}) => JSON.stringify({ rpId: "example.test", challenge: "Y2g", allowCredentials: [], extensions: ext, ...o });
+  const createJson = (o = {}) => JSON.stringify({ rp: { id: "example.test", name: "E" }, user: { id: "dXNlcjE", name: "ann", displayName: "Ann" }, challenge: "Y2g", pubKeyCredParams: [{ type: "public-key", alg: -7 }], extensions: ext, ...o });
+  // a stand-in for chrome.storage.session
+  const memory = () => {
+    const data = /** @type {any} */ ({});
+    return { data, get: async (/** @type {any} */ d) => ({ ...d, ...Object.fromEntries(Object.keys(d).filter((k) => k in data).map((k) => [k, structuredClone(data[k])])) }), set: async (/** @type {any} */ o) => void Object.assign(data, structuredClone(o)), remove: async (/** @type {any} */ k) => void delete data[k] };
+  };
+  const setup = async ({ enabled = true, url = origin + "/", kind = "unlocked", allSites = false, stayUnlocked = false } = {}) => {
+    const calls = /** @type {any[]} */ ([]);
+    const api = {
+      attach: async () => void calls.push("attach"),
+      detach: async () => void calls.push("detach"),
+      completeGetRequest: async (/** @type {any} */ d) => void calls.push({ get: d }),
+      completeCreateRequest: async (/** @type {any} */ d) => void calls.push({ create: d }),
+      completeIsUvpaaRequest: async (/** @type {any} */ d) => void calls.push({ uvpaa: d }),
+      onCreateRequest: { addListener: () => {} },
+      onGetRequest: { addListener: () => {} },
+      onIsUvpaaRequest: { addListener: () => {} },
+      onRequestCanceled: { addListener: () => {} },
+    };
+    const state = { url, enabled, allSites, stayUnlocked };
+    const client = createMockClient(kind);
+    const session = memory();
+    const proxy = createPasskeyProxy({ api: () => api, client, ensureConnected: async () => {}, enabled: async () => state.enabled, settings: async () => ({ allSites: state.allSites, stayUnlocked: state.stayUnlocked }), session: () => session, getTab: async () => ({ id: 1, url: state.url }), sleep: async () => { await new Promise((r) => setTimeout(r, 1)); }, pollMs: 1 });
+    return { calls, api, state, client, proxy, session };
+  };
+  const seed = (/** @type {any} */ client) => createPasskey(JSON.parse(createJson())).then(({ record }) => savePasskey(client, 1, record, { pollMs: 1 }).then(() => record));
+
+  let w = await setup();
+  await w.proxy.refresh();
+  ok("passkey proxy: no stored passkey for the site stays detached", w.calls.join() === "detach");
+  await seed(w.client);
+  w.proxy.invalidate();
+  await w.proxy.refresh();
+  ok("passkey proxy: a stored passkey for the site attaches", w.calls.join() === "detach,attach");
+  await w.proxy.refresh();
+  ok("passkey proxy: no change means no call", w.calls.length === 2);
+  w.state.url = "https://other.test/";
+  await w.proxy.refresh();
+  ok("passkey proxy: another site detaches", w.calls.join() === "detach,attach,detach");
+  w.state.url = "chrome://extensions/";
+  await w.proxy.refresh();
+  ok("passkey proxy: a non-web page stays detached", w.calls.length === 3);
+  const off = await setup({ enabled: false });
+  await seed(off.client);
+  await off.proxy.refresh();
+  ok("passkey proxy: the setting off detaches even with stored passkeys", off.calls.join() === "detach");
+
+  w = await setup();
+  const rec = await seed(w.client);
+  await w.proxy.onGet({ requestId: /** @type {any} */ (1), requestDetailsJson: getJson() });
+  const g = w.calls.find((c) => c.get)?.get;
+  ok("passkey proxy: a get request is answered with a response for the stored passkey", g?.requestId === 1 && !g.error && JSON.parse(g.responseJson).id === rec.credentialId);
+  w.calls.length = 0;
+  await w.proxy.onGet({ requestId: /** @type {any} */ (2), requestDetailsJson: getJson({ extensions: { remoteDesktopClientOverride: { origin: "https://evil.test" } } }) });
+  ok("passkey proxy: a get from the wrong origin is refused", w.calls[0].get.error?.name === "SecurityError" && !w.calls[0].get.responseJson);
+  w.calls.length = 0;
+  await w.proxy.onGet({ requestId: /** @type {any} */ (3), requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  ok("passkey proxy: a get that allows only other credentials is refused", w.calls[0].get.error?.name === "NotAllowedError");
+  w.calls.length = 0;
+  await w.proxy.onCreate({ requestId: /** @type {any} */ (4), requestDetailsJson: createJson({ user: { id: "dXNlcjI", name: "bo", displayName: "Bo" } }) });
+  const c = w.calls.find((x) => x.create)?.create;
+  ok("passkey proxy: a create request is saved to the vault, then answered", !!c?.responseJson && (await listPasskeys(w.client, 1)).length === 2);
+  w.calls.length = 0;
+  await w.proxy.onCreate({ requestId: /** @type {any} */ (5), requestDetailsJson: createJson({ rp: { id: "other.test" } }) });
+  ok("passkey proxy: a create for another site's rp id is refused and nothing is saved", w.calls[0].create.error?.name === "SecurityError" && (await listPasskeys(w.client, 1)).length === 2);
+  const failing = { ...w.client, saveLogin: async () => true, getLoginNamesForURL: w.client.getLoginNamesForURL, get ready() { return true; } };
+  const p2 = createPasskeyProxy({ api: () => w.api, client: failing, ensureConnected: async () => {}, enabled: async () => true, getTab: async () => ({ id: 1, url: origin }), sleep: async () => {}, pollMs: 1 });
+  w.calls.length = 0;
+  const realNow = Date.now;
+  let tick = 0;
+  Date.now = () => realNow() + (tick += 20000);
+  await p2.onCreate({ requestId: /** @type {any} */ (6), requestDetailsJson: createJson({ user: { id: "dXNlcjM", name: "cy", displayName: "Cy" } }) });
+  Date.now = realNow;
+  ok("passkey proxy: a create that never shows in the vault is reported as failed", w.calls[0].create.error?.name === "NotAllowedError" && !w.calls[0].create.responseJson);
+
+  const lk = await setup({ kind: "locked" });
+  await lk.proxy.onGet({ requestId: /** @type {any} */ (7), requestDetailsJson: getJson({ timeout: 30 }) });
+  ok("passkey proxy: a locked vault waits, then ends with Chrome's normal error", lk.calls[0].get.error?.name === "NotAllowedError");
+  ok("passkey proxy: a locked vault is not attached before it can list passkeys", (await lk.proxy.refresh(), !lk.calls.includes("attach")));
+
+  // all sites on: attached on any web page, even with nothing stored
+  const all = await setup({ allSites: true, url: "https://new-site.test/" });
+  await all.proxy.refresh();
+  ok("passkey proxy: all sites on attaches on a site with no passkey", all.calls.join() === "attach");
+  all.state.allSites = false;
+  all.proxy.invalidate();
+  await all.proxy.refresh();
+  ok("passkey proxy: all sites off goes back to attaching only where a passkey is stored", all.calls.join() === "attach,detach");
+  all.state.url = "chrome://extensions/";
+  all.state.allSites = true;
+  await all.proxy.refresh();
+  ok("passkey proxy: all sites on still stays detached on a non-web page", all.calls.join() === "attach,detach");
+
+  // create, then get: the assertion verifies with the public key returned at registration
+  const cr = await setup({ allSites: true });
+  await cr.proxy.onCreate({ requestId: /** @type {any} */ (20), requestDetailsJson: createJson() });
+  const created = JSON.parse(cr.calls.find((x) => x.create).create.responseJson);
+  ok("passkey proxy: create on a site with no passkey stores it", (await listPasskeys(cr.client, 1)).length === 1 && !!created.id);
+  await cr.proxy.onGet({ requestId: /** @type {any} */ (21), requestDetailsJson: getJson({ allowCredentials: [{ type: "public-key", id: created.rawId }] }) });
+  const got = JSON.parse(cr.calls.find((x) => x.get).get.responseJson);
+  const pub = await crypto.subtle.importKey("spki", pkUnb64u(created.response.publicKey), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+  const der = pkUnb64u(got.response.signature);
+  const derInt = (/** @type {any} */ at) => { const l = der[at + 1]; let x = der.slice(at + 2, at + 2 + l); while (x.length > 32) x = x.slice(1); const o = new Uint8Array(32); o.set(x, 32 - x.length); return [o, at + 2 + l]; };
+  const [r1, next] = derInt(2);
+  const [r2] = derInt(next);
+  const sigRaw = new Uint8Array(64);
+  sigRaw.set(r1);
+  sigRaw.set(r2, 32);
+  const adBytes = pkUnb64u(got.response.authenticatorData);
+  const cdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", pkUnb64u(got.response.clientDataJSON)));
+  const signed = new Uint8Array(adBytes.length + 32);
+  signed.set(adBytes);
+  signed.set(cdHash, adBytes.length);
+  ok("passkey proxy: a get after a create verifies with the public key from the create", await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, sigRaw, signed));
+
+  // excludeCredentials that matches a stored passkey
+  cr.calls.length = 0;
+  await cr.proxy.onCreate({ requestId: /** @type {any} */ (22), requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: created.rawId }] }) });
+  ok("passkey proxy: excludeCredentials matching a stored passkey gives InvalidStateError and saves nothing", cr.calls[0].create.error?.name === "InvalidStateError" && (await listPasskeys(cr.client, 1)).length === 1);
+  cr.calls.length = 0;
+  await cr.proxy.onCreate({ requestId: /** @type {any} */ (23), requestDetailsJson: createJson({ excludeCredentials: [{ type: "public-key", id: "zzzzzzzzzzzz" }] }) });
+  ok("passkey proxy: excludeCredentials that match nothing still creates", !!cr.calls[0].create.responseJson);
+
+  // two passkeys of one user on one site both exist; the same credential id is skipped
+  ok("passkey store: a second passkey for the same user and site is saved", (await listPasskeys(cr.client, 1)).length === 2);
+  const again = await listPasskeys(cr.client, 1);
+  const rd = /** @type {any} */ (await readPasskey(cr.client, 1, again[0]));
+  ok("passkey store: a record with an existing credential id is skipped", (await savePasskey(cr.client, 1, rd.record, { pollMs: 1 })) === "exists" && (await listPasskeys(cr.client, 1)).length === 2);
+
+  // stay-unlocked cache: off keeps nothing, on keeps the read passkey, a locked helper still signs, clearing drops it
+  const stay = await setup();
+  const kept = await seed(stay.client);
+  await stay.proxy.onGet({ requestId: /** @type {any} */ (30), requestDetailsJson: getJson() });
+  ok("passkey proxy: stay unlocked off keeps nothing in the session cache", !("passkeyCache" in stay.session.data));
+  stay.state.stayUnlocked = true;
+  await stay.proxy.onGet({ requestId: /** @type {any} */ (31), requestDetailsJson: getJson() });
+  ok("passkey proxy: stay unlocked on keeps the passkey after a read", !!/** @type {any} */ (stay.session.data).passkeyCache?.["example.test"]?.[kept.credentialId]);
+  const reads = { n: 0 };
+  const realRead = stay.client.getPasswordForLoginName;
+  stay.client.getPasswordForLoginName = async (...a) => (reads.n++, realRead(...a));
+  stay.calls.length = 0;
+  await stay.proxy.onGet({ requestId: /** @type {any} */ (32), requestDetailsJson: getJson() });
+  ok("passkey proxy: a cached passkey signs without reading through the helper", reads.n === 0 && !!stay.calls[0].get.responseJson);
+  stay.client.state = "locked";
+  Object.defineProperty(stay.client, "ready", { get: () => false, configurable: true });
+  stay.calls.length = 0;
+  await stay.proxy.onGet({ requestId: /** @type {any} */ (33), requestDetailsJson: getJson() });
+  ok("passkey proxy: a cached passkey signs while the helper is locked", !!stay.calls[0].get.responseJson);
+  await stay.proxy.clearCache();
+  ok("passkey proxy: clearing the cache drops the kept passkeys", !("passkeyCache" in stay.session.data));
+
+  // nudge: a get with no passkey for the site leaves its rp id for the popup
+  const nd = await setup({ allSites: true });
+  await nd.proxy.onGet({ requestId: /** @type {any} */ (40), requestDetailsJson: getJson() });
+  ok("passkey proxy: a get with no passkey saves the nudge and ends with Chrome's normal error", /** @type {any} */ (nd.session.data).passkeyNudge?.rpId === "example.test" && nd.calls.find((x) => x.get).get.error?.name === "NotAllowedError");
+  ok("passkey login filter: passkey rows are hidden from fill lists", isPasskeyLogin({ username: "example.test · ann · AAAAAAAA", sites: [] }) && isPasskeyLogin({ username: "x", sites: ["passkeys.passbridge.invalid"] }) && !isPasskeyLogin({ username: "me@example.com", sites: ["example.com"] }));
+  const logins = [{ username: "Alex@Mail.com" }, { username: "sam" }, { username: "" }];
+  const names = (/** @type {any} */ q) => filterByUsername(logins, q).map((l) => l.username);
+  ok("username filter: case is ignored", names("ALEX").join() === "Alex@Mail.com");
+  ok("username filter: outer spaces are ignored", names("  sam ").join() === "sam");
+  ok("username filter: part of a name matches", names("mail").join() === "Alex@Mail.com");
+  ok("username filter: empty query keeps all", names("").length === 3 && names("   ").length === 3);
+  ok("username filter: no match gives an empty list", names("zzz").length === 0);
+  const codes = [{ id: 1, username: "sam" }, { id: 2, username: "alex@mail.com" }, { id: 3, username: "bob" }, { id: 4 }];
+  const ids = (/** @type {any} */ q) => codesForLogins(codes, filterByUsername(logins, q), q).map((c) => c.id).join();
+  ok("codes: grouped codes follow their kept login", ids("sam") === "1");
+  ok("codes: an ungrouped code stays when its username matches", ids("bo") === "3");
+  ok("codes: empty query keeps every code", ids("") === "1,2,3,4");
+  ok("codes: an ungrouped code without a username is hidden by a query", !ids("sam").includes("4"));
+}
+// the save offer for a login we just autofilled: a corrected password is a change, not a re-login
+{
+  const target = (/** @type {any} */ p) => pickSaveTarget(p);
+  const existing = ["ada@example.com"];
+
+  ok("save: an unchanged autofilled login is not offered", target({ existing, detected: "ada@example.com", newPwCtx: false }) === null);
+  ok(
+    "save: a password corrected after autofill is offered as an update",
+    target({ existing, detected: "ada@example.com", newPwCtx: newPasswordContext(/** @type {any} */ ({ passwordCount: 1, correctedAfterFill: true })) }) === "ada@example.com",
+  );
+  ok(
+    "save: a corrected password with no username read off the form attaches to the recent login",
+    target({ existing, detected: "", newPwCtx: newPasswordContext(/** @type {any} */ ({ passwordCount: 1, correctedAfterFill: true })), recent: "ada@example.com" }) === "ada@example.com",
+  );
+  ok("save: no username and no change still saves nothing", target({ existing, detected: "", newPwCtx: false }) === null);
+  ok("save: an unknown username is saved as typed", target({ existing, detected: "new@example.com", newPwCtx: false }) === "new@example.com");
+  ok("save: a generated password updates the matched login", target({ existing, detected: "ada@example.com", generated: true }) === "ada@example.com");
+  ok("save: a generated password with no match lets Apple's sheet ask", target({ existing: [], detected: "", generated: true }) === "");
+  ok("save: the username match ignores case", target({ existing: ["Ada@Example.com"], detected: "ada@example.com", newPwCtx: true }) === "Ada@Example.com");
+
+  ok("new password context: a plain one-field login is not a new password", !newPasswordContext(/** @type {any} */ ({ passwordCount: 1 })));
+  ok("new password context: a correction after autofill is", newPasswordContext(/** @type {any} */ ({ passwordCount: 1, correctedAfterFill: true })));
+  ok("new password context: two password fields are", newPasswordContext(/** @type {any} */ ({ passwordCount: 2 })));
+  ok("new password context: autocomplete=new-password is", newPasswordContext(/** @type {any} */ ({ passwordCount: 1, hasNewPasswordMark: true })));
+  ok("new password context: a generated password is", newPasswordContext(/** @type {any} */ ({ passwordCount: 1, generated: true })));
+}
+
+ok("add login: same username shown takes the new-login sheet", useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: true }));
+ok("add login: no match saves normally", !useNewLoginSheet({ username: "me@x.com", before: 0, canSheet: true }));
+ok("add login: empty username saves normally", !useNewLoginSheet({ username: "  ", before: 2, canSheet: true }));
+ok("add login: helper without the sheet saves normally", !useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: false }));
+
+console.log(failed ? `\n${failed} failed` : "\nunit ok");
+process.exit(failed ? 1 : 0);

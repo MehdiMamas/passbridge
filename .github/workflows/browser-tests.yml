@@ -1,6 +1,6 @@
 name: Browser tests
 
-# headless Chromium suite (run-all.mjs), including the e2e drivers against the simulated Apple helper
+# headless Chromium suite (run-all.ts), including the e2e drivers against the simulated Apple helper
 on:
   pull_request:
   push:
@@ -18,12 +18,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.18'
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: node test-harness/automation/build-test-extensions.mjs
-      - run: xvfb-run -a node test-harness/automation/run-all.mjs
+      - run: node test-harness/automation/build-test-extensions.ts
+      - run: xvfb-run -a node test-harness/automation/run-all.ts
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

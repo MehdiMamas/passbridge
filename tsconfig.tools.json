@@ -5,11 +5,12 @@
     "moduleResolution": "nodenext",
     "lib": ["ES2022", "ESNext.Array", "DOM"],
     "types": ["node", "chrome"],
-    "noImplicitAny": true
+    "noImplicitAny": true,
+    "verbatimModuleSyntax": true
   },
   "include": [
-    "scripts/**/*.mjs",
-    "test-harness/automation/**/*.mjs",
-    "test-harness/fake-apple-helper/**/*.mjs"
+    "scripts/**/*.ts",
+    "test-harness/automation/**/*.ts",
+    "test-harness/fake-apple-helper/**/*.ts"
   ]
 }
