@@ -1,4 +1,3 @@
-// @ts-nocheck
 // The Apple helper's side of the native-messaging protocol, for tests. It does what the real helper does for the
 // extension (capabilities, SRP-6a pairing with a 6-digit code, AES-GCM sessions, the vault commands) and nothing else.
 // Keychain and Touch ID / Windows Hello happen inside Apple's helper, so they show up here as vault state and as an
@@ -23,7 +22,9 @@ export function seedVault() {
   };
 }
 
+/** @type {(site: string, host: string) => boolean} */
 const hostMatches = (site, host) => host === site || host.endsWith("." + site);
+/** @param {string} u */
 const hostOf = (u) => {
   try {
     return new URL(u).hostname.toLowerCase();
@@ -31,6 +32,8 @@ const hostOf = (u) => {
     return "";
   }
 };
+
+/** @typedef {{ send: (reply: any) => void, server: any, live: boolean, paired: boolean, username: string, closed: boolean }} Conn */
 
 export class FakeHelper {
   /** @param {{ style?: "mac" | "win", vault?: ReturnType<typeof seedVault> }} [opts] */
@@ -42,9 +45,13 @@ export class FakeHelper {
     /** what Touch ID / Windows Hello does for password and code reads: "approve", "deny" or "timeout" (never answers) */
     this.auth = "approve";
     this.authPrompts = 0;
+    /** @type {string[]} */
     this.codesShown = [];
+    /** @type {any[]} */
     this.saved = [];
+    /** @type {any[]} */
     this.launched = [];
+    /** @type {Set<Conn>} */
     this.conns = new Set();
   }
 
@@ -53,12 +60,16 @@ export class FakeHelper {
     return this.codesShown[this.codesShown.length - 1];
   }
 
-  /** a new browser connection; send(reply) delivers a reply to it, the return value takes its messages */
+  /**
+   * a new browser connection; send(reply) delivers a reply to it, the return value takes its messages
+   * @param {(reply: any) => void} send
+   */
   connect(send) {
+    /** @type {Conn} */
     const conn = { send, server: null, live: false, paired: false, username: "", closed: false };
     this.conns.add(conn);
     return {
-      receive: (msg) => this._handle(conn, msg),
+      receive: (/** @type {any} */ msg) => this._handle(conn, msg),
       close: () => {
         conn.closed = true;
         this.conns.delete(conn);
@@ -77,6 +88,7 @@ export class FakeHelper {
   }
 
   /** the helper asks to sign in again (relogin) or says Passwords is off (disabled); "ok" undoes it */
+  /** @param {"ok" | "relogin" | "disabled"} state */
   setState(state) {
     this.state = state;
     const cmd = state === "relogin" ? Cmd.RELOGIN_NEEDED : state === "disabled" ? Cmd.PASSWORDS_DISABLED : 0;
@@ -92,18 +104,23 @@ export class FakeHelper {
   get win() {
     return this.style === "win";
   }
+  /** @param {number} n */
   _msg(n) {
     return this.win ? String(n) : n;
   }
+  /** @param {any} obj */
   _pake(obj) {
     return Buffer.from(JSON.stringify(obj), "utf8").toString("base64");
   }
+  /** @param {string} s */
   _unpake(s) {
     return JSON.parse(Buffer.from(s, "base64").toString("utf8"));
   }
+  /** @param {Uint8Array} b */
   _wire(b) {
     return "0x" + Buffer.from(b).toString("hex");
   }
+  /** @param {string} s */
   _unwire(s) {
     return Buffer.from(String(s).replace(/^0x/, ""), "hex");
   }
@@ -116,6 +133,7 @@ export class FakeHelper {
   }
 
   // AES-128-GCM under the first half of K. In: ciphertext || tag || iv. Out: iv || ciphertext || tag.
+  /** @param {Conn} conn @param {string} sdata */
   _open(conn, sdata) {
     const raw = this._unwire(sdata);
     const iv = raw.subarray(raw.length - 16);
@@ -124,6 +142,7 @@ export class FakeHelper {
     d.setAuthTag(tag);
     return JSON.parse(Buffer.concat([d.update(raw.subarray(0, raw.length - 32)), d.final()]).toString("utf8"));
   }
+  /** @param {Conn} conn @param {any} obj */
   _seal(conn, obj) {
     const iv = randomBytes(16);
     const c = createCipheriv("aes-128-gcm", conn.server.K.subarray(0, 16), iv);
@@ -132,6 +151,7 @@ export class FakeHelper {
     return this.win ? JSON.stringify(smsg) : smsg;
   }
 
+  /** @param {Conn} conn @param {any} msg */
   async _handle(conn, msg) {
     if (conn.closed) return;
     switch (msg.cmd) {
@@ -153,9 +173,10 @@ export class FakeHelper {
     }
   }
 
+  /** @param {Conn} conn @param {any} msg */
   _handshake(conn, msg) {
     const pake = this._unpake(msg.msg.PAKE);
-    const reply = (fields) => conn.send({ cmd: Cmd.HANDSHAKE, payload: { QID: msg.msg.QID, PAKE: this._pake({ TID: pake.TID, ...fields }) } });
+    const reply = (/** @type {any} */ fields) => conn.send({ cmd: Cmd.HANDSHAKE, payload: { QID: msg.msg.QID, PAKE: this._pake({ TID: pake.TID, ...fields }) } });
     if (msg.msg.QID === "m0") {
       if (this.state === "relogin") return conn.send({ cmd: Cmd.RELOGIN_NEEDED });
       if (this.state === "disabled") return conn.send({ cmd: Cmd.PASSWORDS_DISABLED });
@@ -177,13 +198,14 @@ export class FakeHelper {
     return reply(this.win ? { ErrCode: 5 } : { MSG: 3, ErrCode: 1 });
   }
 
+  /** @param {Conn} conn @param {any} msg */
   async _query(conn, msg) {
     if (!conn.paired) return; // not paired yet: the real helper stays silent
     const sent = JSON.parse(msg.payload.SMSG);
     if (sent.TID !== conn.username) return;
     const q = this._open(conn, sent.SDATA);
-    const answer = (cmd, obj) => conn.send({ cmd, payload: { SMSG: this._seal(conn, obj) } });
-    const entry = (l) => ({ HLD: l.sites[0] || "", customTitle: "", USR: l.username, PWD: l.password, ModDate: "", CDate: "", sites: l.sites, NOTES: "", TOTP: "0" });
+    const answer = (/** @type {number} */ cmd, /** @type {any} */ obj) => conn.send({ cmd, payload: { SMSG: this._seal(conn, obj) } });
+    const entry = (/** @type {{ sites: string[], username: string, password: string }} */ l) => ({ HLD: l.sites[0] || "", customTitle: "", USR: l.username, PWD: l.password, ModDate: "", CDate: "", sites: l.sites, NOTES: "", TOTP: "0" });
 
     if (msg.cmd === Cmd.SET_PASSWORD) {
       const host = q.NURL;
@@ -211,6 +233,7 @@ export class FakeHelper {
     }
 
     // codes: for the frames asked about, the rows whose domain is one of those hosts (or has none, like a text message)
+    /** @type {string[]} */
     const hosts = (q.frameURLs || []).map(hostOf);
     let rows = this.vault.otps.filter((r) => !r.domain || hosts.some((h) => hostMatches(r.domain, h)));
     if (msg.cmd === Cmd.DID_FILL_OTP && q.username) rows = rows.filter((r) => r.username === q.username);

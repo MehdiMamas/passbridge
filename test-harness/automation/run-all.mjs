@@ -1,4 +1,3 @@
-// @ts-nocheck
 // needs the mock builds (node build-test-extensions.mjs). Serves test-harness/ itself unless OP_BASE is set.
 
 import { spawn } from "child_process";
@@ -56,6 +55,7 @@ if (!process.env.OP_BASE) {
 
 const DRIVER_LIMIT_MS = 300000;
 
+/** @param {string} file @returns {Promise<{ code: number | null, out: string }>} */
 function run(file) {
   return new Promise((resolve) => {
     const p = spawn(process.execPath, [join(HERE, file)], { stdio: ["ignore", "pipe", "pipe"] });
@@ -75,6 +75,7 @@ function run(file) {
 }
 
 let passed = 0;
+/** @type {string[]} */
 const failures = [];
 console.log(`Running PassBridge headless suite against ${process.env.OP_BASE}\n` + "=".repeat(50));
 for (const [name, file] of DRIVERS) {
@@ -87,7 +88,7 @@ for (const [name, file] of DRIVERS) {
   } else {
     failures.push(name);
     console.log(`  ❌ FAILED (exit ${code})`);
-    console.log(out.split("\n").filter((l) => /FAIL|Error|throw/.test(l)).slice(0, 5).map((l) => "     " + l).join("\n"));
+    console.log(out.split("\n").filter((/** @type {string} */ l) => /FAIL|Error|throw/.test(l)).slice(0, 5).map((l) => "     " + l).join("\n"));
   }
 }
 await server?.close();

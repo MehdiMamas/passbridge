@@ -1,4 +1,3 @@
-// @ts-nocheck
 // The fake Apple helper (test-harness/fake-apple-helper) against the real src/apple/protocol.ts, in process,
 // in both reply styles: pairing, a wrong code, every command, Touch ID outcomes, relogin. The win style is also
 // checked against the replies recorded from iCloud for Windows (test-harness/fixtures/windows).
@@ -7,9 +6,11 @@ import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 import { FakeHelper, seedVault } from "../fake-apple-helper/helper.mjs";
 
-if (!globalThis.crypto) globalThis.crypto = webcrypto;
+if (!globalThis.crypto) globalThis.crypto = /** @type {any} */ (webcrypto);
 
+/** @type {{ name: string, cond: unknown }[]} */
 const results = [];
+/** @param {string} name @param {unknown} cond @param {string} [detail] */
 const ok = (name, cond, detail = "") => {
   results.push({ name, cond });
   console.log(`${cond ? "PASS" : "FAIL"} ${name}${cond ? "" : " -> " + detail}`);
@@ -17,34 +18,42 @@ const ok = (name, cond, detail = "") => {
 
 const SRC = new URL("../../src/apple/", import.meta.url);
 const FIX = new URL("../fixtures/windows/", import.meta.url);
+/** @param {string} name */
 const fixture = (name) => JSON.parse(readFileSync(new URL(`${name}.json`, FIX), "utf8"));
+/** @param {string} s */
 const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
+/** @param {object} o */
 const keys = (o) => Object.keys(o).sort().join(",");
-const { bytesToUtf8 } = await import(new URL("crypto.ts", SRC));
+const { bytesToUtf8 } = await import(/** @type {any} */ (new URL("crypto.ts", SRC)));
 
 // a port wired straight to the helper, remembering every reply
+/** @param {"mac" | "win"} style @param {object} [opts] */
 function setup(style, opts) {
   const helper = new FakeHelper({ style, vault: seedVault(), ...opts });
+  /** @type {any[]} */
   const replies = [];
+  /** @type {((reply: any) => void)[]} */
   const listeners = [];
+  /** @type {(() => void)[]} */
   const disc = [];
   const link = helper.connect((reply) => {
     replies.push(reply);
     setTimeout(() => listeners.forEach((fn) => fn(reply)), 0);
   });
   const port = {
-    onMessage: { addListener: (fn) => listeners.push(fn) },
-    onDisconnect: { addListener: (fn) => disc.push(fn) },
+    onMessage: { addListener: (/** @type {(reply: any) => void} */ fn) => listeners.push(fn) },
+    onDisconnect: { addListener: (/** @type {() => void} */ fn) => disc.push(fn) },
     disconnect() {},
-    postMessage: (msg) => setTimeout(() => void link.receive(msg), 0),
+    postMessage: (/** @type {any} */ msg) => setTimeout(() => void link.receive(msg), 0),
   };
-  globalThis.chrome = { runtime: { connectNative: () => port, lastError: undefined } };
+  globalThis.chrome = /** @type {any} */ ({ runtime: { connectNative: () => port, lastError: undefined } });
   return { helper, replies };
 }
 
+/** @param {"mac" | "win"} style @param {object} [opts] */
 async function pairedClient(style, opts) {
   const env = setup(style, opts);
-  const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?fake=${Math.random()}`, SRC)));
   const client = new ApplePasswords();
   await client.connect();
   await client.requestChallenge();
@@ -53,6 +62,7 @@ async function pairedClient(style, opts) {
 }
 
 // decrypt the newest encrypted reply with the client's own session
+/** @param {{ replies: any[], client: any }} env */
 async function lastPlain(env) {
   const r = env.replies[env.replies.length - 1];
   const smsg = typeof r.payload.SMSG === "string" ? JSON.parse(r.payload.SMSG) : r.payload.SMSG;
@@ -60,13 +70,15 @@ async function lastPlain(env) {
   return JSON.parse(bytesToUtf8(await s.decrypt(s.deserialize(smsg.SDATA))));
 }
 
+/** @param {Promise<unknown>} p @returns {Promise<any>} */
 const err = async (p) => p.then(() => null, (e) => e);
 
-for (const style of ["mac", "win"]) {
+for (const style of /** @type {const} */ (["mac", "win"])) {
+  /** @param {string} name */
   const t = (name) => `${style}: ${name}`;
   {
     const env = setup(style);
-    const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
+    const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?fake=${Math.random()}`, SRC)));
     const client = new ApplePasswords();
     await client.connect();
     ok(t("capabilities say codes can be filled"), client.canFillOneTimeCodes === true && client.canSetUpTotp === true);
@@ -106,7 +118,7 @@ for (const style of ["mac", "win"]) {
     await client.saveLogin(1, "http://127.0.0.1/signup", "new@pb-e2e.invalid", "n3w-Pass");
     ok(t("save adds a login"), helper.saved.length === 1 && helper.saved[0].updated === false);
     await client.saveLogin(1, "http://127.0.0.1/signup", "new@pb-e2e.invalid", "n3w-Pass-2");
-    ok(t("saving the same login again updates it"), helper.saved[1].updated === true && helper.vault.logins.find((l) => l.username === "new@pb-e2e.invalid").password === "n3w-Pass-2");
+    ok(t("saving the same login again updates it"), helper.saved[1].updated === true && /** @type {any} */ (helper.vault.logins.find((l) => l.username === "new@pb-e2e.invalid")).password === "n3w-Pass-2");
     ok(t("saved logins are listed"), (await client.getLoginNamesForURL(1, "http://127.0.0.1/")).length === 2);
 
     const { entries } = await client.getOneTimeCodes(1, 0, ["http://127.0.0.1/otp"]);
@@ -134,7 +146,7 @@ for (const style of ["mac", "win"]) {
 
   {
     const env = setup(style);
-    const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
+    const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?fake=${Math.random()}`, SRC)));
     const client = new ApplePasswords();
     env.helper.setState("disabled");
     const e = await err(client.connect());
@@ -163,7 +175,7 @@ for (const style of ["mac", "win"]) {
   ok("win: code entries have the recorded keys", keys(otp.Entries[0]) === keys(fixture("otp").Entries[0]), keys(otp.Entries[0]));
 
   const bad = setup("win");
-  const { ApplePasswords } = await import(new URL(`protocol.ts?fake=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(/** @type {any} */ (new URL(`protocol.ts?fake=${Math.random()}`, SRC)));
   const c2 = new ApplePasswords();
   await c2.connect();
   await c2.requestChallenge();
