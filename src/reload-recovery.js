@@ -73,7 +73,7 @@ export function createLifecycle({ win = window, runtime = globalThis.chrome?.run
  * @param {{ tabs: any, scripting: any, runtime: any }} api
  */
 export async function reinjectContentScripts({ tabs, scripting, runtime }) {
-  const files = (runtime.getManifest().content_scripts || []).flatMap((c) => c.js || []);
+  const files = (runtime.getManifest().content_scripts || []).flatMap((/** @type {{ js?: string[] }} */ c) => c.js || []);
   if (!files.length) return 0;
   let tabList = [];
   try {

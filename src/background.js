@@ -83,6 +83,7 @@ chrome.tabs?.onUpdated.addListener((_tabId, info) => {
 chrome.windows?.onFocusChanged.addListener(() => void passkeyProxy.refresh());
 /** @typedef {{ username: string, sites: string[], saved: string[], via: string }} SiteLogin */
 /** @typedef {{ username: string, password: string, sites?: string[] }} Cred */
+/** @typedef {{ tabId: number, frameUrl: string, host: string | null, detected: string, password: string, generated: boolean, newPwCtx: boolean, at: number }} PendingSave */
 
 // the right-click login list, with the tab and site it was built for
 /** @type {{ tabId: number | null, host: string, logins: SiteLogin[] }} */
@@ -130,10 +131,20 @@ const otpByTab = new Map();
 const OTP_LIST_TTL_MS = 120_000;
 
 // never the code itself at list time
+/**
+ * @param {{ source: string, username: string, domain: string }} e
+ * @param {number} i
+ */
 function otpRow(e, i) {
   return { id: i, source: e.source, username: e.username, domain: e.domain };
 }
 
+/**
+ * @param {number} tabId
+ * @param {number} frameId
+ * @param {string[]} frameUrls
+ * @param {{ listOnly?: boolean }} [opts]
+ */
 async function listOneTimeCodes(tabId, frameId, frameUrls, { listOnly = false } = {}) {
   const { entries, requiresAuth } = await listOtpEntries(client, { tabId, frameId, frameUrls, platform: await platformReady, listOnly });
   otpByTab.set(tabId, { at: Date.now(), entries, frameId, frameUrls });
@@ -141,6 +152,10 @@ async function listOneTimeCodes(tabId, frameId, frameUrls, { listOnly = false } 
 }
 
 // TOTP is re-read now, the value rotates and this read triggers Touch ID when the vault demands it
+/**
+ * @param {number} tabId
+ * @param {number} id
+ */
 async function resolveOneTimeCode(tabId, id) {
   const cached = otpByTab.get(tabId);
   if (!cached || Date.now() - cached.at > OTP_LIST_TTL_MS) throw new Error("code list expired, focus the field again");
@@ -155,18 +170,28 @@ async function resolveOneTimeCode(tabId, id) {
   return match.code;
 }
 
+/**
+ * @param {Record<string, unknown>} msg
+ */
 function broadcast(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
 // the MRU lookup needs storage, so the rest of the decision lives in save-target.js
+/**
+ * @param {{ host: string | null, existing: string[], detected: string, generated: boolean, newPwCtx: boolean }} args
+ */
 async function saveTargetFor({ host, existing, detected, generated, newPwCtx }) {
   const recent = existing.length ? (await orderByUse(host, existing.map((u) => ({ username: u }))))[0].username : "";
   return pickSaveTarget({ existing, detected, generated, newPwCtx, recent });
 }
 
 // a reset can navigate away, so stash saves that arrived while locked and flush on unlock
+/** @type {PendingSave[]} */
 const pendingSaves = [];
+/**
+ * @param {Omit<PendingSave, "at">} save
+ */
 function queuePendingSave(save) {
   const k = `${save.host} ${(save.detected || "").toLowerCase()}`;
   const i = pendingSaves.findIndex((p) => `${p.host} ${(p.detected || "").toLowerCase()}` === k);
@@ -182,6 +207,7 @@ async function flushPendingSaves() {
     try {
       if (!secretFresh(s)) continue;
       if (hostBlocked(s.host, settings.excludedDomains)) continue;
+      /** @type {string[]} */
       let existing = [];
       try {
         existing = (await siteLogins(s.tabId, s.frameUrl))
@@ -206,6 +232,9 @@ async function flushPendingSaves() {
 }
 
 // keeps internal spaces so distinct usernames arent merged
+/**
+ * @param {string | null | undefined} u
+ */
 function normUsername(u) {
   return (u || "")
     .normalize("NFC")
@@ -215,6 +244,11 @@ function normUsername(u) {
 }
 
 // helper returns the same username for www + apex entries, fills look up by username so dupes are useless
+/**
+ * @template {{ username: string }} T
+ * @param {T[]} logins
+ * @returns {T[]}
+ */
 function uniqueByUsername(logins) {
   const seen = new Set();
   return logins.filter((l) => {
@@ -225,6 +259,9 @@ function uniqueByUsername(logins) {
   });
 }
 
+/**
+ * @param {string} frameUrl
+ */
 function framePathUrl(frameUrl) {
   const u = new URL(frameUrl);
   u.hash = "";
@@ -234,7 +271,11 @@ function framePathUrl(frameUrl) {
 
 // the helper may only list the exact host. ask for the page host and each parent up to the
 // site, so account.apple.com also shows apple.com logins, and remember which host found each one.
-/** @returns {Promise<SiteLogin[]>} */
+/**
+ * @param {number | undefined} tabId
+ * @param {string} url
+ * @returns {Promise<SiteLogin[]>}
+ */
 async function siteLogins(tabId, url) {
   const host = hostnameOf(url);
   if (!host) return [];
@@ -242,6 +283,7 @@ async function siteLogins(tabId, url) {
   const out = [];
   const byName = new Map();
   for (const h of siteLookupHosts(host)) {
+    /** @type {any[] | undefined} */
     let list;
     try {
       list = await client.getLoginNamesForURL(tabId, h === host ? url : `https://${h}/`);
@@ -268,12 +310,20 @@ async function siteLogins(tabId, url) {
 }
 
 // the page and the popup get usernames only, sites and via stay in the worker
+/**
+ * @param {{ username: string }[]} logins
+ */
 function publicLogins(logins) {
   return logins.map((l) => ({ username: l.username }));
 }
 
 // the login is listed again here, so the hosts searched never come from the caller.
 // one only a parent domain listed is searched on that domain first.
+/**
+ * @param {number | undefined} tabId
+ * @param {string} frameUrl
+ * @param {string} username
+ */
 async function readPasswordForFrame(tabId, frameUrl, username) {
   const host = hostnameOf(frameUrl);
   const pathUrl = client.capabilities?.supportsSubURLs ? framePathUrl(frameUrl) : null;
@@ -308,9 +358,17 @@ const lastFillByTab = new Map();
 const PW_CACHE_TTL_MS = 15_000;
 const SECRET_HOLD_MS = 120_000;
 const pwCache = new Map();
+/**
+ * @param {string | null} host
+ * @param {string | null | undefined} username
+ */
 function pwCacheKey(host, username) {
   return `${host}\n${(username || "").toLowerCase()}`;
 }
+/**
+ * @param {string | null} host
+ * @param {string | null | undefined} username
+ */
 function pwCacheGet(host, username) {
   const k = pwCacheKey(host, username);
   const hit = pwCache.get(k);
@@ -321,6 +379,10 @@ function pwCacheGet(host, username) {
   }
   return hit.cred;
 }
+/**
+ * @param {string | null} host
+ * @param {Cred | null | undefined} cred
+ */
 function pwCacheSet(host, cred) {
   if (!host || !cred?.username) return;
   pwCache.set(pwCacheKey(host, cred.username), { cred, at: Date.now() });
@@ -329,6 +391,13 @@ function pwCacheClear() {
   pwCache.clear();
 }
 
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} [label]
+ * @returns {Promise<T>}
+ */
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -409,6 +478,9 @@ function suppressChromeAutofill() {
     } catch (_) {}
   });
 }
+/**
+ * @param {Record<string, chrome.storage.StorageChange>} changes
+ */
 function applySyncedPrivacy(changes) {
   const svc = chrome.privacy?.services;
   /** @type {[string, chrome.types.ChromeSetting<boolean> | undefined][]} */
@@ -429,6 +501,9 @@ chrome.runtime.onStartup.addListener(suppressChromeAutofill);
 migrateSettingsToSync().catch(() => {}).then(suppressChromeAutofill);
 
 // content messages carry sender.tab, the popup never does
+/**
+ * @param {chrome.runtime.MessageSender} sender
+ */
 function isFromOwnUi(sender) {
   return sender.id === chrome.runtime.id && sender.tab === undefined;
 }
@@ -438,6 +513,9 @@ async function activeTab() {
   return tab;
 }
 
+/**
+ * @param {unknown} raw
+ */
 function httpUrl(raw) {
   const s = String(raw || "").trim();
   if (!s) return null;
@@ -452,6 +530,9 @@ function httpUrl(raw) {
 }
 
 // the exact host. registrableDomain() in site-domain.js gives the site
+/**
+ * @param {any} u a url string, anything else yields null
+ */
 function hostnameOf(u) {
   try {
     return new URL(u).hostname.toLowerCase();
@@ -461,6 +542,9 @@ function hostnameOf(u) {
 }
 
 // loopback and RFC 6761 reserved TLDs are the only non-HTTPS origins treated as fillable
+/**
+ * @param {string | null | undefined} host
+ */
 function isLocalDevHost(host) {
   return (
     host === "localhost" ||
@@ -472,6 +556,9 @@ function isLocalDevHost(host) {
 }
 
 // one gate for every fill and save: https always, dev hosts always, plain http only on the opt-in, other schemes never
+/**
+ * @param {string} url
+ */
 async function isFillUrlAllowed(url) {
   if (/^https:\/\//i.test(url) || isLocalDevHost(hostnameOf(url))) return true;
   return /^http:\/\//i.test(url) && (await getSettings()).canFillOnHttp === true;
@@ -503,6 +590,9 @@ const saveOffers = new Map();
 const GENERATED_HOLD_MS = 600_000;
 /** @type {Map<number, { password: string, at: number, timer: any }>} */
 const generatedByTab = new Map();
+/**
+ * @param {number} tabId
+ */
 function dropGenerated(tabId) {
   const held = generatedByTab.get(tabId);
   if (!held) return;
@@ -514,6 +604,9 @@ const totpOffers = new Map();
 const cycleByTab = new Map();
 
 // the bar must answer; a closed port used to look like "no bar" and saved immediately
+/**
+ * @param {{ tabId: number, frameUrl: string, target: string, password: string, host: string | null, update: boolean, generated?: boolean }} offer
+ */
 async function presentSaveOffer({ tabId, frameUrl, target, password, host, update, generated }) {
   saveOffers.set(tabId, {
     tabId,
@@ -553,6 +646,10 @@ async function presentSaveOffer({ tabId, frameUrl, target, password, host, updat
 }
 
 // frames on another host or without a login form stay silent, so no frame answering means no form
+/**
+ * @param {number} tabId
+ * @param {Record<string, unknown>} msg
+ */
 async function sendFill(tabId, msg) {
   try {
     return await chrome.tabs.sendMessage(tabId, msg);
@@ -562,12 +659,18 @@ async function sendFill(tabId, msg) {
 }
 
 // a username fills that login. without one the shortcut starts at the most recent login and steps through the rest
+/**
+ * @param {{ id?: number, url?: string } | null | undefined} tab
+ * @param {string | null} [username]
+ * @param {{ savedOnly?: boolean, frameAllowlist?: unknown[] }} [opts]
+ */
 async function fillLoginOnTab(tab, username, opts) {
   await ensureConnected();
   if (!client.ready || !tab?.url || tab.id == null) return { filled: false, reason: "needs_user" };
   const host = hostnameOf(tab.url);
   if (!(await isFillUrlAllowed(tab.url))) return { filled: false, reason: "not_allowed" };
   if (username == null) {
+    /** @type {SiteLogin[]} */
     let logins = [];
     try {
       logins = uniqueByUsername(await siteLogins(tab.id, tab.url));
@@ -578,7 +681,7 @@ async function fillLoginOnTab(tab, username, opts) {
     // stable order: re-sorting by MRU after each fill made the shortcut repeat one login
     const last = cycleByTab.get(tab.id);
     const at = last == null ? -1 : logins.findIndex((l) => (l.username || "") === last);
-    username = at < 0 ? (await orderByUse(host, logins))[0].username : logins[(at + 1) % logins.length].username;
+    username = /** @type {string} */ (at < 0 ? (await orderByUse(host, logins))[0].username : logins[(at + 1) % logins.length].username);
   }
   // every-site agent fill: no cache, and the record read must itself be saved for this host
   let cred = opts?.savedOnly ? null : pwCacheGet(host, username);
@@ -604,6 +707,7 @@ async function fillLoginOnTab(tab, username, opts) {
   // agent only: the form may sit in an allowlisted child frame (account.apple.com -> idmsa.apple.com).
   // the password was read for the top site above, each frame is filled only under its own allowlisted host
   if (opts?.frameAllowlist) {
+    /** @type {chrome.webNavigation.GetAllFrameResultDetails[]} */
     let frames = [];
     try {
       frames = (await chrome.webNavigation.getAllFrames({ tabId: tab.id })) || [];
@@ -643,6 +747,9 @@ async function ensureOffscreen() {
 }
 
 // throws when the offscreen page could not write, so nothing says "Copied" over an untouched clipboard
+/**
+ * @param {string} text
+ */
 async function copyText(text) {
   const settings = await getSettings();
   const clearMs = Number(settings.clipboardClearMs) || 10000;
@@ -658,6 +765,9 @@ async function clearClipboard() {
   await chrome.runtime.sendMessage({ type: "offscreenClear" }).catch(() => {});
 }
 
+/**
+ * @param {{ at: number } | undefined} entry
+ */
 function secretFresh(entry) {
   return !!entry && Date.now() - entry.at < SECRET_HOLD_MS;
 }
@@ -699,6 +809,9 @@ async function forgetSecrets() {
 
 // the setup key never goes on the clipboard by itself: Windows clipboard history and cloud
 // clipboard keep it whatever is cleared later. copyTotpKey copies it on an explicit click.
+/**
+ * @param {{ uri: string, pageUrl: string }} offer
+ */
 async function handOffTotp(offer) {
   const hasKey = !!otpAuthSecret(offer?.uri);
   try {
@@ -710,6 +823,10 @@ async function handOffTotp(offer) {
   return { ok: true, launched: true, hasKey, filled: false };
 }
 
+/**
+ * @param {number} tabId
+ * @param {Record<string, unknown>} payload
+ */
 async function showTotpBar(tabId, payload) {
   try {
     const resp = await chrome.tabs.sendMessage(tabId, { type: "showTotpBar", ...payload }, { frameId: 0 });
@@ -719,6 +836,10 @@ async function showTotpBar(tabId, payload) {
   }
 }
 
+/**
+ * @param {chrome.contextMenus.OnClickData} info
+ * @param {chrome.tabs.Tab | undefined} tab
+ */
 async function scanQrFromMenu(info, tab) {
   if (!tab?.id || !tab.url || !/^https?:/i.test(tab.url)) return;
   /** @type {{ x: number, y: number, w: number, h: number, dpr: number, whole?: boolean } | null} */
@@ -759,9 +880,13 @@ async function scanQrFromMenu(info, tab) {
     });
     return;
   }
-  await presentTotpOffer(tab, parsed);
+  await presentTotpOffer(/** @type {{ id: number, url: string }} */ (tab), parsed);
 }
 
+/**
+ * @param {{ id: number, url: string }} tab
+ * @param {{ uri: string, issuer: string, account: string }} parsed
+ */
 async function presentTotpOffer(tab, parsed) {
   await ensureConnected();
   if (!client.ready) {
@@ -772,6 +897,7 @@ async function presentTotpOffer(tab, parsed) {
     await showTotpBar(tab.id, { mode: "error", error: t("totpUnsupported") });
     return;
   }
+  /** @type {SiteLogin[]} */
   let logins = [];
   try {
     logins = uniqueByUsername(await siteLogins(tab.id, tab.url));
@@ -821,9 +947,13 @@ function refreshActiveTab() {
   })();
 }
 
+/**
+ * @param {chrome.tabs.Tab} tab
+ */
 async function refreshTab(tab) {
   const settings = await getSettings();
   const url = tab?.url && /^https?:/i.test(tab.url) ? tab.url : "";
+  /** @type {SiteLogin[]} */
   let logins = [];
   if (url && tab.id != null && client.ready && (settings.enableBadge || settings.enableContextMenu)) {
     try {
@@ -844,6 +974,10 @@ async function refreshTab(tab) {
 const BADGE_COLOR = "#0a84ff";
 
 // no count drops the tab's own text, so the global update badge shows through
+/**
+ * @param {number} tabId
+ * @param {number} n
+ */
 function setCountBadge(tabId, n) {
   chrome.action.setBadgeText(n ? { text: n > 9 ? "9+" : String(n), tabId } : { tabId }).catch(() => {});
   if (n) chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR, tabId }).catch(() => {});
@@ -863,6 +997,13 @@ async function syncUpdateBadge() {
   chrome.action.setTitle({ title: update ? `${name} ${t("updateAvailable", [update.version])}` : name }).catch(() => {});
 }
 
+/**
+ * @param {Awaited<ReturnType<typeof getSettings>>} settings
+ * @param {chrome.tabs.Tab | undefined} tab
+ * @param {string} url
+ * @param {SiteLogin[]} logins
+ * @param {boolean} [hasCode]
+ */
 async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
   if (!chrome.contextMenus) return;
   menuFor = { tabId: null, host: "", logins: [] };
@@ -878,6 +1019,9 @@ async function rebuildContextMenu(settings, tab, url, logins, hasCode = false) {
 const pendingReports = new Map();
 const REPORT_GATHER_MS = 1500;
 
+/**
+ * @param {chrome.tabs.Tab | undefined} tab
+ */
 async function reportPage(tab) {
   if (tab?.id == null) throw new Error("no tab");
   const id = crypto.randomUUID();
@@ -980,7 +1124,7 @@ chrome.contextMenus?.onClicked.addListener(async (info, tab) => {
     if (pick.action === "fill") await fillLoginOnTab(tab, login.username);
     else if (pick.action === "user") await copyText(login.username || "");
     else {
-      const { cred } = await readPasswordForFrame(tab.id, tab.url, login.username);
+      const { cred } = await readPasswordForFrame(tab.id, /** @type {string} */ (tab.url), login.username);
       if (cred?.password) await copyText(cred.password);
     }
   } catch (e) {
@@ -1255,6 +1399,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: true, saved: false, locked: true });
           }
 
+          /** @type {string[]} */
           let existing = [];
           try {
             existing = (await siteLogins(sender.tab.id, frameUrl))
@@ -1585,7 +1730,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await ensureConnected();
           if (!client.ready) return sendResponse({ ok: false, error: t("errUnlockFirst") });
           const username = typeof msg.username === "string" ? msg.username.trim() : "";
-          const lookup = async () => (await client.getLoginNamesForURL(tab.id, full)).filter((l) => !isPasskeyLogin(l));
+          const lookup = async () => (await client.getLoginNamesForURL(tab.id, full)).filter((/** @type {any} */ l) => !isPasskeyLogin(l));
           let before = 0;
           try { before = countLogins(await lookup(), username); } catch {}
           // a same-username login already matches (a sibling tenant): the Passwords new-login sheet adds it without an update prompt
@@ -1716,7 +1861,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: false, filled: false, error: t("noSavedPasswordForLogin") });
           }
           // content script re-checks expectedHost against the page being filled
-          const resp = await sendFill(tab.id, {
+          const resp = await sendFill(/** @type {number} */ (tab.id), {
             type: "fill",
             username: cred.username,
             password: cred.password,
@@ -1743,10 +1888,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return sendResponse({ ok: true, refilled: false, reason: "none" });
           }
           try {
-            const { cred } = await readPasswordForFrame(tab.id, tab.url, entry.username);
+            const { cred } = await readPasswordForFrame(tab.id, /** @type {string} */ (tab.url), entry.username);
             if (!cred) return sendResponse({ ok: false, refilled: false, error: t("noSavedPasswordForLogin") });
             pwCacheSet(host, cred);
-            const resp = await sendFill(tab.id, {
+            const resp = await sendFill(/** @type {number} */ (tab.id), {
               type: "fill",
               username: cred.username,
               password: cred.password,

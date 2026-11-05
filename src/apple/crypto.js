@@ -1,5 +1,8 @@
 // ported from au2001/icloud-passwords-firefox (Apache-2.0) to browser APIs, see NOTICE
 
+/**
+ * @param {string} hex
+ */
 export function hexToBytes(hex) {
   if (hex.startsWith("0x")) hex = hex.slice(2);
   if (hex.length % 2) hex = "0" + hex;
@@ -8,12 +11,19 @@ export function hexToBytes(hex) {
   return out;
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
 export function bytesToHex(bytes) {
   let s = "";
   for (const b of bytes) s += b.toString(16).padStart(2, "0");
   return s;
 }
 
+/**
+ * @param {string} b64
+ */
 export function base64ToBytes(b64) {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -21,20 +31,34 @@ export function base64ToBytes(b64) {
   return out;
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
 export function bytesToBase64(bytes) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
 }
 
+/**
+ * @param {string} str
+ */
 export function utf8ToBytes(str) {
   return new TextEncoder().encode(str);
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
 export function bytesToUtf8(bytes) {
   return new TextDecoder().decode(bytes);
 }
 
+/**
+ * @param {...Uint8Array} arrays
+ */
 export function concatBytes(...arrays) {
   let len = 0;
   for (const a of arrays) len += a.length;
@@ -47,6 +71,9 @@ export function concatBytes(...arrays) {
   return out;
 }
 
+/**
+ * @param {bigint} n
+ */
 export function bigIntToBytes(n) {
   if (n === 0n) return new Uint8Array([0]);
   const out = [];
@@ -57,12 +84,20 @@ export function bigIntToBytes(n) {
   return new Uint8Array(out);
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @returns {bigint}
+ */
 export function bytesToBigInt(bytes) {
   let n = 0n;
   for (const b of bytes) n = (n << 8n) | BigInt(b);
   return n;
 }
 
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} length
+ */
 export function padBytes(bytes, length) {
   if (bytes.length >= length) return bytes.slice(bytes.length - length);
   const out = new Uint8Array(length);
@@ -70,6 +105,11 @@ export function padBytes(bytes, length) {
   return out;
 }
 
+/**
+ * @param {Uint8Array} a
+ * @param {Uint8Array} b
+ * @returns {boolean}
+ */
 export function constantTimeEqual(a, b) {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -77,23 +117,40 @@ export function constantTimeEqual(a, b) {
   return diff === 0;
 }
 
+/**
+ * @param {...(Uint8Array | string | number)} inputs
+ */
 export async function sha256(...inputs) {
   const data = concatBytes(...inputs.map((i) => (i instanceof Uint8Array ? i : utf8ToBytes(String(i)))));
   return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 }
 
+/**
+ * @param {number} count
+ */
 export function randomBytes(count) {
   const a = new Uint8Array(count);
   crypto.getRandomValues(a);
   return a;
 }
 
+/**
+ * @param {bigint} a
+ * @param {bigint} n
+ * @returns {bigint}
+ */
 export function mod(a, n) {
   a %= n;
   if (a < 0n) a += n;
   return a;
 }
 
+/**
+ * @param {bigint} base
+ * @param {bigint} exp
+ * @param {bigint} n
+ * @returns {bigint}
+ */
 export function powmod(base, exp, n) {
   if (exp < 0n) throw new Error("negative exponent unsupported");
   base = mod(base, n);
@@ -119,7 +176,11 @@ export const QueryStatus = {
   InvalidSession: 9,
 };
 
+/**
+ * @param {number} status
+ */
 export function queryStatusError(status) {
+  /** @type {Record<number, string>} */
   const map = {
     1: "Generic query error",
     2: "Invalid query param",
