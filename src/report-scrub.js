@@ -8,11 +8,20 @@ const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 // long opaque runs (session ids, csrf tokens, jwt parts); short words and class names stay
 const TOKEN = /[A-Za-z0-9_\-+/=]{32,}/g;
 
+/**
+ * @typedef {{ tag: string, type: string, name: string, id: string, autocomplete: string, visible: boolean, login: boolean, otp: boolean }} ReportField
+ * @typedef {{ top?: boolean, url: string, error?: string, blocked?: boolean, safe?: boolean, title?: string, fields?: ReportField[], html?: string, truncated?: boolean }} ReportFrame
+ * @typedef {{ url: string, version: string, browser?: string, createdAt?: string, frames: ReportFrame[] }} PageReport
+ * Report objects come from chrome.storage.session, so the three report functions take `any` rather than PageReport.
+ */
+
+/** @param {unknown} s */
 export function scrubText(s) {
   return String(s ?? "").replace(EMAIL, "[email]");
 }
 
 // keeps the path (what the site is) and drops what the query and fragment carry (who the user is)
+/** @param {unknown} raw */
 export function scrubUrl(raw) {
   const s = String(raw ?? "");
   if (/^data:/i.test(s)) return s.length > 120 ? `${s.slice(0, 40)}…[data removed]` : s;
@@ -31,6 +40,7 @@ export function scrubUrl(raw) {
   return `${base}${query}${hash}`;
 }
 
+/** @param {unknown} s */
 export function scrubAttr(s) {
   return scrubText(s).replace(TOKEN, "[token]");
 }
@@ -95,6 +105,7 @@ export function scrubTree(root, isOurs) {
   return root;
 }
 
+/** @param {string} url */
 function hostOf(url) {
   try {
     return new URL(url).hostname;
@@ -103,6 +114,7 @@ function hostOf(url) {
   }
 }
 
+/** @param {ReportFrame} f */
 function frameLine(f) {
   const fields = f.fields || [];
   const login = fields.filter((x) => x.visible && x.login).length;
@@ -111,12 +123,14 @@ function frameLine(f) {
   return `${f.top ? "page" : "iframe"} ${f.url} · ${state} · ${login} login field(s), ${otp} code field(s)`;
 }
 
+/** @param {any} report */
 export function reportFileName(report) {
   const host = hostOf(report.url) || "page";
   return `passbridge-report-${host}-${String(report.createdAt).slice(0, 10)}.txt`;
 }
 
 // the file the reporter attaches: a summary, then each frame's fields and scrubbed HTML
+/** @param {any} report */
 export function reportText(report) {
   const out = [
     "PassBridge page report",
@@ -127,7 +141,7 @@ export function reportText(report) {
     "Scrubbed: field values, script code, query strings, tokens and email addresses.",
     "",
   ];
-  report.frames.forEach((f, i) => {
+  report.frames.forEach((/** @type {ReportFrame} */ f, /** @type {number} */ i) => {
     out.push(`==== Frame ${i + 1}: ${frameLine(f)} ====`);
     if (f.title) out.push(`Title: ${f.title}`);
     for (const x of f.fields || []) {
@@ -142,6 +156,7 @@ export function reportText(report) {
 }
 
 // GitHub's new-issue form, prefilled; the body stays short because it travels in the URL
+/** @param {any} report @param {unknown} note */
 export function reportIssueUrl(report, note) {
   const host = hostOf(report.url) || "a page";
   const lines = [
@@ -152,7 +167,7 @@ export function reportIssueUrl(report, note) {
     `**PassBridge:** ${report.version}`,
     "",
     "**Frames:**",
-    ...report.frames.slice(0, 12).map((f) => `- ${frameLine(f)}`),
+    ...report.frames.slice(0, 12).map((/** @type {ReportFrame} */ f) => `- ${frameLine(f)}`),
     ...(report.frames.length ? [] : ["- none answered (reload the page and try again)"]),
     "",
     `**Page file:** drag \`${reportFileName(report)}\` from your Downloads into this box.`,

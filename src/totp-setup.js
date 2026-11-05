@@ -4,6 +4,7 @@
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 
 // accepts an otpauth:// link (alone or inside pasted text) or a bare base32 setup key, grouped or not
+/** @param {unknown} raw @param {unknown} [fallbackLabel] */
 export function parseSetupInput(raw, fallbackLabel = "") {
   const text = String(raw || "").trim();
   if (!text) return null;
@@ -35,6 +36,7 @@ export function withAccount(uri, { username, issuer } = {}) {
 }
 
 // the message the helper client gets: the uri and the page it belongs to, nothing else
+/** @param {string} uri @param {string} pageUrl */
 export function totpHandoff(uri, pageUrl) {
   return { totpUri: uri, totpPageUrl: pageUrl };
 }

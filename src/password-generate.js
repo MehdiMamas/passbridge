@@ -1,6 +1,8 @@
+/** @param {number} n */
 function randBelow(n) {
   return crypto.getRandomValues(new Uint32Array(1))[0] % n;
 }
+/** @param {string | string[]} set */
 function pickFrom(set) {
   return set[randBelow(set.length)];
 }

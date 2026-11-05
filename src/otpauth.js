@@ -1,4 +1,5 @@
 // otpauth://totp/... and apple-otpauth://totp/... only. The secret stays inside uri.
+/** @param {unknown} raw */
 export function parseOtpAuth(raw) {
   const s = String(raw || "").trim();
   if (!/^(apple-)?otpauth:\/\//i.test(s)) return null;
@@ -26,6 +27,7 @@ export function parseOtpAuth(raw) {
 }
 
 // base32 setup key only. Callers copy or hand this to the Windows helper; it is not a label.
+/** @param {unknown} raw */
 export function otpAuthSecret(raw) {
   const parsed = parseOtpAuth(raw);
   if (!parsed) return "";
@@ -39,10 +41,12 @@ export function otpAuthSecret(raw) {
   return secret.replace(/=+$/, "");
 }
 
+/** @param {unknown} s */
 function cleanSecret(s) {
   return String(s || "").replace(/[\s-]+/g, "");
 }
 
+/** @param {string} s */
 function safeDecode(s) {
   try {
     return decodeURIComponent(s);

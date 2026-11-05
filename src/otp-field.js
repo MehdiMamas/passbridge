@@ -6,6 +6,11 @@ const OTHER_CODE = /coupon|promo|voucher|gift|discount|referral|invite|zip|post(
 const MAX_CONTEXT = 600;
 
 // names: the field's name, id, aria-label, placeholder and label texts; context: the text of its form
+/**
+ * @param {unknown[]} names
+ * @param {unknown} context
+ * @returns {boolean}
+ */
 export function isBareCodeOtp(names, context) {
   const list = names.map((n) => String(n || "").trim()).filter(Boolean);
   if (!list.length || !list.some((n) => BARE_CODE.test(n))) return false;

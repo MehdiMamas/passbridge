@@ -10,6 +10,7 @@ let totpHost = null;
 /** @type {((e: MessageEvent) => void) | null} */
 let totpOnMsg = null;
 
+/** @param {EventTarget | Element | null} node */
 function asPicture(node) {
   if (node instanceof HTMLImageElement || node instanceof HTMLCanvasElement || node instanceof SVGSVGElement) return node;
   if (node instanceof HTMLPictureElement) return node.querySelector("img");
@@ -17,6 +18,7 @@ function asPicture(node) {
   return null;
 }
 
+/** @param {Event} e */
 function pictureFromEvent(e) {
   const path = typeof e.composedPath === "function" ? e.composedPath() : [];
   for (const node of path) {
@@ -27,6 +29,7 @@ function pictureFromEvent(e) {
   return asPicture(e.target.closest("img, canvas, svg, picture"));
 }
 
+/** @param {(t: EventTarget, type: string, fn: (e: any) => void, o?: AddEventListenerOptions | boolean) => void} [listen] */
 export function installQrPage(listen = (t, type, fn, o) => t.addEventListener(type, fn, o)) {
   listen(document, "contextmenu", (e) => {
     const el = pictureFromEvent(e);
@@ -120,6 +123,7 @@ export function showTotpBar(payload, colorScheme) {
   iframe.addEventListener("load", paint);
   iframe.src = chrome.runtime.getURL(`overlay/totp-bar.html?token=${token}&scheme=${encodeURIComponent(colorScheme)}`);
   let pending = false;
+  /** @param {MessageEvent} e */
   const onMsg = (e) => {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
     if (e.data.action === "ready") {

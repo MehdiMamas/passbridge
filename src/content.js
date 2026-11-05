@@ -14,7 +14,7 @@ const UPSTREAM_USER = new Set(
   [...AutoFillConstants.UnambiguousUsernameFieldNames, ...AutoFillConstants.EmailFieldNames].map((name) => name.toLowerCase()),
 );
 
-function hitsUpstreamName(el) {
+function hitsUpstreamName(/** @type {HTMLInputElement} */ el) {
   const raw = `${el.name || ""} ${el.id || ""}`.toLowerCase().replace(/[_-]+/g, " ");
   return raw.split(/\s+/).some((token) => token && UPSTREAM_USER.has(token));
 }
@@ -35,7 +35,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 const life = createLifecycle();
 const listen = life.listen;
 // runtime calls fail with "context invalidated" after a reload, which ends this copy
-const gone = (e) => { life.noteError(e); };
+const gone = (/** @type {Event} */ e) => { life.noteError(e); };
 life.onTeardown(() => {
   removeSuggestion();
   removeIcon();
@@ -43,7 +43,7 @@ life.onTeardown(() => {
   hideTotpBar();
 });
 // chrome event listeners also have to go, a newer copy would answer the same message twice
-function onChrome(event, fn) {
+function onChrome(/** @type {{ addListener(fn: any): void, removeListener(fn: any): void }} */ event, /** @type {(...args: any[]) => any} */ fn) {
   event.addListener(fn);
   life.onTeardown(() => event.removeListener(fn));
 }
@@ -62,10 +62,10 @@ try {
     if (!chrome.runtime.lastError && o) pbSettings = { ...SETTINGS_DEFAULTS, ...o };
     markSettingsLoaded();
   });
-  onChrome(chrome.storage.onChanged, (ch, area) => {
+  onChrome(chrome.storage.onChanged, (/** @type {Record<string, chrome.storage.StorageChange>} */ ch, /** @type {string} */ area) => {
     if (area !== SETTINGS_AREA) return;
     for (const [k, v] of Object.entries(ch)) {
-      if (k in SETTINGS_DEFAULTS) pbSettings[k] = v.newValue;
+      if (k in SETTINGS_DEFAULTS) /** @type {Record<string, any>} */ (pbSettings)[k] = v.newValue; // storage values are untyped
     }
   });
 } catch {
@@ -78,14 +78,14 @@ const OTP_HINT = /\btotp|\b(otp|one[\s-]?time|verification|2fa|mfa|sms[\s-]?code
 const PASSWORD_LABEL = /passw|pwd/i;
 const ONE_TIME_PASSWORD = /one[\s-]?time[\s-]?pass(?:word|code)?|\botp\b/gi;
 
-function attrBlob(el) {
+function attrBlob(/** @type {HTMLInputElement} */ el) {
   // snapchat's web login leaves the input bare and labels it via <label>/aria-labelledby
   let labelText = "";
   try {
     if (el.labels?.length) labelText = Array.from(el.labels, (l) => l.textContent).join(" ");
     const lb = el.getAttribute("aria-labelledby");
     if (lb) {
-      labelText += " " + lb.split(/\s+/).map((id) => el.ownerDocument.getElementById(id)?.textContent || "").join(" ");
+      labelText += " " + lb.split(/\s+/).map((/** @type {string} */ id) => el.ownerDocument.getElementById(id)?.textContent || "").join(" ");
     }
   } catch {}
   return [el.name, el.id, el.getAttribute("aria-label"), el.placeholder, el.getAttribute("autocomplete"), labelText]
@@ -94,7 +94,7 @@ function attrBlob(el) {
 }
 
 // a bare "code" text field counts when the form around it talks about two-factor or a verification code
-function isBareCodeField(el) {
+function isBareCodeField(/** @type {HTMLInputElement} */ el) {
   if (!(el instanceof HTMLInputElement) || !/^(text|tel|number|)$/i.test(el.type)) return false;
   try {
     const names = [el.name, el.id, el.getAttribute("aria-label"), el.placeholder];
@@ -105,7 +105,7 @@ function isBareCodeField(el) {
   }
 }
 
-function isOtpField(el) {
+function isOtpField(/** @type {HTMLInputElement} */ el) {
   const ac = el.getAttribute("autocomplete") || "";
   if (OTP_AUTOCOMPLETE.test(ac)) return true;
   const max = parseInt(el.getAttribute("maxlength") || "0", 10);
@@ -115,14 +115,14 @@ function isOtpField(el) {
   return isBareCodeField(el);
 }
 
-function isPasswordField(el) {
+function isPasswordField(/** @type {HTMLInputElement} */ el) {
   return el instanceof HTMLInputElement && el.type === "password";
 }
 
 // a show-password toggle flips type to text at submit, which hid these from the collector
 const everPassword = new WeakSet();
 
-function isPasswordish(el) {
+function isPasswordish(/** @type {HTMLInputElement} */ el) {
   if (!(el instanceof HTMLInputElement)) return false;
   if (el.type === "password") return true;
   if (everPassword.has(el)) return true;
@@ -136,7 +136,7 @@ function isPasswordish(el) {
 const NONLOGIN_HINT =
   /\b(search|find|filter|query|lookup|tag|tags|mention|comment|reply|message|chat|post|caption|note|subject|topic|recipient|address|street|city|state|zip|postal|country|first[\s-]?name|last[\s-]?name|full[\s-]?name|company|title|url|website|coupon|promo|voucher|gift[\s-]?card|amount|quantity|qty|price|card[\s-]?number|cvv|cvc|expiry|account[\s-]?(?:number|no|holder)|routing|iban|invoice|order|tracking|keyword)\b/i;
 
-function isSearchOrComboField(el) {
+function isSearchOrComboField(/** @type {HTMLInputElement} */ el) {
   const role = (el.getAttribute("role") || "").toLowerCase();
   if (role === "searchbox" || role === "combobox") return true;
   if ((el.type || "").toLowerCase() === "search") return true;
@@ -146,11 +146,11 @@ function isSearchOrComboField(el) {
   return false;
 }
 
-function pageHasVisiblePassword(field) {
-  if (Array.from(document.querySelectorAll('input[type="password"]')).some(isVisible)) return true;
-  const root = field?.getRootNode?.();
+function pageHasVisiblePassword(/** @type {HTMLInputElement} */ field) {
+  if (Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[type="password"]'))).some(isVisible)) return true;
+  const root = /** @type {Document | ShadowRoot | undefined} */ (field?.getRootNode?.());
   if (root && root !== document && root.querySelectorAll) {
-    return Array.from(root.querySelectorAll('input[type="password"]')).some(isVisible);
+    return Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (root.querySelectorAll('input[type="password"]'))).some(isVisible);
   }
   return false;
 }
@@ -158,7 +158,7 @@ function pageHasVisiblePassword(field) {
 // no \b: word boundaries do not work for CJK text
 const CJK_IDENTITY = /邮箱|郵箱|电子邮件|電子郵件|手机|手機|账号|帳號|账户|帳戶|用户名|使用者名稱|登录名|登入|メール|ユーザー|アカウント|이메일|아이디|사용자/;
 
-function hasStrongIdentitySignal(el) {
+function hasStrongIdentitySignal(/** @type {HTMLInputElement} */ el) {
   const t = (el.type || "text").toLowerCase();
   const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
   // wells fargo and nintendo mark their username box autocomplete=webauthn
@@ -173,12 +173,12 @@ function hasStrongIdentitySignal(el) {
 const LOGINISH = /log[\s_-]?in|sign[\s_-]?in|auth|session|sso|oauth|account|idp|passport/i;
 
 // gates the two-step case where no password field exists yet
-function loginishContext(el) {
+function loginishContext(/** @type {HTMLInputElement} */ el) {
   if (LOGINISH.test(location.hostname + location.pathname)) return true;
   const form = el.form;
   if (form && LOGINISH.test(form.getAttribute("action") || "")) return true;
   const scope = form || document;
-  return Array.from(scope.querySelectorAll("button, input[type=submit]")).some((b) => {
+  return Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (scope.querySelectorAll("button, input[type=submit]"))).some((b) => {
     const label = b.textContent || b.value || "";
     if (/\b(payment|shipping|checkout|address|guest|receipt)\b/i.test(label)) return false;
     return /\b(sign[\s-]?in|log[\s-]?in|continue|next)\b/i.test(label);
@@ -188,7 +188,7 @@ function loginishContext(el) {
 // id-number logins (giris.turkiye.gov.tr, 11-digit T.C. Kimlik No) use type=number next to a password field
 const NUMERIC_ID_HINT = /\b(tckn?|tc[\s_-]?kimlik|kimlik|identity|national[\s-]?id|id[\s_-]?(?:no|number|num)|user|username|login|member|customer|client)/i;
 
-function isNumericIdField(el) {
+function isNumericIdField(/** @type {HTMLInputElement} */ el) {
   const max = parseInt(el.getAttribute("maxlength") || "0", 10);
   if (max === 1) return false;
   const form = el.form;
@@ -203,7 +203,8 @@ function isNumericIdField(el) {
 }
 
 // the visible input right before the first visible password in the same form
-function isRightBeforePassword(el) {
+function isRightBeforePassword(/** @type {HTMLInputElement} */ el) {
+  /** @type {HTMLElement | null} */
   let scope = el.form;
   if (!scope) {
     // no <form> (Ant Design logins): nearest ancestor holding el and a visible password
@@ -223,7 +224,7 @@ function isRightBeforePassword(el) {
   return at > 0 && inputs[at - 1] === el;
 }
 
-function isUsernameField(el) {
+function isUsernameField(/** @type {HTMLInputElement} */ el) {
   if (!(el instanceof HTMLInputElement)) return false;
   if (isOtpField(el)) return false;
   if (isSearchOrComboField(el)) return false;
@@ -251,11 +252,11 @@ function ensureFillStyle() {
 }
 
 // native setter plus the Bitwarden insert sequence: click, focus, key events, value, input, change
-function setValue(el, value) {
+function setValue(/** @type {HTMLInputElement} */ el, /** @type {string} */ value) {
   ensureFillStyle();
   const proto = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-  const write = (v) => {
+  const write = (/** @type {string} */ v) => {
     if (setter) setter.call(el, v);
     else el.value = v;
   };
@@ -276,7 +277,7 @@ function setValue(el, value) {
   }
 }
 
-function isVisible(el) {
+function isVisible(/** @type {HTMLElement} */ el) {
   if (!el.isConnected) return false;
   if (el.offsetParent === null && getComputedStyle(el).position !== "fixed") return false;
   const r = el.getBoundingClientRect();
@@ -287,7 +288,7 @@ function isVisible(el) {
 }
 
 // hidden/manager-only fields are fine, block the clickjacking shapes (1px, opacity:0, offscreen)
-function isFillable(el) {
+function isFillable(/** @type {HTMLInputElement} */ el) {
   if (!el.isConnected) return false;
   const s = getComputedStyle(el);
 
@@ -306,23 +307,23 @@ function isFillable(el) {
   return true;
 }
 
-function fillableInputs(anchor) {
+function fillableInputs(/** @type {HTMLInputElement | null | undefined} */ anchor) {
   const pool = new Set(document.querySelectorAll("input"));
-  const root = anchor?.getRootNode?.();
+  const root = /** @type {Document | ShadowRoot | undefined} */ (anchor?.getRootNode?.());
   if (root && root !== document && root.querySelectorAll) {
     for (const i of root.querySelectorAll("input")) pool.add(i);
   }
   return Array.from(pool).filter(isFillable);
 }
 
-function hasFillTarget(anchor) {
+function hasFillTarget(/** @type {HTMLInputElement | null | undefined} */ anchor) {
   return fillableInputs(anchor).some((i) => isPasswordField(i) || isUsernameField(i));
 }
 
 // focus moves through the fields while filling, which must not open the menu again
 let credFilling = false;
 
-async function fillCredentials(username, password, anchor) {
+async function fillCredentials(/** @type {string} */ username, /** @type {string} */ password, /** @type {HTMLInputElement | null | undefined} */ anchor) {
   credFilling = true;
   try {
     return await fillCredentialsNow(username, password, anchor);
@@ -331,7 +332,7 @@ async function fillCredentials(username, password, anchor) {
   }
 }
 
-async function fillCredentialsNow(username, password, anchor) {
+async function fillCredentialsNow(/** @type {string} */ username, /** @type {string} */ password, /** @type {HTMLInputElement | null | undefined} */ anchor) {
   const inputs = fillableInputs(anchor);
   let passwords = inputs.filter(isPasswordField);
   let usernames = inputs.filter(isUsernameField);
@@ -381,22 +382,23 @@ async function fillCredentialsNow(username, password, anchor) {
   return filled;
 }
 
-function domDistance(a, b) {
+function domDistance(/** @type {HTMLInputElement} */ a, /** @type {HTMLInputElement} */ b) {
   const all = Array.from(document.querySelectorAll("input"));
   return all.indexOf(a) - all.indexOf(b);
 }
 
-async function sha256Hex(text) {
+async function sha256Hex(/** @type {unknown} */ text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(text)));
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function passwordsMatch(hash, password) {
+async function passwordsMatch(/** @type {string | undefined} */ hash, /** @type {string} */ password) {
   if (!hash || !password) return false;
   return hash === (await sha256Hex(password));
 }
 
-onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
+// msg: any, background messages vary per type
+onChrome(chrome.runtime.onMessage, (/** @type {any} */ msg, /** @type {chrome.runtime.MessageSender} */ _sender, /** @type {(response?: any) => void} */ sendResponse) => {
   if (msg?.type !== "fill") return false;
   // host must match the origin the background pinned the cred to, so site A's cred never lands on site B
   // the first reply wins, so a frame on another host or with no login fields stays silent
@@ -428,7 +430,8 @@ onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
   return true;
 });
 
-onChrome(chrome.runtime.onMessage, (msg, _sender, sendResponse) => {
+// msg: any, background messages vary per type
+onChrome(chrome.runtime.onMessage, (/** @type {any} */ msg, /** @type {chrome.runtime.MessageSender} */ _sender, /** @type {(response?: any) => void} */ sendResponse) => {
   switch (msg?.type) {
     case "collectReport": {
       // every frame answers on its own message, a reply here would reach only the first frame
@@ -523,7 +526,8 @@ function hideSaveBar() {
   saveHost = null;
 }
 
-function showSaveBar(msg) {
+// msg: any, the save prompt message from the background
+function showSaveBar(/** @type {any} */ msg) {
   const key = `${msg.update ? 1 : 0}:${msg.username || ""}`;
   if (saveHost?.isConnected && saveKey === key) return;
   hideSaveBar();
@@ -597,8 +601,9 @@ let suggestionHost = null;
 let iconHost = null;
 /** @type {HTMLInputElement | null} */
 let anchorField = null;
-/** @type {string[] | null} */
+/** @type {{ username?: string }[] | null} */
 let cachedLogins = null;
+/** @type {{ el: HTMLElement, onActivate: () => void }[]} */
 let navItems = [];
 let navIndex = -1;
 /** @type {HTMLInputElement | null} */
@@ -609,7 +614,7 @@ let loginListReflow = null;
 let loginListUnbind = null;
 let menuGen = 0;
 
-function isLoginField(el) {
+function isLoginField(/** @type {HTMLInputElement} */ el) {
   if (!isVisible(el)) return false;
 
   if (isPasswordField(el)) return true;
@@ -659,7 +664,7 @@ function removeSuggestion() {
   lockedResume = null;
 }
 
-function placeIconAt(host, field) {
+function placeIconAt(/** @type {HTMLElement} */ host, /** @type {HTMLInputElement} */ field) {
   const r = field.getBoundingClientRect();
   const size = Math.min(20, Math.max(14, r.height - 8));
   host.style.width = `${size}px`;
@@ -675,7 +680,7 @@ function repositionIcon() {
     removeIcon();
     return;
   }
-  placeIconAt(iconHost, field);
+  placeIconAt(/** @type {HTMLElement} */ (iconHost), field);
 }
 
 function removeIcon() {
@@ -685,7 +690,7 @@ function removeIcon() {
   iconHost = null;
 }
 
-function setActiveNav(i) {
+function setActiveNav(/** @type {number} */ i) {
   navIndex = i;
   navItems.forEach((it, idx) => {
     const on = idx === i;
@@ -696,7 +701,7 @@ function setActiveNav(i) {
   if (i >= 0 && navItems[i]) navItems[i].el.scrollIntoView({ block: "nearest" });
 }
 
-function registerRow(row, onActivate) {
+function registerRow(/** @type {HTMLElement} */ row, /** @type {() => void} */ onActivate) {
   row.setAttribute("role", "option");
   navItems.push({ el: row, onActivate });
   // index is resolved at hover time so a rebuilt login list can keep the generator rows
@@ -705,13 +710,13 @@ function registerRow(row, onActivate) {
     if (idx >= 0) setActiveNav(idx);
   });
   // act on click not mousedown so the click cant land on a link behind the box (x.com forgot password, issue #2)
-  row.addEventListener("mousedown", (e) => {
+  row.addEventListener("mousedown", (/** @type {Event} */ e) => {
     if (!e.isTrusted) return;
     e.preventDefault();
     e.stopPropagation();
     rowPressAt = Date.now();
   });
-  row.addEventListener("click", (e) => {
+  row.addEventListener("click", (/** @type {Event} */ e) => {
     if (!e.isTrusted) return;
     e.preventDefault();
     e.stopPropagation();
@@ -721,11 +726,11 @@ function registerRow(row, onActivate) {
 
 // a click that follows a row press but reaches the page (box torn down in between) must not act on the page
 let rowPressAt = 0;
-function eventHitsMenu(e) {
+function eventHitsMenu(/** @type {Event} */ e) {
   const path = typeof e.composedPath === "function" ? e.composedPath() : [];
   if (suggestionHost && path.includes(suggestionHost)) return true;
   if (iconHost && path.includes(iconHost)) return true;
-  if (suggestionEl && (e.target === suggestionEl || suggestionEl.contains(e.target))) return true;
+  if (suggestionEl && (e.target === suggestionEl || suggestionEl.contains(/** @type {Node | null} */ (e.target)))) return true;
   return false;
 }
 
@@ -742,23 +747,23 @@ listen(
   true,
 );
 
-function menuSearchFocused(e) {
+function menuSearchFocused(/** @type {Event} */ e) {
   if (!loginSearchEl) return false;
   if (e.target === loginSearchEl) return true;
   // a closed shadow retargets the key event to the host
   return e.target === suggestionHost && document.activeElement === suggestionHost;
 }
 
-function eventField(e) {
+function eventField(/** @type {Event} */ e) {
   const path = typeof e.composedPath === "function" ? e.composedPath() : [];
   return path[0] || e.target;
 }
 
-function menuHandlesKeys(e) {
+function menuHandlesKeys(/** @type {Event} */ e) {
   return eventField(e) === anchorField || menuSearchFocused(e);
 }
 
-function onSuggestionKeydown(e) {
+function onSuggestionKeydown(/** @type {KeyboardEvent} */ e) {
   if (!e.isTrusted) return;
   if (!suggestionEl) return;
   if (e.key === "Escape") {
@@ -802,12 +807,13 @@ function pageIsFaded() {
   }
 }
 
-function rectsOverlap(a, b) {
+/** @typedef {{ left: number, top: number, right: number, bottom: number }} Box */
+function rectsOverlap(/** @type {Box} */ a, /** @type {Box} */ b) {
   return a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
 }
 
-function overlapsControl(rect) {
-  const nodes = document.querySelectorAll("input, textarea");
+function overlapsControl(/** @type {Box} */ rect) {
+  const nodes = /** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll("input, textarea"));
   for (const el of nodes) {
     if (el === anchorField) continue;
     if (!isVisible(el)) continue;
@@ -874,7 +880,7 @@ function fontFaceCss() {
 }
 
 // solid Canvas stays as the fallback where light-dark() is unsupported
-function glassify(el) {
+function glassify(/** @type {HTMLElement} */ el) {
   Object.assign(el.style, {
     background: "Canvas",
     color: "CanvasText",
@@ -895,22 +901,22 @@ function glassify(el) {
   );
 }
 
-function watchMenuHost(host) {
+function watchMenuHost(/** @type {HTMLElement} */ host) {
   const mo = new MutationObserver(() => {
     if (!host.isConnected) return;
     if (host.getAttribute("popover") !== "manual") {
       host.setAttribute("popover", "manual");
       try { host.showPopover(); } catch {}
     }
-    if (host.getAttribute("style") && /display\s*:\s*none/i.test(host.getAttribute("style"))) {
+    if (host.getAttribute("style") && /display\s*:\s*none/i.test(/** @type {string} */ (host.getAttribute("style")))) {
       host.style.display = "block";
     }
   });
   mo.observe(host, { attributes: true, attributeFilter: ["popover", "style", "hidden"] });
-  host._pbWatch = mo;
+  /** @type {HTMLElement & { _pbWatch?: MutationObserver }} */ (host)._pbWatch = mo;
 }
 
-function buildSuggestionBox(field) {
+function buildSuggestionBox(/** @type {HTMLInputElement} */ field) {
   removeSuggestion();
   anchorField = field;
   const host = /** @type {PbHost} */ (document.createElement("div"));
@@ -945,7 +951,7 @@ function buildSuggestionBox(field) {
   return box;
 }
 
-function placeFieldIcon(field) {
+function placeFieldIcon(/** @type {HTMLInputElement} */ field) {
   removeIcon();
   if (pbSettings.inlineMenuVisibility === "off") return;
   const host = /** @type {PbHost} */ (document.createElement("div"));
@@ -989,7 +995,7 @@ function placeFieldIcon(field) {
     // mousedown keeps focus where it was, and a re-rendering page may have replaced the field
     let target = field;
     if (!target.isConnected) {
-      target = liveField(target);
+      target = /** @type {HTMLInputElement} */ (liveField(target));
       removeIcon();
     }
     if (target.isConnected && target !== deepActiveElement()) target.focus({ preventScroll: true });
@@ -1022,6 +1028,7 @@ async function deviceLabel() {
   return t("deviceMac");
 }
 
+/** @param {HTMLInputElement} field @param {() => void} [onUnlock] */
 async function buildLockedSuggestion(field, onUnlock) {
   await resolveLocale();
   const place = await deviceLabel();
@@ -1059,7 +1066,7 @@ async function buildLockedSuggestion(field, onUnlock) {
 
   input.addEventListener("mousedown", (e) => e.stopPropagation());
 
-  const setStatus = (text, isError) => {
+  const setStatus = (/** @type {string} */ text, /** @type {boolean} */ isError) => {
     status.style.color = isError ? "#ff453a" : "rgba(128,128,128,0.9)";
     status.textContent = text;
   };
@@ -1100,7 +1107,7 @@ async function buildLockedSuggestion(field, onUnlock) {
     }
     cachedLogins = null;
     const r2 = await chrome.runtime.sendMessage({ type: "inlineLogins" }).catch((e) => (gone(e), null));
-    /** @type {string[]} */
+    /** @type {{ username?: string }[]} */
     const logins = r2?.logins || [];
     cachedLogins = logins;
     if (logins.length === 1) {
@@ -1154,12 +1161,12 @@ async function buildLockedSuggestion(field, onUnlock) {
   setTimeout(() => input.focus(), 0);
 }
 
-function isNewPasswordField(el) {
+function isNewPasswordField(/** @type {HTMLInputElement} */ el) {
   if (!isPasswordField(el)) return false;
   const ac = (el.getAttribute("autocomplete") || "").toLowerCase();
   if (ac.includes("current-password")) return false;
   if (ac.includes("new-password")) return true;
-  const pwCount = Array.from(document.querySelectorAll('input[type="password"]')).filter(isVisible).length;
+  const pwCount = Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[type="password"]'))).filter(isVisible).length;
   if (pwCount >= 2) return true;
   return Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll("button, input[type=submit], input[type=button]"))).some((b) =>
     /\b(sign[\s-]?up|register|create[\s-]?account|create[\s-]?your[\s-]?account)\b/i.test(b.textContent || b.value || ""),
@@ -1167,7 +1174,7 @@ function isNewPasswordField(el) {
 }
 
 // react can remount the input between dropdown build and click, so re-resolve the node
-function liveField(field) {
+function liveField(/** @type {HTMLInputElement | null | undefined} */ field) {
   if (!field || field.isConnected) return field;
   if (field.id) {
     const byId = document.getElementById(field.id);
@@ -1181,7 +1188,7 @@ function liveField(field) {
 }
 
 // the field plus every other empty new-password input in the same form (never a current-password one)
-function generatedTargets(field) {
+function generatedTargets(/** @type {HTMLInputElement} */ field) {
   const targets = new Set([field]);
   for (const p of Array.from(/** @type {NodeListOf<HTMLInputElement>} */ (document.querySelectorAll('input[type="password"]'))).filter(isFillable)) {
     if (p === field || p.value) continue;
@@ -1193,8 +1200,8 @@ function generatedTargets(field) {
   return targets;
 }
 
-async function fillGeneratedPassword(field, pw) {
-  field = liveField(field);
+async function fillGeneratedPassword(/** @type {HTMLInputElement} */ field, /** @type {string} */ pw) {
+  field = /** @type {HTMLInputElement} */ (liveField(field));
   const targets = generatedTargets(field);
   for (const t of targets) {
     setValue(t, pw);
@@ -1204,7 +1211,7 @@ async function fillGeneratedPassword(field, pw) {
   for (const ms of [50, 400]) {
     setTimeout(() => {
       const f = liveField(field);
-      for (const t of new Set([...targets, ...generatedTargets(f)])) {
+      for (const t of new Set([...targets, ...generatedTargets(/** @type {HTMLInputElement} */ (f))])) {
         if (!t.isConnected || t.value === pw) continue;
         setValue(t, pw);
         everPassword.add(t);
@@ -1229,9 +1236,9 @@ const LOGIN_ROW_PX = 40;
 const EMAIL_RE = /[^\s@<>()"',;:]+@[^\s@<>()"',;:]+\.[^\s@<>()"',;:]+/;
 
 // the username this page is for: a filled username input, a hidden identifier, or an email shown near the password field
-function findPageUsername(field) {
+function findPageUsername(/** @type {HTMLInputElement} */ field) {
   try {
-    const scopes = [field?.form, document].filter(Boolean);
+    const scopes = /** @type {ParentNode[]} */ ([field?.form, document].filter(Boolean));
     for (const scope of scopes) {
       for (const el of scope.querySelectorAll("input")) {
         if (el === field || isPasswordField(el)) continue;
@@ -1247,6 +1254,7 @@ function findPageUsername(field) {
     // an account chip (Google's 2-step page) carries the address in data-email
     const chip = (document.querySelector("[data-email]")?.getAttribute("data-email") || "").trim();
     if (chip && chip.length <= 320 && EMAIL_RE.test(chip)) return chip;
+    /** @type {HTMLElement | null} */
     let node = field;
     for (let i = 0; node && i < 6; i++) {
       node = node.parentElement;
@@ -1259,17 +1267,17 @@ function findPageUsername(field) {
   return "";
 }
 
-function pageUsernameQuery(field) {
+function pageUsernameQuery(/** @type {HTMLInputElement} */ field) {
   if (!field || isPasswordField(field)) return "";
   return (field.value || "").trim().toLowerCase();
 }
 
-function usernameMatches(login, query) {
+function usernameMatches(/** @type {{ username?: string }} */ login, /** @type {string} */ query) {
   if (!query) return true;
   return (login.username || "").toLowerCase().includes(query);
 }
 
-function fitLoginScroller(scroller) {
+function fitLoginScroller(/** @type {HTMLElement} */ scroller) {
   if (!anchorField || !suggestionEl) return;
   const r = anchorField.getBoundingClientRect();
   const vh = window.innerHeight || document.documentElement.clientHeight;
@@ -1278,7 +1286,7 @@ function fitLoginScroller(scroller) {
   const below = vh - 8 - (r.bottom + GAP) - frame;
   const above = r.top - GAP - 8 - frame;
   const room = Math.max(below, above);
-  const row = scroller.firstElementChild?.offsetHeight || LOGIN_ROW_PX;
+  const row = /** @type {HTMLElement | null} */ (scroller.firstElementChild)?.offsetHeight || LOGIN_ROW_PX;
   const cap = (row > 0 ? row : LOGIN_ROW_PX) * LOGIN_LIST_CAP;
   const max = Math.min(cap, Math.max(row > 0 ? row : LOGIN_ROW_PX, room));
   scroller.style.maxHeight = `${Math.round(max)}px`;
@@ -1288,7 +1296,7 @@ function fitLoginScroller(scroller) {
 }
 
 // fill routes through the origin-checked background path, page never sees the password
-function appendLoginRows(box, field, logins, preferred = "") {
+function appendLoginRows(/** @type {HTMLElement} */ box, /** @type {HTMLInputElement} */ field, /** @type {{ username?: string }[]} */ logins, preferred = "") {
   for (const login of logins) {
     const isPreferred = !!preferred && usernameMatchesPage(login.username, preferred);
     const label = login.username || t("noUsername");
@@ -1350,7 +1358,7 @@ function appendLoginRows(box, field, logins, preferred = "") {
   }
 }
 
-function mountLoginList(box, field, logins, hasGenerator) {
+function mountLoginList(/** @type {HTMLElement} */ box, /** @type {HTMLInputElement} */ field, /** @type {{ username?: string }[]} */ logins, /** @type {boolean} */ hasGenerator) {
   const capped = logins.length > LOGIN_LIST_CAP;
   let query = pageUsernameQuery(field);
   const preferred = isPasswordField(field) ? findPageUsername(field) : "";
@@ -1398,6 +1406,7 @@ function mountLoginList(box, field, logins, hasGenerator) {
   box.appendChild(scroller);
 
   const genHost = document.createElement("div");
+  /** @type {typeof navItems} */
   let pinnedNav = [];
   if (hasGenerator) {
     box.appendChild(genHost);
@@ -1412,7 +1421,7 @@ function mountLoginList(box, field, logins, hasGenerator) {
     navItems = [];
     navIndex = -1;
     scroller.replaceChildren();
-    const matched = logins.filter((login) => usernameMatches(login, query));
+    const matched = logins.filter((/** @type {{ username?: string }} */ login) => usernameMatches(login, query));
     if (!matched.length) {
       const empty = document.createElement("div");
       empty.textContent = t("noMatching");
@@ -1441,7 +1450,7 @@ function mountLoginList(box, field, logins, hasGenerator) {
   render();
 }
 
-function appendGeneratorOptions(box, field, separatorAbove) {
+function appendGeneratorOptions(/** @type {HTMLElement} */ box, /** @type {HTMLInputElement} */ field, /** @type {boolean} */ separatorAbove) {
   const options = [
     { label: t("strongPassword"), value: generateApplePassword() },
     { label: t("noSpecial"), value: generateAlphanumericPassword() },
@@ -1484,7 +1493,7 @@ function deepActiveElement() {
 let offerSeq = 0;
 
 // fetch before building so an empty result never flashes a box on then off
-async function buildOfferSuggestion(field, { fromIcon = false } = {}) {
+async function buildOfferSuggestion(/** @type {HTMLInputElement} */ field, { fromIcon = false } = {}) {
   await resolveLocale();
   const hasGenerator = isNewPasswordField(field);
   const seq = ++offerSeq;
@@ -1540,7 +1549,7 @@ async function buildOfferSuggestion(field, { fromIcon = false } = {}) {
 // codes are always an offer behind a click, never filled because a field appeared, a code is a bearer credential
 let otpFilling = false;
 
-function otpBoxGroup(el) {
+function otpBoxGroup(/** @type {HTMLInputElement} */ el) {
   const scope = el.form || el.closest("div, section, fieldset") || document;
   const inputs = Array.from(scope.querySelectorAll("input")).filter(
     (i) => isVisible(i) && !i.disabled && !i.readOnly
@@ -1553,7 +1562,7 @@ function otpBoxGroup(el) {
   return null;
 }
 
-function fillOtp(field, code) {
+function fillOtp(/** @type {HTMLInputElement} */ field, /** @type {string} */ code) {
   const chars = code.replace(/[^A-Za-z0-9]/g, "").split("");
   const boxes = otpBoxGroup(field);
   otpFilling = true;
@@ -1564,7 +1573,7 @@ function fillOtp(field, code) {
       return;
     }
     const start = Math.max(0, boxes.indexOf(field));
-    chars.forEach((c, i) => {
+    chars.forEach((/** @type {string} */ c, /** @type {number} */ i) => {
       const box = boxes[start + i];
       if (!box) return;
       box.focus();
@@ -1613,7 +1622,8 @@ function codeIcon() {
   return svg;
 }
 
-function appendOneTimeCodeRows(box, field, rows, preferred = "") {
+// rows: any[], code rows arrive from the background message
+function appendOneTimeCodeRows(/** @type {HTMLElement} */ box, /** @type {HTMLInputElement} */ field, /** @type {any[]} */ rows, preferred = "") {
   for (const r of rows) {
     const isPreferred = !!preferred && !!r.username && usernameMatchesPage(r.username, preferred);
     const row = document.createElement("div");
@@ -1681,7 +1691,7 @@ function appendOneTimeCodeRows(box, field, rows, preferred = "") {
   }
 }
 
-async function buildOneTimeCodeSuggestion(field) {
+async function buildOneTimeCodeSuggestion(/** @type {HTMLInputElement} */ field) {
   await resolveLocale();
   if (otpFilling) return;
   const seq = ++offerSeq;
@@ -1695,7 +1705,7 @@ async function buildOneTimeCodeSuggestion(field) {
   // a split widget moves focus between its boxes during the lookup (react can swap the node), accept any box in the group
   const active = deepActiveElement();
   const group = otpBoxGroup(field);
-  if (!field.isConnected || !(active === field || (group && group.includes(active)))) return;
+  if (!field.isConnected || !(active === field || (group && /** @type {(Element | null)[]} */ (group).includes(active)))) return;
   if (active !== field && active instanceof HTMLInputElement) field = active;
   if (!res?.ok) return;
   const locked = !!res.locked;
@@ -1730,7 +1740,7 @@ function onShortcut() {
   if (target) target.focus();
 }
 
-function buildChooser(field, logins) {
+function buildChooser(/** @type {HTMLInputElement} */ field, /** @type {{ username?: string }[]} */ logins) {
   if (!logins.length) {
     removeSuggestion();
     return;
@@ -1749,7 +1759,7 @@ function snapshotFrame() {
       name: scrubAttr(el.getAttribute("name") || ""),
       id: scrubAttr(el.id || ""),
       autocomplete: el.getAttribute("autocomplete") || "",
-      visible: isVisible(el),
+      visible: isVisible(/** @type {HTMLElement} */ (el)),
       login: el instanceof HTMLInputElement && isLoginField(el),
       otp: el instanceof HTMLInputElement && isOtpField(el),
     }));
@@ -1792,7 +1802,7 @@ const IFRAME_LOGIN_ALLOWLIST = [
 ];
 
 // suffix match so "clerk.accounts.dev" matches without matching a bare "accounts.dev"
-function isAllowlistedLoginHost(host) {
+function isAllowlistedLoginHost(/** @type {string} */ host) {
   host = host.toLowerCase();
   return IFRAME_LOGIN_ALLOWLIST.some((d) => host === d || host.endsWith("." + d));
 }
@@ -1812,7 +1822,7 @@ function frameIsSafe() {
   }
 }
 
-async function onFocusIn(e) {
+async function onFocusIn(/** @type {{ target: EventTarget | null, composedPath?: () => EventTarget[] }} */ e) {
   if (!life.alive()) return life.teardown();
   if (credFilling) return;
   if (hostBlocked(location.hostname, pbSettings.blockedDomains)) return;
@@ -1946,7 +1956,7 @@ const SUBMITY_ENDINGS = /(pwd|password|passwd|submit|login|signin)$/;
 const TOGGLE_WORDS = new Set(["show", "hide", "toggle", "reveal", "eye", "visibility", "view", "peek", "unmask", "mask"]);
 const NOT_SUBMIT_WORDS = new Set(["forgot", "cancel"]);
 
-function attrWords(text) {
+function attrWords(/** @type {unknown} */ text) {
   return String(text || "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
@@ -1954,7 +1964,7 @@ function attrWords(text) {
     .filter(Boolean);
 }
 
-function submityAttr(attrs) {
+function submityAttr(/** @type {string} */ attrs) {
   const words = attrWords(attrs);
   if (words.some((w) => NOT_SUBMIT_WORDS.has(w))) return false;
   // a bare "password" or "pwd" names the field it sits next to, the compound is the action
@@ -1966,14 +1976,14 @@ function submityAttr(attrs) {
 }
 
 // attributes, not the visible label: "Sign in to view" is still a submit
-function isToggleControl(el) {
+function isToggleControl(/** @type {Element} */ el) {
   if (el.hasAttribute("aria-pressed")) return true;
   const attrs = ["name", "id", "class", "aria-label", "title", "data-testid"].map((a) => el.getAttribute(a) || "").join(" ");
   if (attrWords(attrs).some((w) => TOGGLE_WORDS.has(w))) return true;
-  return /^\s*(show|hide|reveal|toggle)\b/i.test(el.textContent || el.value || "");
+  return /^\s*(show|hide|reveal|toggle)\b/i.test(el.textContent || /** @type {HTMLInputElement} */ (el).value || "");
 }
 
-function isSubmitControl(el) {
+function isSubmitControl(/** @type {unknown} */ el) {
   if (!(el instanceof Element)) return false;
   // button.value or input.value, both strings
   const value = /** @type {HTMLInputElement} */ (el).value;
@@ -1992,13 +2002,14 @@ function isSubmitControl(el) {
   }
   // styled div/a with role=button (sling reset pages)
   if ((el.getAttribute("role") || "").toLowerCase() === "button" || tag === "a") {
-    return SUBMITY_LABEL.test((el.textContent || attrBlob(el)) ?? "");
+    return SUBMITY_LABEL.test((el.textContent || attrBlob(/** @type {HTMLInputElement} */ (el))) ?? "");
   }
   return false;
 }
 
-function collectSubmittedCredentials(scope) {
-  const root = scope && scope.querySelectorAll ? scope : document;
+/** @typedef {{ querySelectorAll?: ParentNode["querySelectorAll"] } | null | undefined} Scope */
+function collectSubmittedCredentials(/** @type {Scope} */ scope) {
+  const root = /** @type {ParentNode} */ (scope && scope.querySelectorAll ? scope : document);
   const inputs = Array.from(root.querySelectorAll("input"));
   // a show-password toggle leaves the field type=text at submit
   const pws = inputs.filter((i) => isPasswordish(i) && i.value);
@@ -2012,19 +2023,20 @@ function collectSubmittedCredentials(scope) {
   if (dup) password = dup[0];
   else if (marked) password = marked.value;
   const firstPw = pws[0];
-  const before = (el) => el.compareDocumentPosition(firstPw) & Node.DOCUMENT_POSITION_FOLLOWING;
+  const before = (/** @type {HTMLInputElement} */ el) => el.compareDocumentPosition(firstPw) & Node.DOCUMENT_POSITION_FOLLOWING;
 
   // a password value in the username slot is what got saved on toggled reset forms
   const pwValues = new Set(pws.map((p) => p.value));
-  const usable = (i) => !isPasswordish(i) && !pwValues.has(i.value.trim());
+  const usable = (/** @type {HTMLInputElement} */ i) => !isPasswordish(i) && !pwValues.has(i.value.trim());
 
   const strict = inputs.filter((i) => isUsernameField(i) && i.value && usable(i));
   const strictBefore = strict.filter(before);
+  /** @type {HTMLInputElement | null} */
   let userEl = strictBefore.length ? strictBefore[strictBefore.length - 1] : strict[0] || null;
 
   // reject junk so a reset doesnt save "9" as the name
   if (!userEl) {
-    const looksLikeUsername = (v) => {
+    const looksLikeUsername = (/** @type {string | null | undefined} */ v) => {
       v = (v || "").trim();
       if (v.length < 3) return false;
       if (/^\d+$/.test(v) && v.length < 6) return false; // a short number is a code, not a name
@@ -2046,14 +2058,14 @@ function collectSubmittedCredentials(scope) {
   return { username: (userEl?.value || "").trim(), password, allPasswords: pws.map((p) => p.value) };
 }
 
-function anchorPwField(root) {
-  const scope = root && root.querySelectorAll ? root : document;
+function anchorPwField(/** @type {Scope} */ root) {
+  const scope = /** @type {ParentNode} */ (root && root.querySelectorAll ? root : document);
   const pws = Array.from(scope.querySelectorAll("input")).filter(isPasswordish);
   return pws.find(isVisible) || pws[0] || null;
 }
 
 // awaiting the lookup here lost the save on a redirect
-async function maybeOfferSave(scope) {
+async function maybeOfferSave(/** @type {Scope | HTMLFormElement | Document} */ scope) {
   if (!frameIsSafe()) return;
   const cred = collectSubmittedCredentials(scope);
   if (!cred || !cred.password) return;
@@ -2093,7 +2105,7 @@ async function maybeOfferSave(scope) {
   lastSaveKey = key;
   lastSaveAt = now;
 
-  const root = scope && scope.querySelectorAll ? scope : document;
+  const root = /** @type {ParentNode} */ (scope && scope.querySelectorAll ? scope : document);
   const pwInputs = Array.from(root.querySelectorAll("input")).filter(isPasswordish);
   const newPwCtx = newPasswordContext({
     generated,
