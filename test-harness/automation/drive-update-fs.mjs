@@ -1,4 +1,3 @@
-// @ts-nocheck
 // runs test-harness/update-fs.html: the folder-update engine on Chrome's own File System Access code (OPFS).
 // serves the repo root so the page imports src/ as is; a zip made with `zip -r`, like release.yml, is passed in when zip exists
 import { execFileSync } from "child_process";
@@ -7,7 +6,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { HERE, chromium, main, ok, serveStatic } from "./lib.mjs";
 
-async function releaseStyleZip(dir) {
+async function releaseStyleZip(/** @type {string} */ dir) {
   const pkg = join(dir, "pkg");
   await mkdir(join(pkg, "src"), { recursive: true });
   await writeFile(join(pkg, "manifest.json"), '{"version":"1.4.2"}');
@@ -29,8 +28,8 @@ await main(async () => {
     if (!zip) console.log("SKIP zip check (no zip command)");
     const page = await browser.newPage();
     await page.goto(`${server.url}/test-harness/update-fs.html`);
-    await page.waitForFunction(() => typeof window.runUpdateFsChecks === "function");
-    for (const [name, passed, detail] of await page.evaluate((bytes) => window.runUpdateFsChecks(bytes), zip)) {
+    await page.waitForFunction(() => typeof /** @type {any} */ (window).runUpdateFsChecks === "function");
+    for (const [name, passed, detail] of await page.evaluate((/** @type {number[]} */ bytes) => /** @type {any} */ (window).runUpdateFsChecks(bytes), zip)) {
       ok(`update fs: ${name}`, passed, detail);
     }
   } finally {

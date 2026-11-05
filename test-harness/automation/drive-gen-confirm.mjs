@@ -1,14 +1,13 @@
-// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.mjs";
 
 // a page with no form whose script clears the confirm box when the first one changes (#169)
 await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const page = await ctx.newPage();
-  for (const [label, row, alnum] of [
+  for (const [label, row, alnum] of /** @type {[string, string, boolean][]} */ ([
     ["strong", "Strong Password", false],
     ["no special characters", "Without Special Characters", true],
-  ]) {
+  ])) {
     await page.goto(`${BASE}/signup-noform-clears.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(300);
     await page.focus("#pw1");

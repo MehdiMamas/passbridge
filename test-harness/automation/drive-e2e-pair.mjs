@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: the real extension against the simulated Apple helper. Pair with the code on the helper's screen (wrong code,
 // then a code that expired, then the right one) on both platforms, and check no mock data is in the build.
 
@@ -9,7 +8,7 @@ import { PLATFORMS, startE2E } from "./e2e-lib.mjs";
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (n) => `${platform}: ${n}`;
+    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
     const bundle = await readFile(join(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`), "src", "background.js"), "utf8");
     ok(t("the build holds no mock fixture data"), !bundle.includes("test@example.com"));
 

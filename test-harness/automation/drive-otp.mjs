@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok } from "./lib.mjs";
 
 await main(async () => {
@@ -86,7 +85,7 @@ await main(async () => {
     const page = await ctx.newPage();
     await page.goto(`${BASE}/otp-totp-pin.html`, { waitUntil: "domcontentloaded" });
     await page.evaluate((n) => {
-      const el = document.querySelector("input");
+      const el = /** @type {HTMLInputElement} */ (document.querySelector("input"));
       el.name = n;
       el.id = n;
     }, name);
@@ -102,7 +101,7 @@ await main(async () => {
     const page = await ctx.newPage();
     await page.goto(`${BASE}/login-okta-passcode.html`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => {
-      document.querySelector('label[for="input28"]').textContent = "Enter code";
+      /** @type {HTMLElement} */ (document.querySelector('label[for="input28"]')).textContent = "Enter code";
     });
     await page.waitForTimeout(300);
     await page.focus('input[name="credentials.passcode"]');

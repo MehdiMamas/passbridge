@@ -1,4 +1,3 @@
-// @ts-nocheck
 // a foreign sub-frame must never get an offer (confused deputy via all_frames)
 // openpw.test resolves to 127.0.0.1 through the launch flags in lib.mjs
 import { join } from "path";
@@ -18,7 +17,7 @@ await main(async () => {
     document.body.appendChild(f);
   }, foreign.href);
   await page.waitForTimeout(1200);
-  const xframe = page.frames().find((f) => f.url().includes("openpw.test") && f.url().includes("iframe-login"));
+  const xframe = /** @type {import("playwright-core").Frame} */ (page.frames().find((f) => f.url().includes("openpw.test") && f.url().includes("iframe-login")));
   const field = xframe?.locator('input[name="username"], input[autocomplete="username"], input[type="text"]').first();
   if (!ok("cross-origin frame loaded", xframe && (await field.count()) > 0, "frame did not load, so nothing was tested")) return;
   await field.focus().catch(() => {});
@@ -37,18 +36,18 @@ await main(async () => {
     document.body.appendChild(f);
   }, `${other.url}/iframe-pages/iframe-login.html`);
   await top.waitForTimeout(1200);
-  const sameHost = top.frames().find((f) => f.url().startsWith(other.url));
+  const sameHost = /** @type {import("playwright-core").Frame} */ (top.frames().find((f) => f.url().startsWith(other.url)));
   const user = sameHost?.locator('input[name="username"]');
   if (!ok("same-host other-port frame loaded", sameHost && (await user.count()) > 0, "frame did not load, so nothing was tested")) return;
   await user.focus();
   await top.waitForTimeout(500);
   const sw = ctx.serviceWorkers()[0];
-  const send = (extra) =>
+  const send = (/** @type {Record<string, string>} */ extra) =>
     sw.evaluate(
       async ({ url, extra }) => {
-        const tab = (await chrome.tabs.query({})).find((t) => t.url?.startsWith(url));
-        const host = new URL(tab.url).hostname;
-        return chrome.tabs.sendMessage(tab.id, { type: "fill", username: "agent@example.com", password: "pw-xorigin", expectedHost: host, ...extra }).catch(() => null);
+        const tab = /** @type {chrome.tabs.Tab} */ ((await chrome.tabs.query({})).find((t) => t.url?.startsWith(url)));
+        const host = new URL(/** @type {string} */ (tab.url)).hostname;
+        return chrome.tabs.sendMessage(/** @type {number} */ (tab.id), { type: "fill", username: "agent@example.com", password: "pw-xorigin", expectedHost: host, ...extra }).catch(() => null);
       },
       { url: `${BASE}/index.html`, extra },
     );

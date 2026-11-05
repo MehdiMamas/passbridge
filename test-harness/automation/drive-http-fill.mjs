@@ -1,4 +1,3 @@
-// @ts-nocheck
 // plain-http pages: the login still lists, fill and save stay refused until canFillOnHttp is on
 import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok } from "./lib.mjs";
 

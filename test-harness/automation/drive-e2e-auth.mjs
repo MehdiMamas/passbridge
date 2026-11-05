@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: what the extension does when the helper's approval (Touch ID / Windows Hello) is denied or never answered,
 // and when the helper asks to sign in again: it stays usable, asks to unlock, and pairs again with the new code.
 // Both platforms, run side by side because the unanswered approval has to outlast the extension's own wait.
@@ -16,8 +15,8 @@ const vault = () => {
   return v;
 };
 
-async function run(platform) {
-  const t = (n) => `${platform}: ${n}`;
+async function run(/** @type {"mac" | "win"} */ platform) {
+  const t = (/** @type {string} */ n) => `${platform}: ${n}`;
   const { ctx, helper } = await startE2E(platform, { vault: vault() });
   const url = `${BASE}/login-standard.html`;
   const fresh = async () => {
@@ -28,7 +27,7 @@ async function run(platform) {
     await page.waitForTimeout(900);
     return page;
   };
-  const pw = (page) => page.inputValue('input[name="password"]');
+  const pw = (/** @type {import("playwright-core").Page} */ page) => page.inputValue('input[name="password"]');
 
   const first = await ctx.newPage();
   await first.goto(url, { waitUntil: "domcontentloaded" });

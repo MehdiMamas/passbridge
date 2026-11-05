@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, menuText, menuShown, ok } from "./lib.mjs";
 
 // click the field icon with a real mouse; the icon sits in a closed shadow, so use its host box
-async function clickIcon(page) {
+async function clickIcon(/** @type {import("playwright-core").Page} */ page) {
   const box = await page.locator("[data-passbridge-icon]").first().boundingBox();
   if (!box) return false;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -10,7 +9,7 @@ async function clickIcon(page) {
   return true;
 }
 
-async function open(kind) {
+async function open(/** @type {string} */ kind) {
   const ctx = await launchExtension(build(kind));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login-email-password.html`, { waitUntil: "domcontentloaded" });

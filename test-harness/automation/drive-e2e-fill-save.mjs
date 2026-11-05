@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: fill from the simulated helper's vault, then save a new login and an update through the real protocol,
 // checking what the helper received. Both platforms.
 
@@ -7,21 +6,21 @@ import { PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.mjs";
 
 await main(async () => {
   for (const platform of PLATFORMS) {
-    const t = (n) => `${platform}: ${n}`;
+    const t = (/** @type {string} */ n) => `${platform}: ${n}`;
     const { ctx, helper } = await startE2E(platform);
     const url = `${BASE}/login-standard.html`;
-    const barOf = async (page) => {
+    const barOf = async (/** @type {import("playwright-core").Page} */ page) => {
       for (let i = 0; i < 40; i++) {
-        const f = page.frames().find((fr) => fr.url().includes("overlay/save-bar.html"));
+        const f = page.frames().find((/** @type {import("playwright-core").Frame} */ fr) => fr.url().includes("overlay/save-bar.html"));
         if (f && (await f.locator("[data-field=password]").count())) return f;
         await page.waitForTimeout(150);
       }
       return null;
     };
     // the bar can be rebuilt right after it appears: let it settle, take the frame again, click without waiting on animation
-    const press = async (page) => {
+    const press = async (/** @type {import("playwright-core").Page} */ page) => {
       await page.waitForTimeout(800);
-      const f = await barOf(page);
+      const f = /** @type {import("playwright-core").Frame} */ (await barOf(page));
       await f.locator("[data-action=save]:not([disabled])").waitFor();
       await f.locator("[data-action=save]").dispatchEvent("click");
       await page.waitForTimeout(1200);
@@ -40,7 +39,7 @@ await main(async () => {
     await page.waitForTimeout(400);
     await page.fill("input[name=username]", "new@pb-e2e.invalid");
     await page.fill("input[name=password]", "n3w-Pass");
-    await page.evaluate(() => document.querySelector("button[type=submit]").click());
+    await page.evaluate(() => /** @type {HTMLElement} */ (document.querySelector("button[type=submit]")).click());
     const bar = await barOf(page);
     ok(t("a new login offers to save"), !!bar, "no save bar");
     if (!bar) continue;
@@ -56,7 +55,7 @@ await main(async () => {
     await page.waitForTimeout(1200);
     ok(t("the saved login fills"), (await page.inputValue("input[name=password]")) === "n3w-Pass", await page.inputValue("input[name=password]"));
     await page.fill("input[name=password]", "n3w-Pass-2");
-    await page.evaluate(() => document.querySelector("button[type=submit]").click());
+    await page.evaluate(() => /** @type {HTMLElement} */ (document.querySelector("button[type=submit]")).click());
     const bar2 = await barOf(page);
     ok(t("a changed password offers an update"), !!bar2 && /Update password/i.test(await bar2.locator("body").innerText()), bar2 ? await bar2.locator("body").innerText() : "no save bar");
     if (!bar2) continue;

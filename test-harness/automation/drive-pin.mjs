@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { join } from "path";
 import { BASE, SHOTS, build, clickMenu, launchExtension, main, menuText, ok, typeInMenu } from "./lib.mjs";
 
