@@ -67,6 +67,10 @@ export function getSettings() {
   });
 }
 
+/**
+ * @param {string | null | undefined} host
+ * @param {unknown[] | undefined} list
+ */
 export function hostBlocked(host, list) {
   host = (host || "").toLowerCase();
   return (list || []).some((d) => {

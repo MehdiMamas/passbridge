@@ -61,20 +61,31 @@ export class SRPSession {
   }
 
   get serverPublicKeyBytes() {
-    return bigIntToBytes(this.serverPublicKey);
+    return bigIntToBytes(/** @type {bigint} */ (this.serverPublicKey));
   }
 
+  /**
+   * @param {Uint8Array} bytes
+   * @param {boolean} [prefix]
+   */
   serialize(bytes, prefix = true) {
     if (this.shouldUseBase64) return bytesToBase64(bytes);
     return (prefix ? "0x" : "") + bytesToHex(bytes);
   }
 
+  /**
+   * @param {string} str
+   */
   deserialize(str) {
     if (this.shouldUseBase64) return base64ToBytes(str);
     return hexToBytes(str.replace(/^0x/, ""));
   }
 
   // salt stays raw bytes, a bigint round trip drops a leading zero and looks like a wrong PIN
+  /**
+   * @param {bigint} serverPublicKey
+   * @param {Uint8Array} saltBytes
+   */
   setServerPublicKey(serverPublicKey, saltBytes) {
     if (serverPublicKey <= 0n || serverPublicKey >= GROUP_PRIME)
       throw new Error("invalid server public key: out of range");
@@ -84,6 +95,9 @@ export class SRPSession {
     this.salt = saltBytes;
   }
 
+  /**
+   * @param {string} pin
+   */
   async setSharedKey(pin) {
     if (this.serverPublicKey === undefined) throw new Error("missing server public key");
     if (this.salt === undefined) throw new Error("missing salt");
@@ -118,15 +132,18 @@ export class SRPSession {
     return await sha256(
       xored,
       hI,
-      this.salt,
+      /** @type {Uint8Array} */ (this.salt),
       this.clientPublicKeyBytes,
       this.serverPublicKeyBytes,
       padBytes(bigIntToBytes(this.sharedKey), 32),
     );
   }
 
+  /**
+   * @param {Uint8Array} m
+   */
   async computeHMAC(m) {
-    return await sha256(this.clientPublicKeyBytes, m, padBytes(bigIntToBytes(this.sharedKey), 32));
+    return await sha256(this.clientPublicKeyBytes, m, padBytes(bigIntToBytes(/** @type {bigint} */ (this.sharedKey)), 32));
   }
 
   async getEncryptionKey() {
@@ -137,6 +154,9 @@ export class SRPSession {
   }
 
   // ciphertext+tag || iv, matches Apple's SecretSession.encrypt concat(ciphertext, iv)
+  /**
+   * @param {unknown} obj
+   */
   async encrypt(obj) {
     const key = await this.getEncryptionKey();
     if (!key) throw new Error("missing encryption key");
@@ -147,6 +167,9 @@ export class SRPSession {
   }
 
   // inbound is iv || ciphertext+tag, asymmetric with encrypt() on purpose
+  /**
+   * @param {Uint8Array} bytes
+   */
   async decrypt(bytes) {
     const key = await this.getEncryptionKey();
     if (!key) throw new Error("missing encryption key");

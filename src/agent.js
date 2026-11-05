@@ -3,6 +3,20 @@
 import { SETTINGS_AREA, getSettings, hostBlocked } from "./settings.js";
 import { hostOfSite, siteHosts } from "./session/password-search.js";
 
+/**
+ * Injected collaborators. Results are `any` where they are owned by background.js or the vault (shapes not typed there).
+ * @typedef {object} AgentDeps
+ * @property {() => Promise<any>} getSettings
+ * @property {{ ready?: boolean }} client
+ * @property {(id: number) => Promise<any>} getTab
+ * @property {(url: string) => any} hostnameOf the host, or null for an unparsable url
+ * @property {(url: string) => Promise<boolean>} isFillUrlAllowed
+ * @property {(host: string) => boolean} isLocalDevHost
+ * @property {(tabId: number, url: string) => Promise<any[]>} siteLogins
+ * @property {(logins: any[]) => any[]} uniqueByUsername
+ * @property {(tab: any, username: string, opts: Record<string, unknown>) => Promise<any>} fillLoginOnTab
+ */
+
 const HOST = "com.passbridge.agent";
 const LOG_KEY = "agentLog";
 const LOG_MAX = 200;
@@ -13,11 +27,19 @@ export const RATE_WINDOW_MS = 10 * 60 * 1000;
 export const hostAllowed = hostBlocked;
 
 // the host is the site or one of its subdomains. a site with no dot (com, localhost) matches itself only
+/**
+ * @param {string} host
+ * @param {string} site
+ */
 export function onSiteOrSubdomain(host, site) {
   return host === site || (site.includes(".") && host.endsWith("." + site));
 }
 
 // a login is saved for this host: a saved site, a subdomain of it, or the saved www. host without its www.
+/**
+ * @param {string | null | undefined} host
+ * @param {any} sites saved-site list from the vault, shape owned by session/password-search.js
+ */
 export function loginSavedFor(host, sites) {
   if (!host) return false;
   return siteHosts(sites).some((s) => onSiteOrSubdomain(host, s) || host === s.replace(/^www\./, ""));
@@ -25,7 +47,13 @@ export function loginSavedFor(host, sites) {
 
 // child frames the agent may fill: a real child (not the top frame) whose own host is on the allowlist,
 // e.g. idmsa.apple.com under apple.com. frames are {frameId, url} from webNavigation.getAllFrames
+/**
+ * @param {any} frames webNavigation.getAllFrames result
+ * @param {unknown[] | undefined} allowlist
+ * @param {(url: string) => any} hostnameOf the host, or null for an unparsable url
+ */
 export function pickAllowedFrames(frames, allowlist, hostnameOf) {
+  /** @type {{ frameId: number, host: string }[]} */
   const out = [];
   for (const f of Array.isArray(frames) ? frames : []) {
     if (!f || !f.frameId) continue;
@@ -40,6 +68,7 @@ export function pickAllowedFrames(frames, allowlist, hostnameOf) {
 
 // sliding window, the caller passes the clock so tests need no timers
 export function createLimiter(max = RATE_MAX, windowMs = RATE_WINDOW_MS) {
+  /** @type {number[]} */
   let hits = [];
   return {
     take(now = Date.now()) {
@@ -49,6 +78,9 @@ export function createLimiter(max = RATE_MAX, windowMs = RATE_WINDOW_MS) {
       return true;
     },
     dump: () => hits.slice(),
+    /**
+     * @param {unknown} list
+     */
     load(list) {
       hits = (Array.isArray(list) ? list : []).filter((t) => typeof t === "number");
     },
@@ -57,9 +89,14 @@ export function createLimiter(max = RATE_MAX, windowMs = RATE_WINDOW_MS) {
 
 // every reply goes through here: any key that could carry a secret is dropped at any depth
 const SECRET_KEYS = /^(password|passwd|pass|code|otp|secret|token)$/i;
+/**
+ * @param {any} value reply JSON, any shape
+ * @returns {any}
+ */
 export function sanitizeReply(value) {
   if (Array.isArray(value)) return value.map(sanitizeReply);
   if (value && typeof value === "object") {
+    /** @type {Record<string, any>} */
     const out = {};
     for (const [k, v] of Object.entries(value)) {
       if (SECRET_KEYS.test(k)) continue;
@@ -70,10 +107,25 @@ export function sanitizeReply(value) {
   return value;
 }
 
+/**
+ * @param {unknown} a
+ * @param {unknown} b
+ */
 const same = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+/**
+ * @param {string} error
+ * @param {Record<string, unknown>} [extra]
+ */
 const fail = (error, extra) => ({ ok: false, error, ...extra });
 
 // the whole request flow, deps injected so it runs without chrome
+/**
+ * @param {any} msg request from the native host, any JSON
+ * @param {AgentDeps} deps
+ * @param {ReturnType<typeof createLimiter>} limiter
+ * @param {number} [now]
+ * @returns {Promise<any>} a plain reply for status, else { reply, host, username }
+ */
 export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   const op = msg?.op;
   const settings = await deps.getSettings();
@@ -81,6 +133,10 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
     return { ok: true, paired: !!deps.client.ready, enabled: !!settings.agentSignIn, allowlist: settings.agentAllowlist || [], allowAll: settings.agentAllowAll === true };
   }
   const base = { host: "", username: "" };
+  /**
+   * @param {any} reply
+   * @param {Record<string, unknown>} [extra]
+   */
   const done = (reply, extra) => Object.assign(base, extra, { reply });
   if (!settings.agentSignIn) return done(fail("not_enabled"));
   if (!["logins", "sign_in"].includes(op)) return done(fail("unknown_op"));
@@ -140,6 +196,9 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   }
 }
 
+/**
+ * @param {Record<string, unknown>} entry
+ */
 async function appendLog(entry) {
   try {
     const o = await chrome.storage.local.get(LOG_KEY);
@@ -159,6 +218,9 @@ export function relayEvent(m) {
   return m.event === "active" || m.event === "standby" ? m.event : null;
 }
 
+/**
+ * @param {string | null} state
+ */
 const setRelay = (state) => {
   try {
     if (state) chrome.storage.session.set({ agentRelay: state });
@@ -166,6 +228,9 @@ const setRelay = (state) => {
   } catch {}
 };
 
+/**
+ * @param {AgentDeps} deps
+ */
 export function initAgent(deps) {
   const limiter = createLimiter();
   /** @type {chrome.runtime.Port | null} */
@@ -189,9 +254,14 @@ export function initAgent(deps) {
     } catch {}
   };
 
+  /**
+   * @param {chrome.runtime.Port} p
+   * @param {any} msg
+   */
   async function onRequest(p, msg) {
     const id = msg?.id;
     await loadLimiter();
+    /** @type {any} */
     let out;
     try {
       out = await handleAgentRequest(msg, deps, limiter);

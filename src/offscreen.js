@@ -5,20 +5,27 @@ import { t } from "./i18n/runtime.js";
 let timer = null;
 let pending = "";
 
+/**
+ * @param {chrome.runtime.MessageSender | undefined} sender
+ */
 function fromExtensionPage(sender) {
   return sender?.id === chrome.runtime.id && sender.tab == null;
 }
 
 // an offscreen page never has focus, so navigator.clipboard rejects here.
 // execCommand works with the CLIPBOARD reason and the clipboardWrite/clipboardRead permissions.
+/**
+ * @param {string} text
+ */
 function writeClipboard(text) {
   const area = document.createElement("textarea");
   area.value = text || " ";
   document.body.append(area);
   area.select();
   // the copy event sets the exact text, an empty string included
+  /** @param {ClipboardEvent} e */
   const onCopy = (e) => {
-    e.clipboardData.setData("text/plain", text);
+    /** @type {DataTransfer} */ (e.clipboardData).setData("text/plain", text);
     e.preventDefault();
   };
   document.addEventListener("copy", onCopy, { once: true });
@@ -46,6 +53,9 @@ function readClipboard() {
 }
 
 // leave the clipboard alone when the user copied something else since
+/**
+ * @param {string} expected
+ */
 function clearIfUnchanged(expected) {
   if (!expected) return;
   const current = readClipboard();
@@ -96,6 +106,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
+/**
+ * @param {string} url
+ * @returns {Promise<HTMLImageElement>}
+ */
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -105,6 +119,15 @@ function loadImage(url) {
   });
 }
 
+/**
+ * @param {HTMLImageElement} img
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ * @param {number} scale
+ * @returns {string[]}
+ */
 function readQr(img, x, y, w, h, scale) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(w * scale));
@@ -117,6 +140,11 @@ function readQr(img, x, y, w, h, scale) {
   return code?.data ? [code.data] : [];
 }
 
+/**
+ * @param {string} dataUrl
+ * @param {{ whole?: boolean, dpr?: number, x?: number, y?: number, w?: number, h?: number } | undefined} rect
+ * @returns {Promise<string[]>}
+ */
 async function decodeQr(dataUrl, rect) {
   const img = await loadImage(dataUrl);
   if (rect?.whole) return readQr(img, 0, 0, img.width, img.height, 1);
