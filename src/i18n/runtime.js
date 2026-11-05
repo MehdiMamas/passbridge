@@ -85,7 +85,7 @@ export function resolveLocale() {
       let raw = "";
       try {
         const got = await settingsStore().get({ uiLanguage: "" });
-        raw = got?.uiLanguage || "";
+        raw = /** @type {string} */ (got?.uiLanguage || "");
       } catch (_) {
         raw = "";
       }

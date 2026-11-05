@@ -46,10 +46,11 @@ async function runCheck(now, force) {
   const tag = body?.tag_name;
   if (!res.ok) return false;
   // a release is offered only once its signature is on it, the update page refuses it before that
-  await chrome.storage.local.set(parseVersion(tag) ? { updateCheckedAt: now, latestRelease: tag, latestUnsigned: signedAsset(body, ZIP_NAME) ? null : tag } : { updateCheckedAt: now });
+  await chrome.storage.local.set(/** @type {Record<string, unknown>} */ (parseVersion(tag) ? { updateCheckedAt: now, latestRelease: tag, latestUnsigned: signedAsset(body, ZIP_NAME) ? null : tag } : { updateCheckedAt: now }));
   return true;
 }
 
+/** @type {Promise<boolean> | null} */
 let running = null;
 // force skips the wait (a button press); resolves true when GitHub answered.
 // storage calls fail with "No SW" while the worker shuts down for a reload, the next alarm checks again
@@ -68,7 +69,7 @@ export async function availableUpdate(currentVersion = chrome.runtime.getManifes
   const { latestRelease, dismissedRelease, latestUnsigned } = await chrome.storage.local.get(["latestRelease", "dismissedRelease", "latestUnsigned"]);
   if (latestRelease === dismissedRelease || latestRelease === latestUnsigned || !isNewerVersion(latestRelease, currentVersion)) return null;
   return {
-    version: parseVersion(latestRelease).join("."),
+    version: /** @type {number[]} */ (parseVersion(latestRelease)).join("."),
     url: releasePageUrl(latestRelease),
   };
 }

@@ -36,6 +36,7 @@ function toB64(bytes) {
 
 // returns {ok:true} (the extension reloads right after) or {ok:false, error} with short text for the popup.
 // shares one lock with the folder update page, so only one update runs across all PassBridge pages
+/** @param {string} [currentVersion] @param {{ publicKey?: string, locks?: any, auto?: boolean }} [opts] locks: the Web Locks manager, only injected by tests */
 export async function installUpdate(currentVersion = chrome.runtime.getManifest().version, { publicKey = PUBLIC_KEY_B64, locks, auto = false } = {}) {
   const locked = await withUpdateLock(() => runInstall(currentVersion, publicKey, auto), locks);
   return locked.ok ? locked.value : { ok: false, error: t("errBusy") };
@@ -43,6 +44,7 @@ export async function installUpdate(currentVersion = chrome.runtime.getManifest(
 
 // the helper is updated first, so an extension that needs a newer helper finds it. never blocks the extension update.
 // an old helper (before install-helper) can't do it: the popup tells the user once to re-install it
+/** @param {{ publicKey?: string, send?: (m: any) => Promise<any>, platform?: string }} [opts] */
 export async function updateHelper({ publicKey = PUBLIC_KEY_B64, send = (m) => chrome.runtime.sendNativeMessage(UPDATER_HOST, m), platform } = {}) {
   if (!publicKey) return { ok: false, error: "nokey" };
   let status;
@@ -110,7 +112,7 @@ export async function autoInstallUpdate({ install = installUpdate, available = u
     // nothing new for the extension, the helper may still be behind (once per release)
     const { helperFailed, latestRelease: tag } = await chrome.storage.local.get(["helperFailed", "latestRelease"]);
     if (helperFailed === tag) return { ran: false, why: "none" };
-    const res = await helper().catch(() => ({ ok: false }));
+    const res = /** @type {{ ok: boolean, error?: string }} */ (await helper().catch(() => ({ ok: false })));
     if (!res.ok && res.error !== "host" && res.error !== "old-helper") await chrome.storage.local.set({ helperFailed: tag });
     return { ran: false, why: "none", helper: res };
   }

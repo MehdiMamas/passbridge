@@ -1,6 +1,7 @@
 // on Windows, Chrome asks before saving every .js file, so updates there go through the helper unless the user picks the folder update
 export const HELPER_ZIP_URL = "https://github.com/MehdiMamas/passbridge/releases/latest/download/passbridge-windows-helper.zip";
 
+/** @param {{ platform?: string, userAgentData?: { platform?: string } }} [nav] */
 export function isWindows(nav = globalThis.navigator) {
   return /^win/i.test(nav?.userAgentData?.platform || nav?.platform || "");
 }
