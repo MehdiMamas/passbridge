@@ -1,3 +1,4 @@
+// @ts-nocheck
 // shared driver plumbing: playwright, extension launch with throwaway profiles, the pierced menu, results
 
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "fs/promises";

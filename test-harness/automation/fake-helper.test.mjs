@@ -1,3 +1,4 @@
+// @ts-nocheck
 // The fake Apple helper (test-harness/fake-apple-helper) against the real src/apple/protocol.ts, in process,
 // in both reply styles: pairing, a wrong code, every command, Touch ID outcomes, relogin. The win style is also
 // checked against the replies recorded from iCloud for Windows (test-harness/fixtures/windows).

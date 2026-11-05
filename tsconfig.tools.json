@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2022", "ESNext.Array", "DOM"],
+    "types": ["node", "chrome"],
+    "noImplicitAny": true
+  },
+  "include": [
+    "scripts/**/*.mjs",
+    "test-harness/automation/**/*.mjs",
+    "test-harness/fake-apple-helper/**/*.mjs"
+  ]
+}

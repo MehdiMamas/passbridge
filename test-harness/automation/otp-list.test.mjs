@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { listOtpEntries, matchSyncedTotp } from "../../src/session/otp-list.js";
 import { watchState } from "../../src/ui/totp-watch.js";
 

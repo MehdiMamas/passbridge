@@ -1,3 +1,4 @@
+// @ts-nocheck
 // SRP-6a written from RFC 5054 with node:crypto and plain BigInt, sharing no code with src/apple/.
 // The tests check it against the RFC 5054 appendix B vectors, then use it to grade src/apple/srp.ts.
 

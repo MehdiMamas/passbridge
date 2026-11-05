@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok } from "./lib.mjs";
 
 await main(async () => {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.mjs";
 
 // the save bar offers "Let agents sign in on <site>"; only a click in the bar's own frame adds it to the allowlist

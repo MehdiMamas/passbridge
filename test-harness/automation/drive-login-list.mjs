@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, ok, pierced } from "./lib.mjs";
 
 const attrs = (node) => {

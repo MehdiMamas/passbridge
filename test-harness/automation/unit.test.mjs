@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.ts";
 import { isBareCodeOtp } from "../../src/otp-field.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";

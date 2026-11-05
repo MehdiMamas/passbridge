@@ -1,3 +1,4 @@
+// @ts-nocheck
 // the real options page of a mock build: tabs, help lines, saving, and the helper notices with no native hosts
 import { OPTION_TABS } from "../../src/ui/options-model.js";
 import { BASE, build, launchExtension, main, ok, pierced } from "./lib.mjs";

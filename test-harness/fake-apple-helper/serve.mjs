@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Puts a FakeHelper on a unix socket so the native host (host.mjs, started by the browser) can reach it.
 // The test process owns the helper, so the vault and the code on screen outlive each host process.
 // One JSON object per line: host -> {msg}, helper -> {reply}.

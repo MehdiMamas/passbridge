@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Download one pinned upstream and show the diff against vendor/<name>/.
 // Usage: node scripts/sync-upstream.mjs <bitwarden|au2001|open-passwords> [commit] [--accept]
 // --accept copies the download over the vendor mirror and writes PINNED.

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // end-to-end check of the folder update in a real Chrome. Playwright cannot drive the folder picker or Chrome's
 // permission prompts, so a person does the clicks this script asks for. It builds the versions, signs them with a
 // throwaway key, serves them as a fake GitHub release, starts Chrome on a fresh profile and checks the folder

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // npm test: the unit and handshake suites, plus the Python host checks when a Python 3 is on PATH.
 // The browser suite (test-harness/automation/run-all.mjs) needs Chromium and runs separately.
 

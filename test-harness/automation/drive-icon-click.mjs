@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, launchExtension, main, menuText, ok } from "./lib.mjs";
 
 const ICON = "[data-passbridge-icon]";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Check whether a pinned upstream moved and changed any tracked file.
 // Usage: node scripts/upstream-check.mjs [name] [--issues]
 // Prints a JSON summary. With --issues, opens or updates one issue per changed upstream (needs gh and a token).

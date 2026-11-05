@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Replays scrubbed replies captured from iCloud for Windows through the real protocol code.
 // The keys in the fixtures are dummies, so the proof is not checked; the shapes are.
 

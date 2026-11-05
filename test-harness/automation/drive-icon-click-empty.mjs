@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BASE, build, launchExtension, main, menuText, menuShown, ok } from "./lib.mjs";
 
 // click the field icon with a real mouse; the icon sits in a closed shadow, so use its host box

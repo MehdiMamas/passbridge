@@ -1,3 +1,4 @@
+// @ts-nocheck
 // e2e: verification codes from the simulated helper: listed for the page's site only, read through the helper's
 // approval, filled into one field or split boxes, and left unfilled when the approval is denied. Both platforms.
 

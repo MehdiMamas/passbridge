@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Passkey store end to end: the extension answers create and get through chrome.webAuthenticationProxy.
 // The page checks every signature itself. Skips (and says so) only when the browser has no such API.
 
