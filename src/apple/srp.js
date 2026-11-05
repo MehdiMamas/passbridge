@@ -1,4 +1,3 @@
-// @ts-check
 // the 6-digit PIN macOS shows is the SRP password. ported from au2001/icloud-passwords-firefox (Apache-2.0), see NOTICE
 
 import {

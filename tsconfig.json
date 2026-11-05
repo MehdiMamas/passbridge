@@ -16,16 +16,14 @@
       "chrome"
     ],
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noImplicitAny": false,
     "useUnknownInCatchVariables": false
   },
   "include": [
-    "src/background.js",
-    "src/content.js",
-    "src/apple/**/*.js",
-    "src/passkeys/**/*.js",
-    "src/ui/**/*.jsx",
-    "src/ui/**/*.tsx"
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ]
 }

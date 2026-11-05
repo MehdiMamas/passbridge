@@ -1,4 +1,3 @@
-// @ts-check
 // alarm keep-alive holds the MV3 worker so the PIN isnt re-prompted every idle-out
 
 import { State, setDeviceLabel } from "./apple/protocol.js";

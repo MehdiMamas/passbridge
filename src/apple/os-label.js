@@ -1,4 +1,3 @@
-// @ts-check
 // shared wording for the machine that shows the 6-digit pairing code
 
 // protocol wording (sent to Apple's Passwords app, always English)

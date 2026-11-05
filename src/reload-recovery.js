@@ -1,4 +1,3 @@
-// @ts-check
 // after an extension reload or update chrome leaves the old content script on open pages with a dead
 // runtime, and does not inject the new one. the background re-injects, the old copy removes its UI.
 
