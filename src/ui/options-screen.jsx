@@ -4,6 +4,16 @@ import { RECEIVER_READY } from "../passkeys/receiver.js";
 import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
 
 
+/**
+ * Settings are read from chrome.storage.sync and edited by key name, so values stay loose.
+ * @typedef {Record<string, any>} OptionsSettings
+ * @typedef {{ control: string, label: string, help?: string, note?: string, describedBy?: string }} RowIds
+ * @typedef {{ text: string, href: string | null } | null} OptionsNotice
+ * @typedef {{ rows: { policy: string, agents: string, autoInstall: string }, notices: Record<string, OptionsNotice> }} OptionsView
+ * @typedef {(partial: Record<string, any>) => void} OnSettingsChange
+ * @typedef {{ t: number, op: string, host: string, username: string, result: string }} AgentLogRow
+ */
+
 function buildVersion() {
   const m = globalThis.chrome?.runtime?.getManifest?.();
   return m ? m.version_name || m.version : "";
@@ -28,6 +38,7 @@ const activityCell = "truncate px-2.5 py-1.5";
 const SHORT_TIME = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
 
 
+/** @param {{ children?: any }} props */
 function Icon({ children }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
@@ -36,6 +47,7 @@ function Icon({ children }) {
   );
 }
 
+/** @type {Record<string, any>} */
 const TAB_ICONS = {
   autofill: (
     <Icon>
@@ -70,6 +82,7 @@ const TAB_ICONS = {
   ),
 };
 
+/** @param {{ ids: RowIds, checked?: boolean, disabled?: boolean, onChange: (on: boolean) => void }} props */
 function Switch({ ids, checked, disabled, onChange }) {
   return (
     <span className="relative inline-flex h-5 w-9 shrink-0">
@@ -89,6 +102,7 @@ function Switch({ ids, checked, disabled, onChange }) {
   );
 }
 
+/** @param {{ ids: RowIds, value: string, disabled?: boolean, options: string[][], onChange: (value: string) => void }} props */
 function Select({ ids, value, disabled, options, onChange }) {
   return (
     <select
@@ -156,6 +170,7 @@ function Row({ label, help, note, state = "ready", isWide = false, isLabel = tru
   );
 }
 
+/** @param {{ label: string, help?: string, button: string, onClick: () => void }} props */
 function ButtonRow({ label, help, button, onClick }) {
   return (
     <Row label={label} help={help} isLabel={false}>
@@ -206,6 +221,7 @@ function ListRow({ label, help, state, value, onChange, onBlur }) {
   );
 }
 
+/** @param {{ notice: NonNullable<OptionsNotice> }} props */
 function Notice({ notice }) {
   return (
     <div role="note" className="mt-5 flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_28%,Canvas)] bg-[color-mix(in_srgb,var(--color-accent)_8%,Canvas)] px-4 py-3 text-[13px] leading-snug">
@@ -230,6 +246,7 @@ function Notice({ notice }) {
   );
 }
 
+/** @param {{ log: AgentLogRow[] }} props */
 function ActivityTable({ log }) {
   if (!log.length) return <p className={`text-[13px] ${muted}`}>{t("noRequests")}</p>;
 
@@ -277,10 +294,14 @@ function ActivityTable({ log }) {
   );
 }
 
-const toggleProps = (settings, onChange, key) => ({ checked: settings[key], onChange: (on) => onChange({ [key]: on }) });
+/** @param {OptionsSettings} settings @param {OnSettingsChange} onChange @param {string} key */
+const toggleProps = (settings, onChange, key) => ({ checked: settings[key], onChange: (/** @type {boolean} */ on) => onChange({ [key]: on }) });
 
+/** @param {{ settings: OptionsSettings, onChange: OnSettingsChange, lists: Record<string, string>, onListChange: (key: string, text: string) => void, onListBlur: (key: string) => void, isMruCleared: boolean, onClearMru: () => void }} props */
 function AutofillTab({ settings, onChange, lists, onListChange, onListBlur, isMruCleared, onClearMru }) {
-  const list = (key) => ({ value: lists[key], onChange: (text) => onListChange(key, text), onBlur: () => onListBlur(key) });
+  /** @param {string} key */
+  const list = (key) => ({ value: lists[key], onChange: (/** @type {string} */ text) => onListChange(key, text), onBlur: () => onListBlur(key) });
+  /** @param {string} key */
   const toggle = (key) => toggleProps(settings, onChange, key);
   const clearOptions = [
     ["10000", t("clear10s")],
@@ -328,7 +349,9 @@ function AutofillTab({ settings, onChange, lists, onListChange, onListBlur, isMr
 }
 
 
+/** @param {{ settings: OptionsSettings, onChange: OnSettingsChange }} props */
 function AppearanceTab({ settings, onChange }) {
+  /** @param {string} key */
   const toggle = (key) => toggleProps(settings, onChange, key);
   const themeOptions = [
     ["system", t("themeSystem")],
@@ -351,7 +374,7 @@ function AppearanceTab({ settings, onChange }) {
             ids={ids}
             value={settings.uiLanguage}
             disabled={isDisabled}
-            options={[["", t("langSystem")], ...SUPPORTED_LOCALES.map((l) => [l, LOCALE_NAMES[l]])]}
+            options={[["", t("langSystem")], ...SUPPORTED_LOCALES.map((l) => [l, /** @type {Record<string, string>} */ (LOCALE_NAMES)[l]])]}
             onChange={(v) => onChange({ uiLanguage: v })}
           />
         )}
@@ -361,6 +384,14 @@ function AppearanceTab({ settings, onChange }) {
 }
 
 
+/**
+ * @param {{
+ *   isOn: boolean, onToggle: (on: boolean) => void, onPick: (file: File | undefined) => void,
+ *   progress: { done: number, total: number } | null, results: { label: string, status: string, reason?: string }[],
+ *   note: string, allSites: boolean, onAllSites: (on: boolean) => void, stayUnlocked: boolean,
+ *   onStayUnlocked: (on: boolean) => void, syncSteps: string[], onSyncAll: () => void,
+ * }} props
+ */
 function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note, allSites, onAllSites, stayUnlocked, onStayUnlocked, syncSteps, onSyncAll }) {
   const pickId = useId();
   const saved = results.filter((r) => r.status === "saved").length;
@@ -421,8 +452,20 @@ function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note, all
   );
 }
 
+/**
+ * @param {{
+ *   settings: OptionsSettings, onChange: OnSettingsChange, view: OptionsView,
+ *   policy: { hidden: boolean, message: string }, onPolicy: (on: boolean) => void,
+ *   privacy: Record<"bubble" | "address", { shown: boolean, checked: boolean, disabled: boolean }>,
+ *   onPrivacy: (key: "bubble" | "address", on: boolean) => void, onShortcuts: () => void,
+ *   onPasswordSettings: (() => void) | null, passkeys: { helpKey: "passkeysHelpWin" | "passkeysHelpMac", url: string },
+ *   onOpenUrl: (url: string) => void, passkeyStore: any,
+ * }} props
+ */
 function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPrivacy, onShortcuts, onPasswordSettings, passkeys, onOpenUrl, passkeyStore }) {
+  /** @param {{ shown: boolean, disabled: boolean }} p */
   const isShown = (p) => p.shown && !p.disabled;
+  /** @param {string} key */
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
@@ -473,6 +516,7 @@ function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPri
   );
 }
 
+/** @param {{ settings: OptionsSettings, onChange: OnSettingsChange, view: OptionsView, lists: Record<string, string>, onListChange: (key: string, text: string) => void, onListBlur: (key: string) => void, agentLog: AgentLogRow[] }} props */
 function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, agentLog }) {
   const state = view.rows.agents;
   return (
@@ -505,8 +549,10 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
   );
 }
 
+/** @param {{ settings: OptionsSettings, onChange: OnSettingsChange, view: OptionsView, onCheckNow: () => void }} props */
 function UpdatesTab({ settings, onChange, view, onCheckNow }) {
   const checkNoteId = useId();
+  /** @param {string} key */
   const toggle = (key) => toggleProps(settings, onChange, key);
   return (
     <>
@@ -534,8 +580,10 @@ function UpdatesTab({ settings, onChange, view, onCheckNow }) {
   );
 }
 
+/** @type {Record<string, (props: any) => any>} */
 const TAB_BODIES = { autofill: AutofillTab, appearance: AppearanceTab, browser: BrowserTab, agents: AgentsTab, updates: UpdatesTab };
 
+/** @param {{ tab: string, view: OptionsView, isSettled: boolean, [key: string]: any }} props the rest is passed on to the tab body */
 export function OptionsScreen(props) {
   const { tab, view, isSettled } = props;
   const current = OPTION_TABS.find((t) => t.id === tab) || OPTION_TABS[0];
