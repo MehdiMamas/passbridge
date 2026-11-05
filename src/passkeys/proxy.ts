@@ -20,8 +20,7 @@ export const PASSKEY_SETTING = "passkeyStore";
 const LIST_TTL_MS = 60000;
 const DEFAULT_TIMEOUT_MS = 120000;
 
-/** @param {any} u */
-const hostOf = (u) => {
+const hostOf = (u: any) => {
   try {
     return /^https?:$/.test(new URL(u).protocol) ? new URL(u).hostname.toLowerCase() : null;
   } catch {
@@ -29,22 +28,18 @@ const hostOf = (u) => {
   }
 };
 
-/**
- * @param {{
- *   api: () => any, client: any, ensureConnected: () => Promise<void>,
- *   enabled: () => Promise<boolean>, getTab: () => Promise<{ id?: number, url?: string } | undefined>,
- *   notifyUnlock?: () => void, settings?: () => Promise<{ allSites: boolean, stayUnlocked: boolean }>,
- *   session?: () => any, userVerified?: () => boolean, sleep?: (ms: number) => Promise<void>, pollMs?: number,
- * }} deps
- */
-export function createPasskeyProxy({ api, client, ensureConnected, enabled, getTab, notifyUnlock = () => {}, settings = async () => ({ allSites: true, stayUnlocked: false }), session = () => globalThis.chrome?.storage?.session, userVerified = () => false, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = 500 }) {
-  /** @type {boolean | null} */
-  let attached = null; // unknown after a wake
-  /** @type {{ at: number, list: any[] } | null} */
-  let cache = null; // { at, list }
+export type PasskeyProxyDeps = {
+  api: () => any, client: any, ensureConnected: () => Promise<void>,
+  enabled: () => Promise<boolean>, getTab: () => Promise<{ id?: number, url?: string } | undefined>,
+  notifyUnlock?: () => void, settings?: () => Promise<{ allSites: boolean, stayUnlocked: boolean }>,
+  session?: () => any, userVerified?: () => boolean, sleep?: (ms: number) => Promise<void>, pollMs?: number,
+};
+
+export function createPasskeyProxy({ api, client, ensureConnected, enabled, getTab, notifyUnlock = () => {}, settings = async () => ({ allSites: true, stayUnlocked: false }), session = () => globalThis.chrome?.storage?.session, userVerified = () => false, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = 500 }: PasskeyProxyDeps) {
+  let attached: boolean | null = null; // unknown after a wake
+  let cache: { at: number, list: any[] } | null = null; // { at, list }
   let chain = Promise.resolve();
-  /** @type {any} */
-  let registeredOn = null;
+  let registeredOn: any = null;
   const canceled = new Set();
 
   const invalidate = () => {
@@ -100,11 +95,7 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
   }
 
   // wait for an unlocked vault, for as long as the request allows
-  /**
-   * @param {number} deadline
-   * @param {string} id
-   */
-  async function ready(deadline, id) {
+  async function ready(deadline: number, id: string) {
     if (client.ready) return;
     notifyUnlock();
     await ensureConnected();
@@ -115,17 +106,10 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
     }
   }
 
-  /** @param {any} e */
-  const asError = (e) => (e && e.name && e.message !== undefined ? { name: e.name, message: String(e.message) } : { name: "NotAllowedError", message: String(e?.message || e) });
+  const asError = (e: any) => (e && e.name && e.message !== undefined ? { name: e.name, message: String(e.message) } : { name: "NotAllowedError", message: String(e?.message || e) });
 
-  /**
-   * @param {(d: any) => any} complete
-   * @param {string} id
-   * @param {() => Promise<string>} run
-   */
-  async function finish(complete, id, run) {
-    /** @type {{ responseJson: string } | { error: { name: string, message: string } }} */
-    let out;
+  async function finish(complete: (d: any) => any, id: string, run: () => Promise<string>) {
+    let out: { responseJson: string } | { error: { name: string, message: string } };
     try {
       out = { responseJson: await run() };
     } catch (e) {
@@ -135,17 +119,12 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
     await complete({ requestId: id, ...out });
   }
 
-  /** @param {string} rpId */
-  async function cached(rpId) {
+  async function cached(rpId: string) {
     const o = await session()?.get({ [CACHE_KEY]: {} });
-    return Object.values(o?.[CACHE_KEY]?.[rpId] || {});
+    return Object.values<{ record: import("./record.ts").PasskeyRecord, userVerified: boolean }>(o?.[CACHE_KEY]?.[rpId] || {});
   }
 
-  /**
-   * @param {string} rpId
-   * @param {{ record: import("./record.ts").PasskeyRecord, userVerified: boolean }} read
-   */
-  async function remember(rpId, read) {
+  async function remember(rpId: string, read: { record: import("./record.ts").PasskeyRecord, userVerified: boolean }) {
     const store = session();
     if (!store) return;
     const all = (await store.get({ [CACHE_KEY]: {} }))[CACHE_KEY] || {};
@@ -158,9 +137,8 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
     await session()?.remove(CACHE_KEY);
   }
 
-  /** @param {{ requestId: string, requestDetailsJson: string }} req */
-  async function onGet(req) {
-    await finish((/** @type {any} */ d) => api().completeGetRequest(d), req.requestId, async () => {
+  async function onGet(req: { requestId: string, requestDetailsJson: string }) {
+    await finish((d: any) => api().completeGetRequest(d), req.requestId, async () => {
       const details = JSON.parse(req.requestDetailsJson);
       const { rpId } = checkGet(details);
       const stayUnlocked = (await settings()).stayUnlocked;
@@ -172,7 +150,7 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
       }
       const deadline = Date.now() + (Number(details.timeout) > 0 ? Number(details.timeout) : DEFAULT_TIMEOUT_MS);
       await ready(deadline, req.requestId);
-      const allowed = (details.allowCredentials || []).map((/** @type {any} */ c) => String(c.id).slice(0, 8));
+      const allowed = (details.allowCredentials || []).map((c: any) => String(c.id).slice(0, 8));
       const entries = (await names()).filter((p) => p.rpId === rpId && (!allowed.length || allowed.includes(p.idPrefix)));
       if (!entries.length) {
         await session()?.set({ [NUDGE_KEY]: { rpId, at: Date.now() } });
@@ -191,16 +169,15 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
     });
   }
 
-  /** @param {{ requestId: string, requestDetailsJson: string }} req */
-  async function onCreate(req) {
-    await finish((/** @type {any} */ d) => api().completeCreateRequest(d), req.requestId, async () => {
+  async function onCreate(req: { requestId: string, requestDetailsJson: string }) {
+    await finish((d: any) => api().completeCreateRequest(d), req.requestId, async () => {
       const details = JSON.parse(req.requestDetailsJson);
       const deadline = Date.now() + (Number(details.timeout) > 0 ? Number(details.timeout) : DEFAULT_TIMEOUT_MS);
       await ready(deadline, req.requestId);
       const tab = await getTab();
       const { rpId } = checkCreate(details);
       // a credential the site already lists as excluded: the site must not get a second one
-      const excluded = (details.excludeCredentials || []).map((/** @type {any} */ c) => String(c.id).slice(0, 8));
+      const excluded = (details.excludeCredentials || []).map((c: any) => String(c.id).slice(0, 8));
       if (excluded.length && (await names()).some((p) => p.rpId === rpId && excluded.includes(p.idPrefix))) {
         throw requestError("InvalidStateError", "A passkey for this account already exists");
       }
@@ -218,10 +195,10 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
     const p = api();
     if (!p || registeredOn === p) return;
     registeredOn = p;
-    p.onCreateRequest.addListener((/** @type {any} */ req) => void onCreate(req));
-    p.onGetRequest.addListener((/** @type {any} */ req) => void onGet(req));
-    p.onIsUvpaaRequest.addListener((/** @type {any} */ req) => void p.completeIsUvpaaRequest({ requestId: req.requestId, isUvpaa: true }));
-    p.onRequestCanceled.addListener((/** @type {string} */ id) => {
+    p.onCreateRequest.addListener((req: any) => void onCreate(req));
+    p.onGetRequest.addListener((req: any) => void onGet(req));
+    p.onIsUvpaaRequest.addListener((req: any) => void p.completeIsUvpaaRequest({ requestId: req.requestId, isUvpaa: true }));
+    p.onRequestCanceled.addListener((id: string) => {
       canceled.add(id);
     });
   }

@@ -18,10 +18,7 @@ const VERSION = "1.0";
 // background.js sets this from chrome.runtime.getPlatformInfo; tests leave the mac default
 let deviceLabel = "your Mac";
 
-/**
- * @param {unknown} label
- */
-export function setDeviceLabel(label) {
+export function setDeviceLabel(label: unknown) {
   if (typeof label === "string" && label) deviceLabel = label;
 }
 
@@ -31,9 +28,9 @@ function freshCodeMessage() {
 
 // iCloud for Windows JSON-encodes some integers as strings
 /**
- * @param {any} v value from the helper's JSON
+ * @param v value from the helper's JSON
  */
-function asInt(v) {
+function asInt(v: any) {
   if (typeof v === "number") return v;
   if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
   return v;
@@ -44,10 +41,7 @@ const CHALLENGE_TTL_MS = 3 * 60_000;
 const USER_AUTH_TIMEOUT_MS = 2 * 60_000;
 
 // callers show "new code" wording for this, retyping the old code can never work
-/**
- * @param {string} message
- */
-function challengeError(message) {
+function challengeError(message: string) {
   return Object.assign(new Error(message), { code: "challenge_reissued" });
 }
 
@@ -72,8 +66,7 @@ export const Command = {
   OPEN_URL_IN_SAFARI: 1984,
 };
 
-/** @type {Record<number, string>} */
-const QueryId = {
+const QueryId: Record<number, string> = {
   [4]: "CmdGetLoginNames4URL",
   [5]: "CmdGetPassword4LoginName",
   [16]: "CmdGetOneTimeCodes",
@@ -89,10 +82,7 @@ export const State = {
   NoHelper: "no_helper",
 };
 
-/**
- * @param {unknown} obj
- */
-function jsonToBase64(obj) {
+function jsonToBase64(obj: unknown) {
   return bytesToBase64(new TextEncoder().encode(JSON.stringify(obj)));
 }
 
@@ -100,9 +90,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // totp entries can arrive without a code, the value is read at fill time
 /**
- * @param {any} entries entries from the helper's JSON reply
+ * @param entries entries from the helper's JSON reply
  */
-export function normalizeOtpEntries(entries) {
+export function normalizeOtpEntries(entries: any) {
   return (Array.isArray(entries) ? entries : [])
     .map((e) => ({
       source: String(e.source || ""),
@@ -115,32 +105,22 @@ export function normalizeOtpEntries(entries) {
 }
 
 export class ApplePasswords {
-  constructor() {
-    /** @type {chrome.runtime.Port | undefined} */
-    this.port = undefined;
-    /** @type {SRPSession | undefined} */
-    this.session = undefined;
-    /** @type {Record<string, any> | undefined} */
-    this.capabilities = undefined;
-    this.state = State.Disconnected;
-    /** @type {Map<number, { resolve: (m: any) => void, reject: (e: Error) => void, timer: ReturnType<typeof setTimeout> | null }>} */
-    this._waiters = new Map();
-    /** @type {(state: string) => void} */
-    this._onState = () => {};
-    this._onOneTimeCode = () => {};
-    this._challengeAt = 0;
-    this._challengeGen = 0;
-    this._challengePending = undefined;
-    // replies carry no correlation id, so same-cmd requests collide. serialize everything
-    this._lock = Promise.resolve();
-  }
+  port: chrome.runtime.Port | undefined = undefined;
+  session: SRPSession | undefined = undefined;
+  capabilities: Record<string, any> | undefined = undefined;
+  state: string = State.Disconnected;
+  _waiters: Map<number, { resolve: (m: any) => void, reject: (e: Error) => void, timer: ReturnType<typeof setTimeout> | null }> = new Map();
+  _onState: (state: string) => void = () => {};
+  _onOneTimeCode: (...args: any[]) => any = () => {};
+  _challengeAt = 0;
+  _challengeGen = 0;
+  _challengePending: any = undefined;
+  _connectPending: Promise<void> | undefined = undefined;
+  _dropping = false;
+  // replies carry no correlation id, so same-cmd requests collide. serialize everything
+  _lock: Promise<any> = Promise.resolve();
 
-  /**
-   * @template T
-   * @param {() => T | Promise<T>} fn
-   * @returns {Promise<T>}
-   */
-  _withLock(fn) {
+  _withLock<T>(fn: () => T | Promise<T>): Promise<T> {
     const run = this._lock.then(fn, fn);
     this._lock = run.then(
       () => {},
@@ -149,17 +129,11 @@ export class ApplePasswords {
     return run;
   }
 
-  /**
-   * @param {(state: string) => void} fn
-   */
-  onStateChange(fn) {
+  onStateChange(fn: (state: string) => void) {
     this._onState = fn;
   }
 
-  /**
-   * @param {() => void} fn
-   */
-  onOneTimeCodeAvailable(fn) {
+  onOneTimeCodeAvailable(fn: () => void) {
     this._onOneTimeCode = fn;
   }
 
@@ -177,10 +151,7 @@ export class ApplePasswords {
     return this.capabilities?.canSaveAccountWithEmptyUserName === true;
   }
 
-  /**
-   * @param {string} s
-   */
-  _setState(s) {
+  _setState(s: string) {
     if (this.state === s) return;
     this.state = s;
     try {
@@ -198,19 +169,15 @@ export class ApplePasswords {
   }
 
   /**
-   * @param {number} cmd
-   * @param {Record<string, any>} [body]
-   * @param {number | null} [timeoutMs]
-   * @returns {Promise<any>} the helper's reply, native-messaging JSON
+   * @returns the helper's reply, native-messaging JSON
    */
-  _send(cmd, body = {}, timeoutMs = 5000) {
+  _send(cmd: number, body: Record<string, any> = {}, timeoutMs: number | null = 5000): Promise<any> {
     const port = this.port;
     if (!port) throw new Error("connection closed");
     // a second request on the same cmd would steal the first one's reply
     if (this._waiters.has(cmd)) return Promise.reject(new Error("another request is already in flight"));
     return new Promise((resolve, reject) => {
-      /** @type {{ resolve: (m: any) => void, reject: (e: Error) => void, timer: ReturnType<typeof setTimeout> | null }} */
-      const entry = { resolve, reject, timer: null };
+      const entry: { resolve: (m: any) => void, reject: (e: Error) => void, timer: ReturnType<typeof setTimeout> | null } = { resolve, reject, timer: null };
       entry.timer =
         timeoutMs == null
           ? null
@@ -230,10 +197,7 @@ export class ApplePasswords {
   }
 
   // a request that can never be answered must not hold the lock for every later one
-  /**
-   * @param {string} reason
-   */
-  _rejectWaiters(reason) {
+  _rejectWaiters(reason: string) {
     const waiters = [...this._waiters.values()];
     this._waiters.clear();
     for (const w of waiters) {
@@ -243,9 +207,9 @@ export class ApplePasswords {
   }
 
   /**
-   * @param {any} message native-messaging JSON from the helper
+   * @param message native-messaging JSON from the helper
    */
-  _dispatch(message) {
+  _dispatch(message: any) {
     const w = this._waiters.get(message.cmd);
     if (w) {
       this._waiters.delete(message.cmd);
@@ -267,8 +231,7 @@ export class ApplePasswords {
   connect() {
     if (this.port) return Promise.resolve();
     if (this._connectPending) return this._connectPending;
-    /** @type {Promise<void>} */
-    const pending = new Promise((resolve, reject) => {
+    const pending: Promise<void> = new Promise((resolve, reject) => {
       let port;
       try {
         port = chrome.runtime.connectNative(NATIVE_HOST);
@@ -348,11 +311,7 @@ export class ApplePasswords {
   }
 
   // ifNeeded keeps a live prompt, a second code on screen invalidates the one the user is reading
-  /**
-   * @param {{ ifNeeded?: boolean }} [opts]
-   * @returns {Promise<boolean>}
-   */
-  requestChallenge({ ifNeeded = false } = {}) {
+  requestChallenge({ ifNeeded = false } = {}): Promise<boolean> {
     if (!this.session) {
       if (this._connectPending) {
         return this._connectPending.then(() => this.requestChallenge({ ifNeeded }));
@@ -417,10 +376,7 @@ export class ApplePasswords {
   }
 
   // a PIN only matches the challenge it was shown for, so re-issue and ask for the new code
-  /**
-   * @param {string} pin
-   */
-  async verifyPin(pin) {
+  async verifyPin(pin: string) {
     if (!this.session) throw new Error("not connected");
     if (!this.hasChallenge) {
       await this.requestChallenge();
@@ -472,19 +428,12 @@ export class ApplePasswords {
   }
 
   /**
-   * @param {number} cmd
-   * @param {number | undefined} tabId
-   * @param {string | null} hostname
-   * @param {unknown} payloadBody
-   * @param {number | null} timeoutMs
-   * @param {number} [frameId]
-   * @returns {Promise<any>} decrypted reply JSON
+   * @returns decrypted reply JSON
    */
-  async _encryptedQuery(cmd, tabId, hostname, payloadBody, timeoutMs, frameId = 0) {
+  async _encryptedQuery(cmd: number, tabId: number | undefined, hostname: string | null, payloadBody: unknown, timeoutMs: number | null, frameId: number = 0): Promise<any> {
     const session = this._liveSession();
     const sdata = session.serialize(await session.encrypt(payloadBody));
-    /** @type {Record<string, any>} */
-    const body = {
+    const body: Record<string, any> = {
       tabId,
       frameId,
       payload: { QID: QueryId[cmd], SMSG: JSON.stringify({ TID: session.username, SDATA: sdata }) },
@@ -500,11 +449,7 @@ export class ApplePasswords {
     return JSON.parse(bytesToUtf8(data));
   }
 
-  /**
-   * @param {number | undefined} tabId
-   * @param {string} url
-   */
-  async getLoginNamesForURL(tabId, url) {
+  async getLoginNamesForURL(tabId: number | undefined, url: string) {
     if (!this.ready) throw new Error("not unlocked");
     const { hostname } = new URL(url);
     return this._withLock(async () => {
@@ -516,20 +461,13 @@ export class ApplePasswords {
         5000,
       );
       if (res.STATUS === QueryStatus.Success)
-        return (res.Entries ?? []).map((/** @type {any} */ e) => ({ username: e.USR, sites: e.sites }));
+        return (res.Entries ?? []).map((e: any) => ({ username: e.USR, sites: e.sites }));
       if (res.STATUS === QueryStatus.NoResults) return [];
       throw queryStatusError(res.STATUS);
     });
   }
 
-  /**
-   * @param {number | undefined} tabId
-   * @param {string} url
-   * @param {{ username: string }} loginName
-   * @param {string} [queryUrl]
-   * @param {string} [envelopeUrl]
-   */
-  async getPasswordForLoginName(tabId, url, loginName, queryUrl, envelopeUrl) {
+  async getPasswordForLoginName(tabId: number | undefined, url: string, loginName: { username: string }, queryUrl?: string, envelopeUrl?: string) {
     if (!this.ready) throw new Error("not unlocked");
     const { hostname } = new URL(url);
     // encrypted URL is the page host, a path, or a website the helper listed for this frame.
@@ -556,13 +494,7 @@ export class ApplePasswords {
   }
 
   // ACT maybeAdd lets the helper decide add-vs-update and drive the native save prompt
-  /**
-   * @param {number | undefined} tabId
-   * @param {string} url
-   * @param {string | null | undefined} username
-   * @param {string} password
-   */
-  async saveLogin(tabId, url, username, password) {
+  async saveLogin(tabId: number | undefined, url: string, username: string | null | undefined, password: string) {
     if (!this.ready) throw new Error("not unlocked");
     if (!password) throw new Error("no password to save");
     const { hostname } = new URL(url);
@@ -597,17 +529,10 @@ export class ApplePasswords {
     });
   }
 
-  /**
-   * @param {number | undefined} tabId
-   * @param {number} frameId
-   * @param {string[]} frameUrls
-   * @param {string} [username]
-   */
-  async getOneTimeCodes(tabId, frameId, frameUrls, username) {
+  async getOneTimeCodes(tabId: number | undefined, frameId: number, frameUrls: string[], username?: string) {
     if (!this.ready) throw new Error("not unlocked");
     if (!this.canFillOneTimeCodes) return { entries: [], requiresAuth: false };
-    /** @type {Record<string, any>} */
-    const body = { ACT: Action.GHOST_SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
+    const body: Record<string, any> = { ACT: Action.GHOST_SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
     if (username) body.username = username;
     return this._withLock(async () => {
       const res = await this._encryptedQuery(Command.GET_ONE_TIME_CODES, tabId, null, body, 8000, frameId);
@@ -619,16 +544,9 @@ export class ApplePasswords {
   }
 
   // read at pick time so a code listed earlier isnt filled after it rotated. may wait on Touch ID
-  /**
-   * @param {number | undefined} tabId
-   * @param {number} frameId
-   * @param {string[]} frameUrls
-   * @param {string} [username]
-   */
-  async readOneTimeCode(tabId, frameId, frameUrls, username) {
+  async readOneTimeCode(tabId: number | undefined, frameId: number, frameUrls: string[], username?: string) {
     if (!this.ready) throw new Error("not unlocked");
-    /** @type {Record<string, any>} */
-    const body = { ACT: Action.SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
+    const body: Record<string, any> = { ACT: Action.SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
     if (username) body.username = username;
     return this._withLock(async () => {
       const res = await this._encryptedQuery(Command.DID_FILL_ONE_TIME_CODE, tabId, null, body, USER_AUTH_TIMEOUT_MS, frameId);
@@ -638,11 +556,9 @@ export class ApplePasswords {
     });
   }
 
-  /** @param {{ searchUrl?: string, newPasswordUrl?: string, totpUri?: string, totpPageUrl?: string }} [opts] */
-  launchPasswordsApp({ searchUrl, newPasswordUrl, totpUri, totpPageUrl } = {}) {
+  launchPasswordsApp({ searchUrl, newPasswordUrl, totpUri, totpPageUrl }: { searchUrl?: string, newPasswordUrl?: string, totpUri?: string, totpPageUrl?: string } = {}) {
     if (!this.port) throw new Error("not connected");
-    /** @type {Record<string, any>} */
-    const msg = { cmd: Command.LAUNCH_PASSWORDS_APP };
+    const msg: Record<string, any> = { cmd: Command.LAUNCH_PASSWORDS_APP };
     if (totpUri) {
       if (!this.canSetUpTotp) throw new Error("this helper cant set up verification codes");
       msg.setUpTOTPURI = totpUri;

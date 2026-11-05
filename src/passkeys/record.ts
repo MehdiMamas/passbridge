@@ -7,17 +7,15 @@ export const RECORD_VERSION = 1;
 
 const SEP = " · ";
 
-/** @typedef {{ v: number, rpId: string, credentialId: string, userHandle: string, userName: string, key: string }} PasskeyRecord */
+export type PasskeyRecord = { v: number, rpId: string, credentialId: string, userHandle: string, userName: string, key: string };
 
-/** @param {ArrayBuffer | ArrayLike<number>} bytes */
-export function b64u(bytes) {
+export function b64u(bytes: ArrayBuffer | ArrayLike<number>) {
   let s = "";
   for (const c of new Uint8Array(bytes)) s += String.fromCharCode(c);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** @param {unknown} str */
-export function unb64u(str) {
+export function unb64u(str: unknown) {
   let s = String(str).replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";
   return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -25,24 +23,19 @@ export function unb64u(str) {
 
 /**
  * key = PKCS#8 P-256 private key, base64url; userHandle and credentialId are base64url too.
- * @param {{ rpId: string, credentialId: string, userHandle?: string, userName?: string, key: string }} fields
- * @returns {PasskeyRecord}
  */
-export function makeRecord({ rpId, credentialId, userHandle = "", userName = "", key }) {
+export function makeRecord({ rpId, credentialId, userHandle = "", userName = "", key }: { rpId: string, credentialId: string, userHandle?: string, userName?: string, key: string }): PasskeyRecord {
   return { v: RECORD_VERSION, rpId, credentialId, userHandle, userName, key };
 }
 
-/** @param {PasskeyRecord} rec */
-export function encodeRecord(rec) {
+export function encodeRecord(rec: PasskeyRecord) {
   return b64u(new TextEncoder().encode(JSON.stringify(rec)));
 }
 
 /**
  * Returns the record, or null when the text is not a record of a version this build understands.
- * @param {string} text
- * @returns {PasskeyRecord | null}
  */
-export function decodeRecord(text) {
+export function decodeRecord(text: string): PasskeyRecord | null {
   try {
     const rec = JSON.parse(new TextDecoder().decode(unb64u(text)));
     if (!rec || rec.v !== RECORD_VERSION) return null;
@@ -54,17 +47,14 @@ export function decodeRecord(text) {
   }
 }
 
-/** @param {PasskeyRecord} rec */
-export function recordUsername(rec) {
+export function recordUsername(rec: PasskeyRecord) {
   return [rec.rpId, rec.userName.replace(/\s+/g, " "), rec.credentialId.slice(0, 8)].join(SEP);
 }
 
 /**
  * {rpId, userName, idPrefix} for a name made by recordUsername, else null.
- * @param {unknown} name
- * @returns {{ rpId: string, userName: string, idPrefix: string } | null}
  */
-export function parseUsername(name) {
+export function parseUsername(name: unknown): { rpId: string, userName: string, idPrefix: string } | null {
   const parts = String(name || "").split(SEP);
   if (parts.length < 3) return null;
   const idPrefix = parts[parts.length - 1];
@@ -73,16 +63,14 @@ export function parseUsername(name) {
   return { rpId, userName: parts.slice(1, -1).join(SEP), idPrefix };
 }
 
-/** @param {unknown} name */
-export function isPasskeyName(name) {
+export function isPasskeyName(name: unknown) {
   return parseUsername(name) !== null;
 }
 
 /**
  * True for a URL (or host) that is the dedicated passkey URL, so fill lists can drop it.
- * @param {unknown} urlOrHost
  */
-export function isPasskeyHost(urlOrHost) {
+export function isPasskeyHost(urlOrHost: unknown) {
   const s = String(urlOrHost || "");
   try {
     return new URL(s.includes("://") ? s : `https://${s}`).hostname === PASSKEY_HOST;
@@ -93,8 +81,7 @@ export function isPasskeyHost(urlOrHost) {
 
 /**
  * True for a login-list row that is a stored passkey, so fill lists never offer it as a password.
- * @param {{ username?: unknown, sites?: unknown } | null | undefined} login
  */
-export function isPasskeyLogin(login) {
+export function isPasskeyLogin(login: { username?: unknown, sites?: unknown } | null | undefined) {
   return isPasskeyName(login?.username) || (Array.isArray(login?.sites) && login.sites.some(isPasskeyHost));
 }
