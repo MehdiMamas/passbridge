@@ -4,6 +4,7 @@
 
 import { b64u, makeRecord, unb64u } from "./record.js";
 
+/** @param {string} keyB64u */
 async function p256Key(keyB64u) {
   try {
     const key = await crypto.subtle.importKey("pkcs8", unb64u(keyB64u), { name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
@@ -14,6 +15,7 @@ async function p256Key(keyB64u) {
 }
 
 // A Bitwarden credential id is a GUID, or "b64." plus base64url of the raw id.
+/** @param {unknown} id */
 function bitwardenCredentialId(id) {
   if (typeof id !== "string") return null;
   if (id.startsWith("b64.")) return id.slice(4) || null;
@@ -22,8 +24,20 @@ function bitwardenCredentialId(id) {
   return b64u(Uint8Array.from(/** @type {RegExpMatchArray} */ (hex.match(/../g)), (h) => parseInt(h, 16)));
 }
 
+/**
+ * @param {string | undefined} rpId
+ * @param {string | undefined} userName
+ */
 const label = (rpId, userName) => [rpId || "(no site)", userName].filter(Boolean).join(" · ");
 
+/**
+ * @typedef {{ records: any[], skipped: { label: string, reason: string }[] }} ParseResult
+ */
+
+/**
+ * @param {{ rpId?: string, userName?: string, userHandle?: string, keyValue?: string, keyAlgorithm?: string, keyCurve?: string, credentialId?: string | null }} f
+ * @param {ParseResult} out
+ */
 async function toRecord(f, out) {
   const name = label(f.rpId, f.userName);
   if (!f.rpId) return out.skipped.push({ label: name, reason: "missing site (rpId)" });
@@ -37,6 +51,10 @@ async function toRecord(f, out) {
   out.records.push(makeRecord({ rpId: f.rpId, credentialId: f.credentialId, userHandle: f.userHandle || "", userName: f.userName || "", key }));
 }
 
+/**
+ * @param {any} data parsed JSON from the export file
+ * @returns {Promise<ParseResult>}
+ */
 export async function parseBitwarden(data) {
   /** @type {{ records: any[], skipped: { label: string, reason: string }[] }} */
   const out = { records: [], skipped: [] };
@@ -55,7 +73,12 @@ export async function parseBitwarden(data) {
   return out;
 }
 
+/**
+ * @param {any} data parsed JSON from the export file
+ * @returns {Promise<ParseResult>}
+ */
 export async function parseCxf(data) {
+  /** @type {ParseResult} */
   const out = { records: [], skipped: [] };
   for (const account of data.accounts || []) {
     for (const item of account?.items || []) {
@@ -68,7 +91,10 @@ export async function parseCxf(data) {
   return out;
 }
 
-/** Parse the text of an export file. Throws an Error with a plain message when it is not a known format. */
+/**
+ * Parse the text of an export file. Throws an Error with a plain message when it is not a known format.
+ * @param {string} text
+ */
 export async function parseExport(text) {
   let data;
   try {
