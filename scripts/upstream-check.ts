@@ -67,10 +67,10 @@ export function issueBody(s: Summary) {
   lines.push(
     "Steps (see UPSTREAMS.md):",
     "",
-    `1. \`npm run sync -- ${s.name} ${s.latest}\` and read the diff.`,
+    `1. \`pnpm sync ${s.name} ${s.latest}\` and read the diff.`,
     "2. Review it against the running code, then rebuild.",
     "3. Run the harness.",
-    `4. \`npm run sync -- ${s.name} ${s.latest} --accept\` to pin it.`,
+    `4. \`pnpm sync ${s.name} ${s.latest} --accept\` to pin it.`,
     "",
     "This issue is updated by the weekly upstream check.",
   );
