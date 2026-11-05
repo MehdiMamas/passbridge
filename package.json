@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.18",
+    "pnpm": ">=10"
   },
   "license": "GPL-3.0-only",
   "scripts": {
@@ -31,5 +32,6 @@
     "@types/react-dom": "^19.3.0",
     "esbuild": "^0.25.10",
     "playwright": "^1.63.0"
-  }
+  },
+  "packageManager": "pnpm@10.34.9"
 }

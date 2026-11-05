@@ -19,11 +19,11 @@ You need:
 ```bash
 git clone https://github.com/MehdiMamas/passbridge.git
 cd passbridge
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
-`npm run build` compiles the React popup, the settings page, and the content script into `dist/`.
+`pnpm build` compiles the React popup, the settings page, and the content script into `dist/`.
 
 1. Open `chrome://extensions`.
 2. Turn on Developer mode.
@@ -118,8 +118,8 @@ In Git Bash or PowerShell:
 ```bash
 git clone https://github.com/MehdiMamas/passbridge.git
 cd passbridge
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 1. Open `chrome://extensions`.
@@ -198,8 +198,8 @@ Shortcuts (change them at `chrome://extensions/shortcuts`):
 
 ```bash
 git pull
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 Then on `chrome://extensions`, click Reload on PassBridge. You do not load the extension again unless you moved the folder.

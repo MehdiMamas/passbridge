@@ -1,6 +1,6 @@
 # Keeping PassBridge current
 
-PassBridge is three layers. Each upstream is pinned. `npm run sync -- <name> [commit]` downloads that pin and prints which tracked files changed. Add `--accept` only after the running code and the harness agree with the diff.
+PassBridge is three layers. Each upstream is pinned. `pnpm sync <name> [commit]` downloads that pin and prints which tracked files changed. Add `--accept` only after the running code and the harness agree with the diff.
 
 | Name | Repo | What it updates | Running code |
 |---|---|---|---|
@@ -12,7 +12,7 @@ Pins live in `vendor/<name>/PINNED`. The mirrors under `vendor/` are the diff ba
 
 ## Weekly check
 
-`.github/workflows/upstream-check.yml` runs every Monday (and on demand). `npm run upstream:check` does the same locally and prints a JSON summary per upstream: pinned and latest commit, changed files, files removed upstream, and a compare link. In CI (`--issues`) it opens or updates one issue labelled `upstream` per upstream whose tracked files changed. It never changes a pin; accepting stays manual.
+`.github/workflows/upstream-check.yml` runs every Monday (and on demand). `pnpm upstream:check` does the same locally and prints a JSON summary per upstream: pinned and latest commit, changed files, files removed upstream, and a compare link. In CI (`--issues`) it opens or updates one issue labelled `upstream` per upstream whose tracked files changed. It never changes a pin; accepting stays manual.
 
 ## Autofill spike
 
@@ -24,8 +24,8 @@ The content bundle after this change is 70,020 bytes (17,496 gzip), against a ba
 
 ## When something breaks
 
-- Bitwarden changes detection: `npm run sync -- bitwarden <commit>`. Read the diff. If `autofill-constants.ts` changed, rebuild and run the harness, then `--accept`.
-- A new macOS or iCloud for Windows breaks pairing or login lookup, and au2001 or open-passwords has the fix: `npm run sync -- au2001 <commit>` (or `open-passwords`). Update `src/apple/` only where the command shape changed. `src/apple/protocol.ts` is the client the background talks to.
+- Bitwarden changes detection: `pnpm sync bitwarden <commit>`. Read the diff. If `autofill-constants.ts` changed, rebuild and run the harness, then `--accept`.
+- A new macOS or iCloud for Windows breaks pairing or login lookup, and au2001 or open-passwords has the fix: `pnpm sync au2001 <commit>` (or `open-passwords`). Update `src/apple/` only where the command shape changed. `src/apple/protocol.ts` is the client the background talks to.
 - The popup needs a new capability: add the message to `src/background.js` first. The React UI in `src/ui/` only renders what the background answers.
 
 ## Parity

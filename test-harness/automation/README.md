@@ -9,7 +9,7 @@ real PIN is needed.
 
 ```bash
 # 0. one-time, from the repo root: Playwright comes from the repo's node_modules
-npm install && npx playwright install chromium
+pnpm install && pnpm exec playwright install chromium
 
 # 1. build the mock extensions into .builds/<kind>
 node test-harness/automation/build-test-extensions.ts
@@ -26,7 +26,7 @@ python -m http.server 8799 --bind 127.0.0.1
 node automation/drive-pin.ts
 ```
 
-`npm test` (from the repo root) runs the suites that need no browser: `unit`,
+`pnpm test` (from the repo root) runs the suites that need no browser: `unit`,
 `pin-session`, `windows-host`, `fake-helper` (the simulated Apple helper against the real protocol), and `native-hosts.test.py` when Python 3 is on PATH.
 
 Nothing needs a hosts-file entry: the cross-origin host `openpw.test` is mapped to
@@ -40,7 +40,7 @@ Env vars, all optional:
 - `OP_LOCKED`: locked build for `drive.ts` (default `.builds/locked`)
 - `OP_MULTI`: multi-account build for `drive-login-list.ts` (default `.builds/multi`)
 - `OP_PREVIEW`: an already-served `preview.html` for `drive-ui-preview.ts` (default: it builds and serves one)
-- `PB_PYTHON`: the Python `npm test` uses for `native-hosts.test.py`
+- `PB_PYTHON`: the Python `pnpm test` uses for `native-hosts.test.py`
 
 ## What each file covers
 

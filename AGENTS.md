@@ -4,9 +4,9 @@
 PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Apple iCloud Passwords vault, with Bitwarden-style autofill. It uses Apple's native-messaging protocol and pinned upstream field lists. It is loaded unpacked (not on the Chrome Web Store). See `README.md` and `SETUP.md`.
 
 ## Setup, build, test
-- Needs Node.js 22.18 or newer. `npm install`, then `npm run build` (output in `dist/`; load that folder unpacked from `chrome://extensions`). Local builds add `version_name` (`<version>+<short sha>`, `-dirty` if uncommitted; omitted without git) shown in `chrome://extensions` and the Options sidebar; `PASSBRIDGE_RELEASE=1` (set in `release.yml`) skips it. Update code keeps reading `version`.
-- `npm run typecheck` (also covers `scripts/` and `test-harness/` through `tsconfig.tools.json`), `npm test` (`scripts/test.ts`), `npm run test:unit`.
-- Browser tests (CI): `npx playwright install --with-deps chromium`, `node test-harness/automation/build-test-extensions.ts`, `node test-harness/automation/run-all.ts`.
+- Needs Node.js 22.18 or newer and pnpm 10 (`corepack enable`); the project uses pnpm, not npm. `pnpm install`, then `pnpm build` (output in `dist/`; load that folder unpacked from `chrome://extensions`). Local builds add `version_name` (`<version>+<short sha>`, `-dirty` if uncommitted; omitted without git) shown in `chrome://extensions` and the Options sidebar; `PASSBRIDGE_RELEASE=1` (set in `release.yml`) skips it. Update code keeps reading `version`.
+- `pnpm typecheck` (also covers `scripts/` and `test-harness/` through `tsconfig.tools.json`), `pnpm test` (`scripts/test.ts`), `pnpm test:unit`.
+- Browser tests (CI): `pnpm exec playwright install --with-deps chromium`, `node test-harness/automation/build-test-extensions.ts`, `node test-harness/automation/run-all.ts`.
 - macOS helper install: `sh native/install.sh` (Windows scripts are in `native/windows`).
 
 ## End-to-end suite
@@ -15,7 +15,7 @@ PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Ap
 ## Where things live
 - `src/`: extension code (`background.js`, `content.js`, `menu.js`, `autofill/`, `apple/`, `ui/`, `update/`, popup/options pages).
 - `overlay/`: save and TOTP bar pages. `native/`: Python helper agent and install scripts. `manifest.json`: extension manifest (its key fixes the extension id).
-- `vendor/`, `upstreams.json`, `UPSTREAMS.md`, `scripts/sync-upstream.ts`: pinned upstream code and how to update it (`npm run sync -- <name> [commit]`, add `--accept` only after tests agree). `patches/site-fixes.md`: site-specific fixes.
+- `vendor/`, `upstreams.json`, `UPSTREAMS.md`, `scripts/sync-upstream.ts`: pinned upstream code and how to update it (`pnpm sync <name> [commit]`, add `--accept` only after tests agree). `patches/site-fixes.md`: site-specific fixes.
 - `test-harness/`: test pages and automated Playwright tests. `docs/`: agent protocol, releasing, Windows findings. `VERIFICATION.md`, `COMPLAINTS.md`: audit logs.
 
 ## CI and release

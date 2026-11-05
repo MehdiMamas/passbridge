@@ -41,8 +41,8 @@ copying `en` and translating the `message` values.
 4. **Check it.** Run:
 
    ```bash
-   npm test          # includes scripts/check-locales.ts
-   npm run typecheck
+   pnpm test          # includes scripts/check-locales.ts
+   pnpm typecheck
    ```
 
    `check-locales.ts` verifies that every key the code uses exists in `en`,
@@ -53,7 +53,7 @@ copying `en` and translating the `message` values.
    in **Settings → Appearance → Language** (or follow Chrome's UI language):
 
    ```bash
-   npm run build      # output in dist/
+   pnpm build      # output in dist/
    ```
 
    Open `chrome://extensions`, enable Developer mode, "Load unpacked", and pick

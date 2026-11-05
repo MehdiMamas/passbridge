@@ -20,15 +20,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22.18'
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
       # unit, pin-session and windows-host; the Python policy host checks need Windows and skip here
-      - run: npm test
+      - run: pnpm test
 
   # the Python relay round trip needs the real OS transport: unix socket on macOS, named pipe on Windows
   agent-relay:

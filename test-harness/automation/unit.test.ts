@@ -1122,7 +1122,7 @@ globalThis.fetch = realFetch;
   ok("upstream: a 404 counts as a change", changeCount(s) === 3);
   ok("upstream: title starts with the upstream prefix", issueTitle(s) === "Upstream: bitwarden changed 3 tracked file(s)" && issueTitle(s).startsWith(titlePrefix("bitwarden")));
   const body = issueBody(s);
-  ok("upstream: body has commits, compare link, files and steps", body.includes("fc5de86") && body.includes("aaaa111") && body.includes(s.compare) && body.includes("`gone.ts`") && body.includes("npm run sync -- bitwarden aaaa111 --accept"));
+  ok("upstream: body has commits, compare link, files and steps", body.includes("fc5de86") && body.includes("aaaa111") && body.includes(s.compare) && body.includes("`gone.ts`") && body.includes("pnpm sync bitwarden aaaa111 --accept"));
 }
 
 

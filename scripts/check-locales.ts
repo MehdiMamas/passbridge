@@ -1,4 +1,4 @@
-// static locale check, run by npm test:
+// static locale check, run by pnpm test:
 // 1. every key the code uses (a t("key") literal call in src/ or overlay/) exists in _locales/en
 // 2. every en key exists in each locale file (no missing translations)
 // 3. placeholders match en in each locale
