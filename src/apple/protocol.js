@@ -18,6 +18,9 @@ const VERSION = "1.0";
 // background.js sets this from chrome.runtime.getPlatformInfo; tests leave the mac default
 let deviceLabel = "your Mac";
 
+/**
+ * @param {unknown} label
+ */
 export function setDeviceLabel(label) {
   if (typeof label === "string" && label) deviceLabel = label;
 }
@@ -27,6 +30,9 @@ function freshCodeMessage() {
 }
 
 // iCloud for Windows JSON-encodes some integers as strings
+/**
+ * @param {any} v value from the helper's JSON
+ */
 function asInt(v) {
   if (typeof v === "number") return v;
   if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
@@ -38,6 +44,9 @@ const CHALLENGE_TTL_MS = 3 * 60_000;
 const USER_AUTH_TIMEOUT_MS = 2 * 60_000;
 
 // callers show "new code" wording for this, retyping the old code can never work
+/**
+ * @param {string} message
+ */
 function challengeError(message) {
   return Object.assign(new Error(message), { code: "challenge_reissued" });
 }
@@ -63,6 +72,7 @@ export const Command = {
   OPEN_URL_IN_SAFARI: 1984,
 };
 
+/** @type {Record<number, string>} */
 const QueryId = {
   [4]: "CmdGetLoginNames4URL",
   [5]: "CmdGetPassword4LoginName",
@@ -79,6 +89,9 @@ export const State = {
   NoHelper: "no_helper",
 };
 
+/**
+ * @param {unknown} obj
+ */
 function jsonToBase64(obj) {
   return bytesToBase64(new TextEncoder().encode(JSON.stringify(obj)));
 }
@@ -86,6 +99,9 @@ function jsonToBase64(obj) {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // totp entries can arrive without a code, the value is read at fill time
+/**
+ * @param {any} entries entries from the helper's JSON reply
+ */
 export function normalizeOtpEntries(entries) {
   return (Array.isArray(entries) ? entries : [])
     .map((e) => ({
@@ -133,10 +149,16 @@ export class ApplePasswords {
     return run;
   }
 
+  /**
+   * @param {(state: string) => void} fn
+   */
   onStateChange(fn) {
     this._onState = fn;
   }
 
+  /**
+   * @param {() => void} fn
+   */
   onOneTimeCodeAvailable(fn) {
     this._onOneTimeCode = fn;
   }
@@ -155,6 +177,9 @@ export class ApplePasswords {
     return this.capabilities?.canSaveAccountWithEmptyUserName === true;
   }
 
+  /**
+   * @param {string} s
+   */
   _setState(s) {
     if (this.state === s) return;
     this.state = s;
@@ -172,6 +197,12 @@ export class ApplePasswords {
     );
   }
 
+  /**
+   * @param {number} cmd
+   * @param {Record<string, any>} [body]
+   * @param {number | null} [timeoutMs]
+   * @returns {Promise<any>} the helper's reply, native-messaging JSON
+   */
   _send(cmd, body = {}, timeoutMs = 5000) {
     const port = this.port;
     if (!port) throw new Error("connection closed");
@@ -199,6 +230,9 @@ export class ApplePasswords {
   }
 
   // a request that can never be answered must not hold the lock for every later one
+  /**
+   * @param {string} reason
+   */
   _rejectWaiters(reason) {
     const waiters = [...this._waiters.values()];
     this._waiters.clear();
@@ -208,6 +242,9 @@ export class ApplePasswords {
     }
   }
 
+  /**
+   * @param {any} message native-messaging JSON from the helper
+   */
   _dispatch(message) {
     const w = this._waiters.get(message.cmd);
     if (w) {
@@ -311,6 +348,10 @@ export class ApplePasswords {
   }
 
   // ifNeeded keeps a live prompt, a second code on screen invalidates the one the user is reading
+  /**
+   * @param {{ ifNeeded?: boolean }} [opts]
+   * @returns {Promise<boolean>}
+   */
   requestChallenge({ ifNeeded = false } = {}) {
     if (!this.session) {
       if (this._connectPending) {
@@ -376,6 +417,9 @@ export class ApplePasswords {
   }
 
   // a PIN only matches the challenge it was shown for, so re-issue and ask for the new code
+  /**
+   * @param {string} pin
+   */
   async verifyPin(pin) {
     if (!this.session) throw new Error("not connected");
     if (!this.hasChallenge) {
@@ -427,6 +471,15 @@ export class ApplePasswords {
     });
   }
 
+  /**
+   * @param {number} cmd
+   * @param {number | undefined} tabId
+   * @param {string | null} hostname
+   * @param {unknown} payloadBody
+   * @param {number | null} timeoutMs
+   * @param {number} [frameId]
+   * @returns {Promise<any>} decrypted reply JSON
+   */
   async _encryptedQuery(cmd, tabId, hostname, payloadBody, timeoutMs, frameId = 0) {
     const session = this._liveSession();
     const sdata = session.serialize(await session.encrypt(payloadBody));
@@ -447,6 +500,10 @@ export class ApplePasswords {
     return JSON.parse(bytesToUtf8(data));
   }
 
+  /**
+   * @param {number | undefined} tabId
+   * @param {string} url
+   */
   async getLoginNamesForURL(tabId, url) {
     if (!this.ready) throw new Error("not unlocked");
     const { hostname } = new URL(url);
@@ -459,12 +516,19 @@ export class ApplePasswords {
         5000,
       );
       if (res.STATUS === QueryStatus.Success)
-        return (res.Entries ?? []).map((e) => ({ username: e.USR, sites: e.sites }));
+        return (res.Entries ?? []).map((/** @type {any} */ e) => ({ username: e.USR, sites: e.sites }));
       if (res.STATUS === QueryStatus.NoResults) return [];
       throw queryStatusError(res.STATUS);
     });
   }
 
+  /**
+   * @param {number | undefined} tabId
+   * @param {string} url
+   * @param {{ username: string }} loginName
+   * @param {string} [queryUrl]
+   * @param {string} [envelopeUrl]
+   */
   async getPasswordForLoginName(tabId, url, loginName, queryUrl, envelopeUrl) {
     if (!this.ready) throw new Error("not unlocked");
     const { hostname } = new URL(url);
@@ -492,6 +556,12 @@ export class ApplePasswords {
   }
 
   // ACT maybeAdd lets the helper decide add-vs-update and drive the native save prompt
+  /**
+   * @param {number | undefined} tabId
+   * @param {string} url
+   * @param {string | null | undefined} username
+   * @param {string} password
+   */
   async saveLogin(tabId, url, username, password) {
     if (!this.ready) throw new Error("not unlocked");
     if (!password) throw new Error("no password to save");
@@ -527,9 +597,16 @@ export class ApplePasswords {
     });
   }
 
+  /**
+   * @param {number | undefined} tabId
+   * @param {number} frameId
+   * @param {string[]} frameUrls
+   * @param {string} [username]
+   */
   async getOneTimeCodes(tabId, frameId, frameUrls, username) {
     if (!this.ready) throw new Error("not unlocked");
     if (!this.canFillOneTimeCodes) return { entries: [], requiresAuth: false };
+    /** @type {Record<string, any>} */
     const body = { ACT: Action.GHOST_SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
     if (username) body.username = username;
     return this._withLock(async () => {
@@ -542,8 +619,15 @@ export class ApplePasswords {
   }
 
   // read at pick time so a code listed earlier isnt filled after it rotated. may wait on Touch ID
+  /**
+   * @param {number | undefined} tabId
+   * @param {number} frameId
+   * @param {string[]} frameUrls
+   * @param {string} [username]
+   */
   async readOneTimeCode(tabId, frameId, frameUrls, username) {
     if (!this.ready) throw new Error("not unlocked");
+    /** @type {Record<string, any>} */
     const body = { ACT: Action.SEARCH, TYPE: "oneTimeCodes", frameURLs: frameUrls };
     if (username) body.username = username;
     return this._withLock(async () => {
@@ -557,6 +641,7 @@ export class ApplePasswords {
   /** @param {{ searchUrl?: string, newPasswordUrl?: string, totpUri?: string, totpPageUrl?: string }} [opts] */
   launchPasswordsApp({ searchUrl, newPasswordUrl, totpUri, totpPageUrl } = {}) {
     if (!this.port) throw new Error("not connected");
+    /** @type {Record<string, any>} */
     const msg = { cmd: Command.LAUNCH_PASSWORDS_APP };
     if (totpUri) {
       if (!this.canSetUpTotp) throw new Error("this helper cant set up verification codes");
