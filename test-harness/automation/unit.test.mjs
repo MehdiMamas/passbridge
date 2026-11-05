@@ -8,6 +8,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { addToAllowlist, agentHostFor, agentOfferFor } from "../../src/session/agent-allow.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
+import { newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { createLimiter, handleAgentRequest, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
@@ -1568,9 +1569,37 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
   ok("codes: empty query keeps every code", ids("") === "1,2,3,4");
   ok("codes: an ungrouped code without a username is hidden by a query", !ids("sam").includes("4"));
 }
-console.log(failed ? `\n${failed} failed` : "\nunit ok");
-process.exit(failed ? 1 : 0);
+// the save offer for a login we just autofilled: a corrected password is a change, not a re-login
+{
+  const target = (p) => pickSaveTarget(p);
+  const existing = ["ada@example.com"];
+
+  ok("save: an unchanged autofilled login is not offered", target({ existing, detected: "ada@example.com", newPwCtx: false }) === null);
+  ok(
+    "save: a password corrected after autofill is offered as an update",
+    target({ existing, detected: "ada@example.com", newPwCtx: newPasswordContext({ passwordCount: 1, correctedAfterFill: true }) }) === "ada@example.com",
+  );
+  ok(
+    "save: a corrected password with no username read off the form attaches to the recent login",
+    target({ existing, detected: "", newPwCtx: newPasswordContext({ passwordCount: 1, correctedAfterFill: true }), recent: "ada@example.com" }) === "ada@example.com",
+  );
+  ok("save: no username and no change still saves nothing", target({ existing, detected: "", newPwCtx: false }) === null);
+  ok("save: an unknown username is saved as typed", target({ existing, detected: "new@example.com", newPwCtx: false }) === "new@example.com");
+  ok("save: a generated password updates the matched login", target({ existing, detected: "ada@example.com", generated: true }) === "ada@example.com");
+  ok("save: a generated password with no match lets Apple's sheet ask", target({ existing: [], detected: "", generated: true }) === "");
+  ok("save: the username match ignores case", target({ existing: ["Ada@Example.com"], detected: "ada@example.com", newPwCtx: true }) === "Ada@Example.com");
+
+  ok("new password context: a plain one-field login is not a new password", !newPasswordContext({ passwordCount: 1 }));
+  ok("new password context: a correction after autofill is", newPasswordContext({ passwordCount: 1, correctedAfterFill: true }));
+  ok("new password context: two password fields are", newPasswordContext({ passwordCount: 2 }));
+  ok("new password context: autocomplete=new-password is", newPasswordContext({ passwordCount: 1, hasNewPasswordMark: true }));
+  ok("new password context: a generated password is", newPasswordContext({ passwordCount: 1, generated: true }));
+}
+
 ok("add login: same username shown takes the new-login sheet", useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: true }));
 ok("add login: no match saves normally", !useNewLoginSheet({ username: "me@x.com", before: 0, canSheet: true }));
 ok("add login: empty username saves normally", !useNewLoginSheet({ username: "  ", before: 2, canSheet: true }));
 ok("add login: helper without the sheet saves normally", !useNewLoginSheet({ username: "me@x.com", before: 1, canSheet: false }));
+
+console.log(failed ? `\n${failed} failed` : "\nunit ok");
+process.exit(failed ? 1 : 0);

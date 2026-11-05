@@ -17,6 +17,7 @@ const DRIVERS = [
   ["Clickjacking: hidden field not filled (#18)", "drive-clickjack.mjs"],
   ["HTTP fill gate (refused by default, canFillOnHttp opens it)", "drive-http-fill.mjs"],
   ["Save prompt (edit username/password before saving)", "drive-save-edit.mjs"],
+  ["Save prompt (a password corrected after autofill is an update) (#224)", "drive-save-update.mjs"],
   ["Save prompt: allow agent sign-in for the site", "drive-save-agent-allow.mjs"],
   ["Multi-account chooser", "drive-multi.mjs"],
   ["Generated password reaches the confirm box (#169)", "drive-gen-confirm.mjs"],

@@ -6,6 +6,7 @@ import { hideTotpBar, installQrPage, qrImageRect, showTotpBar } from "./qr-page.
 import { SETTINGS_AREA, SETTINGS_DEFAULTS, colorSchemeFor, hostBlocked } from "./settings.js";
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
 import { orderByPageUsername, usernameMatchesPage } from "./session/username-match.js";
+import { newPasswordContext } from "./save-target.js";
 import { createLifecycle } from "./reload-recovery.js";
 import { REPORT_FRAME_HTML_MAX, scrubAttr, scrubTree, scrubUrl } from "./report-scrub.js";
 
@@ -2071,18 +2072,20 @@ async function maybeOfferSave(scope) {
     }
   }
 
+  // what we filled in this frame, if it was recent enough to be the same login attempt
+  const filled = !generated ? lastAutofill : null;
+  const filledHere = !!filled && filled.host === location.hostname && !!filled.passwordHash && Date.now() - filled.at < 300000;
+  const unchangedAfterFill = filledHere && (await passwordsMatch(filled.passwordHash, cred.password));
+
   // a login we just autofilled unchanged is not a save
-  if (
-    !generated &&
-    lastAutofill &&
-    lastAutofill.host === location.hostname &&
-    lastAutofill.passwordHash &&
-    Date.now() - lastAutofill.at < 300000 &&
-    (await passwordsMatch(lastAutofill.passwordHash, cred.password))
-  ) {
+  if (unchangedAfterFill) {
     console.debug("[PassBridge] save skipped: recently autofilled");
     return;
   }
+
+  // we filled the vault's value and the form submitted a different one: the user retyped it, so
+  // the saved password is stale. That is a password change even on a one-field login form.
+  const correctedAfterFill = filledHere && !unchangedAfterFill;
 
   // 15s covers the click+submit+Enter burst ("shows up twice" fix)
   const key = `${location.hostname} ${cred.username || ""}`;
@@ -2093,10 +2096,12 @@ async function maybeOfferSave(scope) {
 
   const root = scope && scope.querySelectorAll ? scope : document;
   const pwInputs = Array.from(root.querySelectorAll("input")).filter(isPasswordish);
-  const newPwCtx =
-    generated ||
-    (cred.allPasswords || []).length >= 2 ||
-    pwInputs.some((p) => (p.getAttribute("autocomplete") || "").toLowerCase().includes("new-password"));
+  const newPwCtx = newPasswordContext({
+    generated,
+    passwordCount: (cred.allPasswords || []).length,
+    hasNewPasswordMark: pwInputs.some((p) => (p.getAttribute("autocomplete") || "").toLowerCase().includes("new-password")),
+    correctedAfterFill,
+  });
 
   // fire and forget, awaiting would let a navigating submit kill us
   console.debug("[PassBridge] handing save to background", {
