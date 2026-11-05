@@ -12,8 +12,10 @@ const enc = new TextEncoder();
 let keyPromise;
 let writeChain = Promise.resolve();
 
+/** @param {ArrayBuffer | Uint8Array} buf */
 const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-const fromHex = (hex) => Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16));
+/** @param {string} hex */
+const fromHex = (hex) => Uint8Array.from(/** @type {string[]} */ (hex.match(/../g)), (h) => parseInt(h, 16));
 
 async function loadOrCreateKey() {
   const store = chrome.storage.local;
@@ -24,9 +26,10 @@ async function loadOrCreateKey() {
     if (!(await store.get(SECRET_KEY))[SECRET_KEY]) await store.set({ [SECRET_KEY]: fresh });
     hex = (await store.get(SECRET_KEY))[SECRET_KEY];
   }
-  return crypto.subtle.importKey("raw", fromHex(hex), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return crypto.subtle.importKey("raw", fromHex(/** @type {string} */ (hex)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
 }
 
+/** @param {string} text */
 async function mac(text) {
   keyPromise ??= loadOrCreateKey().catch((e) => {
     keyPromise = undefined;
@@ -35,15 +38,23 @@ async function mac(text) {
   return toHex(await crypto.subtle.sign("HMAC", await keyPromise, enc.encode(text)));
 }
 
+/** @param {string | null | undefined} host */
 const siteId = (host) => mac("site:" + (registrableDomain(host) || ""));
+/** @param {unknown} username */
 const userId = (username) => mac("user:" + String(username).toLowerCase());
 
+/** @returns {Promise<[string, string[]][]>} */
 async function readOrder() {
   const v = (await chrome.storage.local.get(ORDER_KEY))[ORDER_KEY];
   return Array.isArray(v) ? v : [];
 }
 
-// sites most recent first: [[siteHash, [userHash, ...]], ...]
+/**
+ * sites most recent first: [[siteHash, [userHash, ...]], ...]
+ * @param {string | null | undefined} host
+ * @param {unknown} username
+ * @returns {Promise<void>}
+ */
 export function recordUse(host, username) {
   if (!host || !username) return Promise.resolve();
   const run = async () => {
@@ -59,6 +70,12 @@ export function recordUse(host, username) {
   return p;
 }
 
+/**
+ * @template {{ username?: string }} T
+ * @param {string | null | undefined} host
+ * @param {T[]} logins
+ * @returns {Promise<T[]>}
+ */
 export async function orderByUse(host, logins) {
   try {
     if (!host || logins.length < 2) return logins;
@@ -66,6 +83,7 @@ export async function orderByUse(host, logins) {
     const entry = (await readOrder()).find(([s]) => s === site);
     if (!entry) return logins;
     const ids = await Promise.all(logins.map((l) => userId(l.username || "")));
+    /** @param {number} i */
     const rank = (i) => {
       const r = entry[1].indexOf(ids[i]);
       return r === -1 ? Infinity : r;
