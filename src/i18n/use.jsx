@@ -4,7 +4,7 @@ import { invalidateLocale, resolveLocale } from "./runtime.js";
 // React pages: resolve the UI language once, then follow changes to the uiLanguage setting so a
 // switch in the options page re-renders this page without a reload.
 export function useLocale() {
-  const [locale, setLocale] = useState(null);
+  const [locale, setLocale] = useState(/** @type {string | null} */ (null));
   useEffect(() => {
     let dead = false;
     resolveLocale().then((l) => {

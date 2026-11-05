@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
+    "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
@@ -10,22 +10,21 @@
     "skipLibCheck": true,
     "lib": [
       "ES2022",
+    "ESNext.Array",
       "DOM"
     ],
     "types": [
       "chrome"
     ],
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noImplicitAny": false,
     "useUnknownInCatchVariables": false
   },
   "include": [
-    "src/background.js",
-    "src/content.js",
-    "src/apple/**/*.js",
-    "src/passkeys/**/*.js",
-    "src/ui/**/*.jsx",
-    "src/ui/**/*.tsx"
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ]
 }

@@ -52,7 +52,9 @@ export function substitute(message, subs) {
   });
 }
 
+/** @type {string | null} */
 let locale = null;
+/** @type {Promise<string> | null} */
 let pending = null;
 
 /** @param {string} next @returns {void} */
@@ -83,7 +85,7 @@ export function resolveLocale() {
       let raw = "";
       try {
         const got = await settingsStore().get({ uiLanguage: "" });
-        raw = got?.uiLanguage || "";
+        raw = /** @type {string} */ (got?.uiLanguage || "");
       } catch (_) {
         raw = "";
       }

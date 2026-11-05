@@ -1,6 +1,7 @@
 // the right-click menu: only items that can work on this page, built fresh for the active tab
 import { resolveLocale, t } from "./i18n/runtime.js";
 
+/** @type {["editable", "page"]} */
 const ON_PAGE = ["editable", "page"];
 
 // resolve the UI language in the background's lifetime; t() falls back to en until it lands
@@ -12,8 +13,10 @@ void resolveLocale();
  * @returns {chrome.contextMenus.CreateProperties[]}
  */
 export function menuItems({ ready, onSite = true, logins, hasCode, hasGenerated = false }) {
+  /** @type {chrome.contextMenus.CreateProperties[]} */
   const items = [{ id: "pb-root", title: t("menuRoot"), contexts: ["editable", "page", "image"] }];
-  const add = (props) => items.push({ parentId: "pb-root", contexts: ON_PAGE, ...props });
+  /** @param {{ id: string, title?: string, type?: string, enabled?: boolean, contexts?: string[] }} props */
+  const add = (props) => items.push(/** @type {chrome.contextMenus.CreateProperties} */ ({ parentId: "pb-root", contexts: ON_PAGE, ...props }));
   if (!ready) {
     add({ id: "pb-unlock", title: t("menuUnlock") });
   } else if (!onSite) {

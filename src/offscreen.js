@@ -1,6 +1,7 @@
 import jsQR from "jsqr";
 import { t } from "./i18n/runtime.js";
 
+/** @type {ReturnType<typeof setTimeout> | null} */
 let timer = null;
 let pending = "";
 
@@ -108,7 +109,7 @@ function readQr(img, x, y, w, h, scale) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(w * scale));
   canvas.height = Math.max(1, Math.round(h * scale));
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d", { willReadFrequently: true }));
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);

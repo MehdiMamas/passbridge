@@ -1,4 +1,3 @@
-// @ts-check
 // ported from au2001/icloud-passwords-firefox (Apache-2.0), see NOTICE
 
 import { SRPSession, SecretSessionVersion, MSGType } from "./srp.js";

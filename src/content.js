@@ -1,4 +1,3 @@
-// @ts-check
 import { AutoFillConstants } from "./autofill/hints.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { isBareCodeOtp } from "./otp-field.js";

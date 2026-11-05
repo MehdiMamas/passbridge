@@ -30,7 +30,7 @@ function PopupApp() {
   const [pinError, setPinError] = useState("");
   const [showFavicons, setShowFavicons] = useState(true);
   const [lookupUrl, setLookupUrl] = useState(null);
-  const [update, setUpdate] = useState(null);
+  const [update, setUpdate] = useState(/** @type {{ url?: string, version?: string } | null} */ (null));
   const [canInstallUpdate, setCanInstallUpdate] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [canCheckUpdate, setCanCheckUpdate] = useState(false);
@@ -113,7 +113,8 @@ function PopupApp() {
       try {
         const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
         const host = new URL(active?.url || "").hostname;
-        const { passkeyNudge } = await chrome.storage.session.get({ passkeyNudge: null });
+        /** @type {{ passkeyNudge: { rpId?: string } | null }} */
+        const { passkeyNudge } = /** @type {any} */ (await chrome.storage.session.get({ passkeyNudge: null })); // chrome.storage edge returns untyped items
         if (passkeyNudge?.rpId && (host === passkeyNudge.rpId || host.endsWith("." + passkeyNudge.rpId))) setNudge(true);
       } catch {}
     })();
@@ -264,7 +265,7 @@ function PopupApp() {
         else showNote(res?.error || t("couldntReadPage"), "danger");
       }}
       onOpenUpdate={async () => {
-        await chrome.tabs.create({ url: update.url });
+        await chrome.tabs.create({ url: /** @type {{ url?: string }} */ (update).url });
         window.close();
       }}
       onInstallUpdate={async () => {
@@ -307,4 +308,4 @@ function PopupApp() {
 
 followTheme();
 void applyDocumentLanguage(document, "extensionName");
-createRoot(document.getElementById("root")).render(<PopupApp />);
+createRoot(/** @type {HTMLElement} */ (document.getElementById("root"))).render(<PopupApp />);

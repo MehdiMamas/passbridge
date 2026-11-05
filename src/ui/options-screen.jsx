@@ -24,6 +24,7 @@ const ACTIVITY_COLUMNS = [
 ];
 
 const activityCell = "truncate px-2.5 py-1.5";
+/** @type {Intl.DateTimeFormatOptions} */
 const SHORT_TIME = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
 
 
@@ -108,6 +109,7 @@ function Select({ ids, value, disabled, options, onChange }) {
   );
 }
 
+/** @param {{ label: string, help?: string, note?: string, state?: string, isWide?: boolean, isLabel?: boolean, children: (ids: { control: string, label: string, help?: string, note?: string, describedBy?: string }, isDisabled: boolean) => import("react").ReactNode }} props */
 function Row({ label, help, note, state = "ready", isWide = false, isLabel = true, children }) {
   const base = useId();
   const helpId = help ? `${base}h` : undefined;
@@ -173,6 +175,7 @@ function ButtonRow({ label, help, button, onClick }) {
   );
 }
 
+/** @param {{ label: string, help?: string, note?: string, state?: string, isLabel?: boolean, checked: boolean, onChange: (on: boolean) => void }} props */
 function SwitchRow({ label, help, note, state, isLabel, checked, onChange }) {
   return (
     <Row label={label} help={help} note={note} state={state} isLabel={isLabel}>
@@ -181,6 +184,7 @@ function SwitchRow({ label, help, note, state, isLabel, checked, onChange }) {
   );
 }
 
+/** @param {{ label: string, help?: string, state?: string, value: string, onChange: (text: string) => void, onBlur: () => void }} props */
 function ListRow({ label, help, state, value, onChange, onBlur }) {
   return (
     <Row label={label} help={help} state={state} isWide>

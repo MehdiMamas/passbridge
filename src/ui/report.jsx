@@ -4,18 +4,20 @@ import { reportFileName, reportIssueUrl, reportText } from "../report-scrub.js";
 import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { followTheme } from "./page-theme.js";
 
+/** @typedef {{ top?: boolean, url?: string, error?: string, blocked?: boolean, safe?: boolean, fields?: { visible?: boolean, login?: boolean, otp?: boolean }[] }} ReportFrame */
+/** @typedef {{ url: string, version: string, frames: ReportFrame[] }} Report */
 
 const muted = "text-[color-mix(in_srgb,CanvasText_60%,Canvas)]";
 const border = "border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
 
 function ReportApp() {
   const id = new URLSearchParams(location.search).get("id") || "";
-  const [report, setReport] = useState(undefined);
+  const [report, setReport] = useState(/** @type {Report | null | undefined} */ (undefined));
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
-    chrome.storage.session.get(`report:${id}`).then((r) => setReport(r[`report:${id}`] || null), () => setReport(null));
+    chrome.storage.session.get(`report:${id}`).then((r) => setReport(/** @type {Record<string, Report>} */ (r)[`report:${id}`] || null), () => setReport(null));
   }, [id]);
 
   const text = useMemo(() => (report ? reportText(report) : ""), [report]);
@@ -112,5 +114,5 @@ function ReportApp() {
 
 followTheme();
 void applyDocumentLanguage(document, "reportTitle");
-createRoot(document.getElementById("root")).render(<ReportApp />);
+createRoot(/** @type {HTMLElement} */ (document.getElementById("root"))).render(<ReportApp />);
 

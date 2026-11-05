@@ -86,6 +86,7 @@ function Frame({ title, scheme, props }) {
 }
 
 const release = { version: "1.4.2", pageUrl: "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.2" };
+/** @type {[string, Record<string, unknown>, string[]][]} */
 const updateScreens = [
   ["ready_first", { phase: "ready", release }, ["light"]],
   ["ready", { phase: "ready", release, folderName: "passbridge" }, ["light"]],
@@ -121,4 +122,4 @@ function Preview() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<Preview />);
+createRoot(/** @type {HTMLElement} */ (document.getElementById("root"))).render(<Preview />);

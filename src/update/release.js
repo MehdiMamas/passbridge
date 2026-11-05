@@ -23,7 +23,7 @@ export async function latestRelease(currentVersion = chrome.runtime.getManifest(
 }
 
 // the helper zip for this machine, signed like the extension zip; no version comparison, the caller has its own
-export function helperZipName(platform = navigator.userAgentData?.platform || navigator.platform || "") {
+export function helperZipName(platform = /** @type {Navigator & { userAgentData?: { platform?: string } }} */ (navigator).userAgentData?.platform || navigator.platform || "") {
   return /win/i.test(platform) ? "passbridge-windows-helper.zip" : "passbridge-macos-helper.zip";
 }
 
@@ -36,7 +36,8 @@ export async function latestHelperRelease(platform) {
 }
 
 async function fetchLatest() {
-  let release = null;
+  /** @type {{ tag_name?: string, assets?: { name?: string, digest?: string, size?: number, browser_download_url?: string }[] } | null} */
+  let release = null; // the GitHub release JSON
   try {
     // a cached answer would hide a release that just came out, or hand over a zip the digest no longer matches
     const res = await fetch(LATEST_RELEASE_URL, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });

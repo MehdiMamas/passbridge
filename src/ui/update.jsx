@@ -32,7 +32,7 @@ const readBack = (name) => fetch(chrome.runtime.getURL(name), { cache: "no-store
 
 const folderDeps = {
   store: folderStore,
-  pick: (startIn) => showDirectoryPicker({ id: "passbridge-folder", mode: "readwrite", ...(startIn ? { startIn } : {}) }),
+  pick: (startIn) => /** @type {typeof globalThis & { showDirectoryPicker: (opts: object) => Promise<FileSystemDirectoryHandle> }} */ (globalThis).showDirectoryPicker({ id: "passbridge-folder", mode: "readwrite", ...(startIn ? { startIn } : {}) }),
   isSource: looksLikeSource,
   isOwn: (folder) => isOwnFolder(folder, readBack),
 };
@@ -44,11 +44,11 @@ function UpdateApp() {
   const locale = useLocale();
   const installed = chrome.runtime.getManifest().version;
   const [phase, setPhase] = useState("checking");
-  const [release, setRelease] = useState(null);
+  const [release, setRelease] = useState(/** @type {{ version?: string, pageUrl?: string, zipUrl?: string, sigUrl?: string, digest?: string, size?: number } | null} */ (null));
   const [folderName, setFolderName] = useState("");
   const [step, setStep] = useState("download");
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(/** @type {{ message: string, restored: boolean } | null} */ (null));
   const [expected, setExpected] = useState("");
   const [native, setNative] = useState(false);
 
@@ -120,12 +120,14 @@ function UpdateApp() {
   }
 
   async function install() {
+    // install only runs once a release was found (the Update button shows in the ready phase)
+    const rel = /** @type {{ version: string, zipUrl: string, sigUrl: string, digest: string, size: number }} */ (release);
     const access = await folderForUpdate(folderDeps);
     if (!access.ok) return fail(access.error);
     setFolderName(access.folder.name);
     setPhase("working");
     advance("download");
-    const got = await downloadRelease(release, {
+    const got = await downloadRelease(rel, {
       onProgress: (n, total) => (n < total ? advance("download", n / total) : advance("verify")),
     });
     if (!got.ok) return fail(got.error);
@@ -135,18 +137,18 @@ function UpdateApp() {
     } catch {
       return fail("zip");
     }
-    if (manifestProblem(files, { key: chrome.runtime.getManifest().key, version: release.version })) return fail("mismatch");
+    if (manifestProblem(files, { key: /** @type {string} */ (chrome.runtime.getManifest().key), version: rel.version })) return fail("mismatch");
     advance("write");
     await setUpdating(true);
     try {
-      await applyUpdate(access.folder, files, { version: release.version, onProgress: (n, total) => advance("write", n / total) });
+      await applyUpdate(access.folder, files, { version: rel.version, onProgress: (n, total) => advance("write", n / total) });
     } catch (e) {
       if (await hasInterruptedUpdate()) return setPhase("interrupted");
       return fail("write", !!e?.restored);
     }
     advance("restart");
     await setUpdating(false);
-    await markUpdatedTo(release.version);
+    await markUpdatedTo(rel.version);
     setTimeout(() => chrome.runtime.reload(), 600);
   }
 
@@ -196,4 +198,4 @@ function UpdateApp() {
 
 followTheme();
 void applyDocumentLanguage(document, "updTitle");
-createRoot(document.getElementById("root")).render(<UpdateApp />);
+createRoot(/** @type {HTMLElement} */ (document.getElementById("root"))).render(<UpdateApp />);

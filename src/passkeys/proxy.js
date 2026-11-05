@@ -37,7 +37,9 @@ const hostOf = (u) => {
  * }} deps
  */
 export function createPasskeyProxy({ api, client, ensureConnected, enabled, getTab, notifyUnlock = () => {}, settings = async () => ({ allSites: true, stayUnlocked: false }), session = () => globalThis.chrome?.storage?.session, userVerified = () => false, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = 500 }) {
+  /** @type {boolean | null} */
   let attached = null; // unknown after a wake
+  /** @type {{ at: number, list: any[] } | null} */
   let cache = null; // { at, list }
   let chain = Promise.resolve();
   let registeredOn = null;

@@ -105,11 +105,11 @@ export async function createPasskey(details, { userVerified = false } = {}) {
   const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
   const id = crypto.getRandomValues(new Uint8Array(32));
   const credentialId = b64u(id);
-  const cose = cbor(new Map([[1, 2], [3, -7], [-1, 1], [-2, raw.slice(1, 33)], [-3, raw.slice(33, 65)]]));
+  const cose = cbor(new Map(/** @type {[number, number | Uint8Array][]} */ ([[1, 2], [3, -7], [-1, 1], [-2, raw.slice(1, 33)], [-3, raw.slice(33, 65)]])));
   const attested = cat(new Uint8Array(16), Uint8Array.of(id.length >> 8, id.length & 255), id, cose);
   const flags = UP | BE | BS | AT | (userVerified ? UV : 0);
   const ad = await authData(rpId, flags, attested);
-  const attestationObject = cbor(new Map([["fmt", "none"], ["attStmt", new Map()], ["authData", ad]]));
+  const attestationObject = cbor(new Map(/** @type {[string, string | Map<any, any> | Uint8Array][]} */ ([["fmt", "none"], ["attStmt", new Map()], ["authData", ad]])));
   const response = {
     id: credentialId,
     rawId: credentialId,
