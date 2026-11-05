@@ -1,11 +1,10 @@
-// @ts-nocheck
 // a foreign sub-frame must never get an offer (confused deputy via all_frames)
 // openpw.test resolves to 127.0.0.1 through the launch flags in lib.mjs
 import { join } from "path";
 import { BASE, HERE, build, launchExtension, main, ok, serveStatic } from "./lib.mjs";
 
 await main(async () => {
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   const foreign = new URL("/iframe-pages/iframe-login.html", BASE);

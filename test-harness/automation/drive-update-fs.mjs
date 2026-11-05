@@ -1,4 +1,3 @@
-// @ts-nocheck
 // runs test-harness/update-fs.html: the folder-update engine on Chrome's own File System Access code (OPFS).
 // serves the repo root so the page imports src/ as is; a zip made with `zip -r`, like release.yml, is passed in when zip exists
 import { execFileSync } from "child_process";

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: the passkey store through the real protocol. A passkey is a login saved for a reserved site in the simulated
 // helper; the page's create and get are answered from it through chrome.webAuthenticationProxy. Windows only (the
 // proxy is attached there; on macOS Chrome uses iCloud passkeys itself). Skips, and says so, when the browser has no such API.

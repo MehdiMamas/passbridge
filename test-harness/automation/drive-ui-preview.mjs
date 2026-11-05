@@ -1,4 +1,3 @@
-// @ts-nocheck
 // renders src/ui/preview.jsx (popup screens, light and dark) from a preview build it makes and serves itself
 // OP_PREVIEW=<url> uses an already-served preview page instead
 import { mkdir, mkdtemp, rm } from "fs/promises";

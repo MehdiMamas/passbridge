@@ -1,10 +1,9 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, menuShown, ok } from "./lib.mjs";
 
 const ADV = `${BASE}/adversarial`;
 
 await main(async () => {
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const negatives = [
     ["search-bar", ["#header-search", "#inline-search", "#form-search"]],
     ["social-tag", ["#tag-search", "#tag-combobox"]],

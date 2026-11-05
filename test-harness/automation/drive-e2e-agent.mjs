@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: the agent relay with the simulated helper behind it. The relay (native/passbridge-agent.py) is started by the
 // browser, and the reference client (native/passbridge-agent-cli.py) asks it to sign in; the password comes from the
 // helper's vault and never appears in a reply. Both platforms.

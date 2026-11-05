@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, menuText, ok } from "./lib.mjs";
 
 const ICON = "[data-passbridge-icon]";
@@ -21,7 +20,7 @@ async function clickIcon(page) {
 
 await main(async () => {
   // no logins, unfocused email field: the click says so
-  const emptyCtx = await launchExtension(build("empty"));
+  const emptyCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("empty"))));
   let page = await emptyCtx.newPage();
   await unfocusKeepingIcon(page, "#em");
   ok("icon is up with the field unfocused", (await page.locator(ICON).count()) > 0, "no icon");
@@ -31,7 +30,7 @@ await main(async () => {
   ok("icon click on an empty vault shows the no-logins row", /No saved logins for this site/.test(empty), empty);
 
   // logins, unfocused password field: the click opens the list
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   page = await ctx.newPage();
   await unfocusKeepingIcon(page, "#pw");
   await clickIcon(page);

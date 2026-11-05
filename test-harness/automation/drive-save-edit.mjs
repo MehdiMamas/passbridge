@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 
 // the save prompt shows the captured login for editing, and Save stores what is in the fields
 await main(async () => {
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const sw = ctx.serviceWorkers()[0];
   const barOf = async (page) => {
     for (let i = 0; i < 40; i++) {

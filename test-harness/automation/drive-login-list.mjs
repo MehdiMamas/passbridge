@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, ok, pierced } from "./lib.mjs";
 
 const attrs = (node) => {
@@ -16,7 +15,7 @@ async function openMany(page) {
 }
 
 await main(async () => {
-  const manyCtx = await launchExtension(build("many"));
+  const manyCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("many"))));
   const page = await manyCtx.newPage();
   await openMany(page);
 
@@ -123,7 +122,7 @@ await main(async () => {
   );
   await manyCtx.close();
 
-  const multiCtx = await launchExtension(build("multi", "OP_MULTI"));
+  const multiCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("multi", "OP_MULTI"))));
   const multi = await multiCtx.newPage();
   await multi.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   await multi.waitForTimeout(300);
@@ -151,7 +150,7 @@ await main(async () => {
   const DECOY_PW = "input[type=password][style]";
   const REAL_PW = "input[type=password]:not([style])";
   // unlabelled email box right before a password, with a hidden decoy password (issue #134)
-  const bareCtx = await launchExtension(build("unlocked"));
+  const bareCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const bare = await bareCtx.newPage();
   const hasMenu = async () => (await bare.locator('[data-passbridge-host="menu"]').count()) > 0;
   await bare.goto(`${BASE}/login-unlabeled.html`, { waitUntil: "domcontentloaded" });
@@ -186,7 +185,7 @@ await main(async () => {
   await bareCtx.close();
 
   // CJK-only labels, no <form> (issue #147)
-  const cjkCtx = await launchExtension(build("unlocked"));
+  const cjkCtx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const cjk = await cjkCtx.newPage();
   const cjkMenu = async () => (await cjk.locator('[data-passbridge-host="menu"]').count()) > 0;
   await cjk.goto(`${BASE}/username-cjk-noform.html`, { waitUntil: "domcontentloaded" });

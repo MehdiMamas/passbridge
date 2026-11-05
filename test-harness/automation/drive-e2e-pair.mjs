@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: the real extension against the simulated Apple helper. Pair with the code on the helper's screen (wrong code,
 // then a code that expired, then the right one) on both platforms, and check no mock data is in the build.
 

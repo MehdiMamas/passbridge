@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.mjs";
 
 // a page with no form whose script clears the confirm box when the first one changes (#169)
 await main(async () => {
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const page = await ctx.newPage();
   for (const [label, row, alnum] of [
     ["strong", "Strong Password", false],

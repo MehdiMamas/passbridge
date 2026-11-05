@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, menuShown, ok } from "./lib.mjs";
 
 await main(async () => {
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/testbench.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);

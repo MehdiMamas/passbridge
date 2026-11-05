@@ -1,4 +1,3 @@
-// @ts-nocheck
 // e2e: fill from the simulated helper's vault, then save a new login and an update through the real protocol,
 // checking what the helper received. Both platforms.
 

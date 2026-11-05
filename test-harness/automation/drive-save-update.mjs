@@ -1,11 +1,10 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, ok } from "./lib.mjs";
 
 // A password corrected after autofill is a change worth saving, not a re-login to ignore (#224).
 // The vault holds a stale value, we fill it, the user retypes the one that works, and the login
 // succeeds: the save bar has to come back as an update instead of staying silent.
 await main(async () => {
-  const ctx = await launchExtension(build("unlocked"));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build("unlocked"))));
   const sw = ctx.serviceWorkers()[0];
   const barOf = async (page) => {
     for (let i = 0; i < 40; i++) {

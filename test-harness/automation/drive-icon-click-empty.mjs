@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { BASE, build, launchExtension, main, menuText, menuShown, ok } from "./lib.mjs";
 
 // click the field icon with a real mouse; the icon sits in a closed shadow, so use its host box
@@ -11,7 +10,7 @@ async function clickIcon(page) {
 }
 
 async function open(kind) {
-  const ctx = await launchExtension(build(kind));
+  const ctx = /** @type {import("playwright-core").BrowserContext} */ (/** @type {unknown} */ (await launchExtension(build(kind))));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login-email-password.html`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(300);
