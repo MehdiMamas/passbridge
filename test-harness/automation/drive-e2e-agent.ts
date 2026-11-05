@@ -11,7 +11,7 @@ import { AGENT_CLI, PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.ts";
 
 const cli = (appDir: string, ...args: string[]) =>
   new Promise<any>((resolve) => {
-    execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir }, timeout: 110000 }, (err, stdout) => {
+    execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir, PASSBRIDGE_NO_WSL_REEXEC: "1" }, timeout: 110000 }, (err, stdout) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {

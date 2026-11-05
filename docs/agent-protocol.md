@@ -8,12 +8,15 @@ No reply ever contains a password or a code. The extension drops any key named `
 
 macOS and Windows. The request and reply format is the same on both; only how a client connects differs (see Socket and named pipe).
 
+WSL: the vault is only reachable from the Windows side, so a client in WSL on the same PC runs the reference CLI, which detects WSL (`/proc/sys/kernel/osrelease` contains `microsoft`) and re-runs itself through the Windows Python (`py.exe -3`, else `python.exe`) with WSL interop. The named pipe and `agent.key` stay Windows-only, and stdin and the exit code pass through. A client of your own in WSL does the same, or talks to the pipe from a Windows process. Set `PASSBRIDGE_NO_WSL_REEXEC=1` to turn the re-run off. A Linux machine with no Windows or macOS browser has no vault to reach.
+
 ## Turning it on
 
 1. Run the helper's installer: `install.sh` on macOS (1.4.0 or later), `install.ps1` on Windows (needs Python). It registers the native host `com.passbridge.agent`.
 2. Quit and reopen the browser.
 3. In PassBridge Settings, on the Agents tab, turn on Allow agent sign-in. It is off by default.
-4. Optional: after that, the save bar shows "Let agents sign in on <site>" when you save a login for a site that is not on the allowlist. It starts checked only for a password PassBridge generated; ticking it and saving adds the site (the registrable domain, or the full host on shared hosts such as Workday tenants) to the allowlist.
+4. Optional: to let a program add new logins, turn on Let agents save new logins on the same tab (needs Allow agent sign-in; off by default). It can only add, never read or overwrite a login.
+5. Optional: after that, the save bar shows "Let agents sign in on <site>" when you save a login for a site that is not on the allowlist. It starts checked only for a password PassBridge generated; ticking it and saving adds the site (the registrable domain, or the full host on shared hosts such as Workday tenants) to the allowlist.
 
 While it is off, the extension doesn't start the host, so the socket or pipe below doesn't exist.
 
@@ -58,6 +61,9 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 | `status` | none | reports the state, touches no tab |
 | `logins` | `tabId` (number), `site` (optional string) | lists the saved usernames for that tab's site |
 | `sign_in` | `tabId` (number), `username` (optional string), `site` (optional string) | fills that login into the tab's sign-in form |
+| `save` | `tabId` (number), `username` (string), `password` (string), `site` (optional string) | adds a new login for the tab's site. Add-only: if that username already has a login for the site, the reply is `exists` and nothing changes |
+
+`save` needs Let agents save new logins, not the allowlist. The tab must be `https:` and not a local host. The password is sent in the request, is never in a reply, and is never written to the Activity list (it keeps the op, tab, site and username). Apple's Passwords may show its own prompt for the new login; if nobody answers it in time, the reply is `needs_user`. The extension shows a notification for each saved login. `save` counts toward the `sign_in` rate limit.
 
 `site` is the site the client believes the tab is on, a host or a URL. If the tab's host is not that site or a subdomain of it, the reply is `not_allowed` with `reason: "site_mismatch"`. A client that leaves `site` out still works. Send it, so a tab that navigated away between your steps is refused.
 
@@ -81,29 +87,32 @@ If `username` is left out and the site has exactly one login, that login is used
 Success:
 
 ```json
-{"id":"…","ok":true,"paired":true,"enabled":true,"allowlist":["github.com","google.com","vercel.com","apple.com"],"allowAll":false}
+{"id":"…","ok":true,"paired":true,"enabled":true,"allowlist":["github.com","google.com","vercel.com","apple.com"],"allowAll":false,"save":false}
 {"id":"…","ok":true,"domain":"github.com","usernames":["octocat"]}
 {"id":"…","ok":true,"domain":"github.com","username":"octocat"}
 ```
 
-The three lines are `status`, `logins` and `sign_in`.
+The three lines are `status`, `logins` and `sign_in`. `save` succeeds with `{"id":"…","ok":true,"domain":"github.com","username":"octocat"}`.
 
-Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries `usernames`. `not_allowed` may carry `reason`; today the only value is `site_mismatch`, and the Agents > Activity list shows it.
+Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries `usernames`. `not_allowed` may carry `reason`; the values are `site_mismatch` and `save_off`, and the Agents > Activity list shows it.
 
 | error | meaning |
 |---|---|
 | `not_enabled` | agent sign-in is off in Settings |
-| `unknown_op` | the op isn't `status`, `logins` or `sign_in` |
-| `bad_request` | the line isn't a JSON object, or `id` or `op` is missing |
+| `unknown_op` | the op isn't `status`, `logins`, `sign_in` or `save` |
+| `bad_request` | the line isn't a JSON object, or `id` or `op` is missing, or `save` has no `username` or `password` |
+| `exists` | `save`: a login with that username already exists for the site |
 | `no_tab` | no tab with that id, or it has no URL |
-| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`) |
-| `rate_limited` | more than 10 `sign_in` requests in 10 minutes |
+| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Let agents save new logins is off (`reason: "save_off"`) |
+| `rate_limited` | more than 10 `sign_in` or `save` requests in 10 minutes |
 | `needs_user` | the user has to act: the extension isn't paired, or the Passwords approval (Touch ID) was refused or not given in time |
 | `no_login` | no saved login for the site, or none matching `username` |
 | `choose_login` | several logins and no `username` given; pick one from `usernames` |
 | `fill_failed` | no sign-in form was found or the fill didn't take |
 | `timeout` | the extension didn't answer within 90 s (sent by the host) |
 | `extension_gone` | the browser or extension went away mid-request (sent by the host) |
+
+The reference CLI: `status`, `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`.
 
 The reference CLI adds two codes of its own, without an `id`: `no_host`, when it can't connect, and `no_reply`, when the connection closed with no answer. Wait at least 90 s for a reply, because a Touch ID prompt can take that long. The CLI waits 100 s.
 
