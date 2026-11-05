@@ -1,7 +1,7 @@
 // WebAuthn answers for chrome.webAuthenticationProxy: ES256 only, no attestation, signCount 0.
 // The extension builds clientDataJSON itself; the browser passes it through and the page checks the origin.
 
-import { b64u, makeRecord, unb64u } from "./record.js";
+import { b64u, makeRecord, unb64u } from "./record.ts";
 
 const UP = 0x01;
 const UV = 0x04;
@@ -193,7 +193,7 @@ export function checkGet(details) {
 /**
  * True when the request allows this record (an empty allow list allows every credential of the rp).
  * @param {WebAuthnDetails} details
- * @param {import("./record.js").PasskeyRecord} record
+ * @param {import("./record.ts").PasskeyRecord} record
  */
 export function allowsRecord(details, record) {
   const allow = details?.allowCredentials || [];
@@ -203,7 +203,7 @@ export function allowsRecord(details, record) {
 /**
  * Sign a get request with a stored record. userVerified sets the UV flag. Returns the response JSON.
  * @param {WebAuthnDetails} details
- * @param {import("./record.js").PasskeyRecord} record
+ * @param {import("./record.ts").PasskeyRecord} record
  * @param {{ userVerified?: boolean }} [opts]
  */
 export async function signAssertion(details, record, { userVerified = false } = {}) {

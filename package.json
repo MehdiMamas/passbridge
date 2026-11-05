@@ -3,6 +3,9 @@
   "version": "1.4.25",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "license": "GPL-3.0-only",
   "scripts": {
     "build": "node scripts/build.mjs",

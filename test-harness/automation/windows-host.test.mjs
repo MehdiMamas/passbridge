@@ -105,7 +105,7 @@ const plainSalt = () => {
 
 async function freshClient(opts) {
   makeWindowsHost({ pin: "123456", salt: plainSalt(), ...opts });
-  const { ApplePasswords } = await import(new URL(`protocol.js?windows=${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(new URL(`protocol.ts?windows=${Math.random()}`, SRC));
   const client = new ApplePasswords();
   await client.connect();
   await client.requestChallenge();

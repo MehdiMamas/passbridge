@@ -5,7 +5,7 @@ import { domainLines } from "../session/agent-allow.js";
 import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
-import { parseExport } from "../passkeys/import.js";
+import { parseExport } from "../passkeys/import.ts";
 import { helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
 import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";

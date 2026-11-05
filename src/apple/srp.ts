@@ -14,7 +14,7 @@ import {
   bytesToBase64,
   utf8ToBytes,
   concatBytes,
-} from "./crypto.js";
+} from "./crypto.ts";
 
 // RFC 5054 appendix A 3072-bit group, one wrong digit silently breaks interop with the helper
 const GROUP_PRIME = BigInt(

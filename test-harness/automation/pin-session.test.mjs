@@ -12,7 +12,7 @@ const ok = (name, cond, detail = "") => {
 };
 
 const SRC = new URL("../../src/apple/", import.meta.url);
-const { SRPSession } = await import(new URL("srp.js", SRC));
+const { SRPSession } = await import(new URL("srp.ts", SRC));
 
 const hex = (n) => (typeof n === "bigint" ? n.toString(16) : Buffer.from(n).toString("hex")).toUpperCase();
 const same = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
@@ -123,7 +123,7 @@ const plainSalt = () => {
 
 async function freshClient() {
   // re-import per test so each run gets its own module-level client state
-  const { ApplePasswords } = await import(new URL(`protocol.js?${Math.random()}`, SRC));
+  const { ApplePasswords } = await import(new URL(`protocol.ts?${Math.random()}`, SRC));
   const c = new ApplePasswords();
   await c.connect();
   return c;
@@ -149,7 +149,7 @@ async function freshClient() {
 }
 
 // fixed inputs chosen so K = H(S) starts with 0x00 and the salt starts with 0x00,
-// graded against the reference and against golden values, not against srp.js's own formula
+// graded against the reference and against golden values, not against srp.ts's own formula
 {
   const username = "0x00112233445566778899aabbccddeeff";
   const salt = Buffer.from("00" + "5a".repeat(15), "hex");

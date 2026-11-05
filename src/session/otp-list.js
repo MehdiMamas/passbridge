@@ -1,5 +1,5 @@
 import { siteLookupHosts } from "./site-domain.js";
-import { isPasskeyLogin } from "../passkeys/record.js";
+import { isPasskeyLogin } from "../passkeys/record.ts";
 
 // iCloud for Windows 15.10 lists only codes set up on Windows, so a synced TOTP needs a per-login read
 export const OTP_FALLBACK_MAX_LOGINS = 8;

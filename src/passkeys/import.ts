@@ -2,7 +2,7 @@
 // Credential Exchange JSON (accounts[].items[].credentials[] with type "passkey").
 // Returns { records, skipped: [{ label, reason }] }. Only P-256 (ES256) keys can be kept.
 
-import { b64u, makeRecord, unb64u } from "./record.js";
+import { b64u, makeRecord, unb64u } from "./record.ts";
 
 /** @param {string} keyB64u */
 async function p256Key(keyB64u) {

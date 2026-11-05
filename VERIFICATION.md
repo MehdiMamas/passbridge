@@ -19,16 +19,16 @@ wrong prime or IV order fails the handshake.
 
 | # | Issue | Resolution |
 |---|---|---|
-| C3 | SRP group prime corrupted: a stray `9` made it 3076 bits, non-standard and weak | replaced with the exact RFC 5054 3072-bit prime; added a startup assertion (768 hex digits). [srp.js](src/apple/srp.js) |
-| — | AES-GCM decrypt read the IV from the wrong end. the helper sends replies as `iv ‖ ciphertext` (confirmed against Apple's decompiled `SecretSession.decrypt` and the Firefox reference) | `decrypt()` reads the IV as the first 16 bytes; `encrypt()` keeps IV-last for requests (Apple is intentionally asymmetric). [srp.js](src/apple/srp.js) |
+| C3 | SRP group prime corrupted: a stray `9` made it 3076 bits, non-standard and weak | replaced with the exact RFC 5054 3072-bit prime; added a startup assertion (768 hex digits). [srp.ts](src/apple/srp.ts) |
+| — | AES-GCM decrypt read the IV from the wrong end. the helper sends replies as `iv ‖ ciphertext` (confirmed against Apple's decompiled `SecretSession.decrypt` and the Firefox reference) | `decrypt()` reads the IV as the first 16 bytes; `encrypt()` keeps IV-last for requests (Apple is intentionally asymmetric). [srp.ts](src/apple/srp.ts) |
 | C1 | any in-extension message could fetch or fill passwords for an attacker-named origin | background rejects messages that aren't from its own UI (`sender.tab === undefined && sender.id === runtime.id`), removed the raw `getPassword` path, and resolves the target tab/origin from the real active tab, never caller input. [background.js](src/background.js) |
 | C2 | content script filled without checking origin or visibility; a hidden field on evil.com could capture a fill | fills require the page host to match the pinned `expectedHost`, require an in-extension sender, skip invisible/zero-size/hidden fields, and the background refuses non-HTTPS pages. [content.js](src/content.js), [background.js](src/background.js) |
 
 ## Other hardening
 
-- SRP range checks (H1): reject a server public key that is `0 mod N` and reject `u == 0`. [srp.js](src/apple/srp.js)
+- SRP range checks (H1): reject a server public key that is `0 mod N` and reject `u == 0`. [srp.ts](src/apple/srp.ts)
 - downgrade resistance (H2): the per-handshake `PROTO` field is verified; the capabilities flag is treated leniently because the real helper may omit it (matching the reference), so the mode is governed by PROTO negotiation.
-- concurrent-query collision: the native protocol echoes the same `cmd` with no correlation id, so overlapping requests could cross-wire or hang. all exchanges are serialized behind a mutex (verified: max concurrency = 1). [protocol.js](src/apple/protocol.js)
+- concurrent-query collision: the native protocol echoes the same `cmd` with no correlation id, so overlapping requests could cross-wire or hang. all exchanges are serialized behind a mutex (verified: max concurrency = 1). [protocol.ts](src/apple/protocol.ts)
 - AES key imported `extractable: false`.
 - permissions trimmed: dropped `scripting` in favor of `activeTab` plus a statically-declared content script. The manifest still requests `tabs`.
 
@@ -49,7 +49,7 @@ Verified (automated, in `test-harness/automation/`):
 - `pin-session.test.mjs`: a code is only accepted for the challenge it was
   shown for, and spent or expired codes re-prompt
 - `npm run test:unit`: site matching, fill scripts, otpauth parsing, password generation
-- `srp.js` refuses to load if the prime is not 768 hex digits (a load-time check, not a test)
+- `srp.ts` refuses to load if the prime is not 768 hex digits (a load-time check, not a test)
 - the update without the helper: zip reading, staging and swap, rollback and recovery, and the folder
   permission flow in `npm run test:unit`; the same engine on Chrome's own File System Access code (OPFS)
   in `drive-update-fs.mjs`

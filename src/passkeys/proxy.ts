@@ -5,8 +5,8 @@
 // background.js calls register() at the top level, so the listeners exist each time the worker wakes,
 // and refresh() on wake to work out again whether to be attached.
 
-import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "./store.js";
-import { allowsRecord, checkCreate, checkGet, createPasskey, requestError, signAssertion } from "./webauthn.js";
+import { listPasskeys, passkeysForHost, readPasskey, savePasskey } from "./store.ts";
+import { allowsRecord, checkCreate, checkGet, createPasskey, requestError, signAssertion } from "./webauthn.ts";
 
 /** chrome.storage.local keys, per machine, set from the options page. */
 export const ALL_SITES_SETTING = "passkeysAllSites"; // default on
@@ -143,7 +143,7 @@ export function createPasskeyProxy({ api, client, ensureConnected, enabled, getT
 
   /**
    * @param {string} rpId
-   * @param {{ record: import("./record.js").PasskeyRecord, userVerified: boolean }} read
+   * @param {{ record: import("./record.ts").PasskeyRecord, userVerified: boolean }} read
    */
   async function remember(rpId, read) {
     const store = session();

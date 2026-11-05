@@ -1,8 +1,8 @@
 // Passkeys in the vault: list, read and save through the client (src/session/create-client.js).
-// Each passkey is one login for PASSKEY_URL; see record.js for the username and password formats.
+// Each passkey is one login for PASSKEY_URL; see record.ts for the username and password formats.
 
 import { confirmLoginAdded, countLogins } from "../session/add-login-check.js";
-import { PASSKEY_HOST, PASSKEY_URL, decodeRecord, encodeRecord, parseUsername, recordUsername } from "./record.js";
+import { PASSKEY_HOST, PASSKEY_URL, decodeRecord, encodeRecord, parseUsername, recordUsername } from "./record.ts";
 
 /** @typedef {{ username: string, sites: any[], rpId: string, userName: string, idPrefix: string }} PasskeyName */
 
@@ -38,7 +38,7 @@ export function passkeysForHost(list, host) {
  * @param {any} client
  * @param {number} tabId
  * @param {{ username: string, sites?: any[] }} entry
- * @returns {Promise<{ record: import("./record.js").PasskeyRecord, userVerified: boolean } | null>}
+ * @returns {Promise<{ record: import("./record.ts").PasskeyRecord, userVerified: boolean } | null>}
  */
 export async function readPasskey(client, tabId, entry) {
   const cred = await client.getPasswordForLoginName(tabId, PASSKEY_URL, { username: entry.username }, PASSKEY_HOST, entry.sites?.[0] || PASSKEY_HOST);
@@ -53,7 +53,7 @@ export async function readPasskey(client, tabId, entry) {
  * in the vault, nothing written), "locked" or "timeout".
  * @param {any} client
  * @param {number} tabId
- * @param {import("./record.js").PasskeyRecord} record
+ * @param {import("./record.ts").PasskeyRecord} record
  * @param {object} [opts] extra options for confirmLoginAdded
  * @returns {Promise<"saved" | "exists" | "locked" | "timeout">}
  */

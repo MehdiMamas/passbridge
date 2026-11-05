@@ -1,6 +1,6 @@
 // ported from au2001/icloud-passwords-firefox (Apache-2.0), see NOTICE
 
-import { SRPSession, SecretSessionVersion, MSGType } from "./srp.js";
+import { SRPSession, SecretSessionVersion, MSGType } from "./srp.ts";
 import {
   bytesToBase64,
   base64ToBytes,
@@ -10,7 +10,7 @@ import {
   constantTimeEqual,
   QueryStatus,
   queryStatusError,
-} from "./crypto.js";
+} from "./crypto.ts";
 
 const NATIVE_HOST = "com.apple.passwordmanager";
 const BROWSER_NAME = "Chrome";
