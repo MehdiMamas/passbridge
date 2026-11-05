@@ -19,17 +19,11 @@ function findPython() {
   return null;
 }
 
-/** @type {string[]} */
-const failed = [];
-/**
- * @param {string} label
- * @param {string} cmd
- * @param {string[]} args
- */
-function run(label, cmd, args) {
+const failed: string[] = [];
+function run(label: string, cmd: string, args: string[]) {
   console.log(`\n▶ ${label}`);
   const r = spawnSync(cmd, args, { stdio: "inherit" });
-  if (r.status !== 0) failed.push(`${label} (exit ${r.status ?? /** @type {NodeJS.ErrnoException | undefined} */ (r.error)?.code})`);
+  if (r.status !== 0) failed.push(`${label} (exit ${r.status ?? (r.error as NodeJS.ErrnoException | undefined)?.code})`);
 }
 
 // static locale check first: fails fast on a missing key or placeholder mismatch

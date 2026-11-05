@@ -5,8 +5,7 @@ import { dirname, join, relative } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-/** @param {...string} p */
-const at = (...p) => join(REPO, ...p);
+const at = (...p: string[]) => join(REPO, ...p);
 
 const alias = {
   "@bitwarden/common/vault/enums": at("src/shims/bw-cipher-type.js"),
@@ -15,11 +14,7 @@ const alias = {
 };
 
 // Test builds set mockKind; a release build swaps the mock client for a stub so it never ships.
-/**
- * @param {string} kind
- * @returns {import("esbuild").Plugin}
- */
-function mockPlugin(kind) {
+function mockPlugin(kind: string): import("esbuild").Plugin {
   return {
     name: "passbridge-mock",
     setup(b) {
@@ -40,11 +35,7 @@ function mockPlugin(kind) {
 
 // The e2e builds report this platform instead of the browser's own, so the mac and Windows code paths both run on Linux.
 // Release builds bundle src/session/test-platform.js as is (empty).
-/**
- * @param {string} platform
- * @returns {import("esbuild").Plugin}
- */
-function testPlatformPlugin(platform) {
+function testPlatformPlugin(platform: string): import("esbuild").Plugin {
   return {
     name: "passbridge-test-platform",
     setup(b) {
@@ -60,11 +51,7 @@ function testPlatformPlugin(platform) {
 
 // Test builds may also point the update at a local server and a test key; without one the real
 // src/update/source.js (null: GitHub and the pinned key) is bundled.
-/**
- * @param {string | null} source
- * @returns {import("esbuild").Plugin}
- */
-function releaseSourcePlugin(source) {
+function releaseSourcePlugin(source: string | null): import("esbuild").Plugin {
   return {
     name: "passbridge-release-source",
     setup(b) {
@@ -83,12 +70,11 @@ function releaseSourcePlugin(source) {
 
 // Chrome holds the unpacked-extension root open on Windows, so rmdir(out) is EBUSY
 // while the files inside can still be replaced.
-/** @param {string} out */
-async function clean(out) {
+async function clean(out: string) {
   try {
     await rm(out, { recursive: true, force: true });
   } catch (err) {
-    const code = /** @type {NodeJS.ErrnoException | undefined} */ (err)?.code;
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code !== "EBUSY" && code !== "EPERM") throw err;
     const entries = await readdir(out).catch(() => []);
     await Promise.all(entries.map((name) => rm(join(out, name), { recursive: true, force: true })));
@@ -96,14 +82,12 @@ async function clean(out) {
   await mkdir(out, { recursive: true });
 }
 
-/** @param {string} p */
-async function exists(p) {
+async function exists(p: string) {
   return stat(p).then(() => true, () => false);
 }
 
 // every file the manifest and the extension pages load has to be in out/
-/** @param {string} out */
-async function verify(out) {
+async function verify(out: string) {
   const manifest = JSON.parse(await readFile(join(out, "manifest.json"), "utf8"));
   const wanted = new Set([
     manifest.background.service_worker,
@@ -113,7 +97,7 @@ async function verify(out) {
     "src/report.html",
     "src/update.html",
     ...Object.values(manifest.icons),
-    ...manifest.content_scripts.flatMap((/** @type {{ js?: string[] }} */ c) => c.js || []),
+    ...manifest.content_scripts.flatMap((c: { js?: string[] }) => c.js || []),
   ]);
   for (const page of [...wanted].filter((p) => p.endsWith(".html"))) {
     const html = await readFile(join(out, page), "utf8");
@@ -124,10 +108,8 @@ async function verify(out) {
   for (const page of ["overlay/save-bar.html", "overlay/totp-bar.html"]) wanted.add(page);
   const missing = [];
   for (const p of wanted) if (!(await exists(join(out, p)))) missing.push(p);
-  /** @type {string[]} */
-  const stray = [];
-  /** @param {string} dir */
-  const walk = async (dir) => {
+  const stray: string[] = [];
+  const walk = async (dir: string) => {
     for (const ent of await readdir(dir, { withFileTypes: true })) {
       const p = join(dir, ent.name);
       if (ent.isDirectory()) await walk(p);
@@ -141,11 +123,9 @@ async function verify(out) {
 }
 
 // Short commit sha, plus -dirty when the tree has uncommitted changes; "" when git is unavailable (zip download).
-/** @param {string} [cwd] */
-export function buildStamp(cwd = REPO) {
+export function buildStamp(cwd: string = REPO) {
   try {
-    /** @param {...string} args */
-    const run = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const run = (...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     const sha = run("rev-parse", "--short", "HEAD");
     return run("status", "--porcelain", "--untracked-files=no") ? `${sha}-dirty` : sha;
   } catch {
@@ -153,15 +133,11 @@ export function buildStamp(cwd = REPO) {
   }
 }
 
-/**
- * @param {{ out?: string, mockKind?: string, preview?: boolean, quiet?: boolean, releaseSource?: string | null, version?: string, testPlatform?: string, stamp?: string | boolean }} [options]
- */
-export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "", testPlatform = "", stamp = !process.env.PASSBRIDGE_RELEASE } = {}) {
+export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "", testPlatform = "", stamp = !process.env.PASSBRIDGE_RELEASE }: { out?: string, mockKind?: string, preview?: boolean, quiet?: boolean, releaseSource?: string | null, version?: string, testPlatform?: string, stamp?: string | boolean } = {}) {
   if ((releaseSource || version) && !mockKind) throw new Error("releaseSource and version are for test builds (mockKind) only");
   if (testPlatform && !["mac", "win"].includes(testPlatform)) throw new Error("testPlatform is mac or win");
   await clean(out);
-  /** @param {...string} p */
-  const dst = (...p) => join(out, ...p);
+  const dst = (...p: string[]) => join(out, ...p);
 
   // fonts/ includes OFL.txt, which has to ship beside the woff2 files.
   // LICENSE, NOTICE and licenses/ (Apache-2.0 for the upstream code) ship with every build.
@@ -184,10 +160,8 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   }
   if (preview) await cp(at("src/ui/preview.html"), dst("src/preview.html"));
 
-  /** @type {import("esbuild").LogLevel} */
-  const logLevel = quiet ? "error" : "warning";
-  /** @type {import("esbuild").BuildOptions} */
-  const common = { bundle: true, legalComments: "none", logLevel, absWorkingDir: REPO };
+  const logLevel: import("esbuild").LogLevel = quiet ? "error" : "warning";
+  const common: import("esbuild").BuildOptions = { bundle: true, legalComments: "none", logLevel, absWorkingDir: REPO };
 
   await build({
     ...common,
@@ -210,8 +184,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
     alias,
   });
 
-  /** @type {import("esbuild").BuildOptions} */
-  const react = {
+  const react: import("esbuild").BuildOptions = {
     ...common,
     format: "esm",
     jsx: "automatic",

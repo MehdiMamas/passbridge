@@ -9,22 +9,18 @@ import { join, dirname, relative } from "path";
 import { fileURLToPath } from "url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-/** @param {...string} p */
-const at = (...p) => join(REPO, ...p);
+const at = (...p: string[]) => join(REPO, ...p);
 
 const LOC_DIR = at("_locales");
 const locales = readdirSync(LOC_DIR).filter((d) => statSync(join(LOC_DIR, d)).isDirectory());
 if (!locales.includes("en")) throw new Error("_locales/en is missing");
 
-/** @param {string} locale */
-const load = (locale) => JSON.parse(readFileSync(at("_locales", locale, "messages.json"), "utf8"));
+const load = (locale: string) => JSON.parse(readFileSync(at("_locales", locale, "messages.json"), "utf8"));
 const en = load("en");
 
 // collect source files that can call t()
-/** @type {string[]} */
-const codeFiles = [];
-/** @param {string} dir */
-const walk = (dir) => {
+const codeFiles: string[] = [];
+const walk = (dir: string) => {
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
     if (ent.name === "node_modules" || ent.name.startsWith(".")) continue;
     const p = join(dir, ent.name);
@@ -37,7 +33,7 @@ walk(at("overlay"));
 
 // a t("key") call: the translation helper t, a string literal first argument
 const CALL = /\bt\(\s*["'`]([A-Za-z0-9_]+)["'`]/g;
-const used = new Set();
+const used = new Set<string>();
 for (const file of codeFiles) {
   for (const m of readFileSync(file, "utf8").matchAll(CALL)) used.add(m[1]);
 }
