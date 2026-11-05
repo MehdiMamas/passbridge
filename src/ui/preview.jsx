@@ -3,6 +3,7 @@ import { PopupScreen } from "./popup-screen.jsx";
 import { UpdateScreen } from "./update-screen.jsx";
 
 const noop = () => {};
+/** @type {[string, any][]} demo props are partial, merged into the screen */
 const screens = [
   ["no_helper", { state: "no_helper", os: "win" }],
   ["needs_pin", { state: "needs_pin", os: "mac", label: "your Mac" }],
@@ -55,6 +56,7 @@ const screens = [
   ],
 ];
 
+/** @param {{ title: string, scheme: string, props: any }} args props are partial demo data merged into the screen */
 function Frame({ title, scheme, props }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)]" style={{ colorScheme: scheme }} data-screen={title} data-scheme={scheme}>
@@ -87,6 +89,7 @@ function Frame({ title, scheme, props }) {
 
 const release = { version: "1.4.2", pageUrl: "https://github.com/MehdiMamas/passbridge/releases/tag/v1.4.2" };
 /** @type {[string, Record<string, unknown>, string[]][]} */
+/** @type {[string, any, string[]][]} */
 const updateScreens = [
   ["ready_first", { phase: "ready", release }, ["light"]],
   ["ready", { phase: "ready", release, folderName: "passbridge" }, ["light"]],
@@ -98,6 +101,7 @@ const updateScreens = [
   ["stale", { phase: "stale", expected: "1.4.2" }, ["light"]],
 ];
 
+/** @param {{ title: string, scheme: string, props: any }} args props are partial demo data merged into the screen */
 function UpdateFrame({ title, scheme, props }) {
   return (
     <section className="w-[600px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)] bg-[Canvas] text-[CanvasText]" style={{ colorScheme: scheme }} data-update-screen={title} data-scheme={scheme}>

@@ -29,7 +29,7 @@ function PopupApp() {
   const [noteTone, setNoteTone] = useState("");
   const [pinError, setPinError] = useState("");
   const [showFavicons, setShowFavicons] = useState(true);
-  const [lookupUrl, setLookupUrl] = useState(null);
+  const [lookupUrl, setLookupUrl] = useState(/** @type {string | null} */ (null));
   const [update, setUpdate] = useState(/** @type {{ url?: string, version?: string } | null} */ (null));
   const [canInstallUpdate, setCanInstallUpdate] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -40,6 +40,7 @@ function PopupApp() {
   const lookupGen = useRef(0);
   const lookupTimer = useRef(0);
 
+  /** @param {string} [text] @param {string} [tone] */
   function showNote(text, tone) {
     setNote(text || "");
     setNoteTone(tone || "");
@@ -61,6 +62,7 @@ function PopupApp() {
     return codeRes?.rows?.length || 0;
   }
 
+  /** @param {string} raw */
   async function runLookup(raw) {
     if (!raw) {
       await loadUnlocked();
@@ -82,12 +84,14 @@ function PopupApp() {
     setCodes(codeRes?.rows || []);
   }
 
+  /** @param {string} next @param {any} [nextCaps] */
   async function applyState(next, nextCaps) {
     setState(next);
     if (nextCaps) setCaps(nextCaps);
     if (next === "unlocked") await loadUnlocked();
   }
 
+  /** @param {any} res the getState reply from the background */
   async function bootFrom(res) {
     if (!res) return;
     if (res.os) setOs(res.os);
@@ -127,6 +131,7 @@ function PopupApp() {
       if (dead || !res) return;
       await bootFrom(res);
     })();
+    /** @param {any} msg a runtime broadcast from the background */
     const onMsg = (msg) => {
       if (msg?.type !== "state" || dead) return;
       if (msg.state === "disconnected") {

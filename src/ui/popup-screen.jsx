@@ -4,6 +4,13 @@ import { generateApplePassword } from "../password-generate.js";
 import { TOTP_WATCH_EVERY_MS, watchState } from "./totp-watch.js";
 import { codesForLogins, filterByUsername } from "./username-filter.js";
 
+/**
+ * One row from the code list or the login list. Parsed background replies, so extra fields stay open.
+ * @typedef {{ id?: string, source?: string, domain?: string, username?: string, [key: string]: any }} PopupRow
+ * @typedef {{ username: string, [key: string]: any }} PopupLogin
+ */
+
+/** @param {{ state: string }} props */
 function StatusDot({ state }) {
   const color =
     state === "unlocked" ? "bg-ok" : state === "needs_pin" ? "bg-warn" : state === "no_helper" ? "bg-danger" : "bg-current opacity-30";
@@ -12,6 +19,7 @@ function StatusDot({ state }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={label} />;
 }
 
+/** @param {{ label: string, onClick: () => void, children?: any }} props */
 function IconButton({ label, onClick, children }) {
   return (
     <button
@@ -53,6 +61,7 @@ function LockIcon() {
   );
 }
 
+/** @param {{ row: PopupRow, site: string, grouped: boolean, onCopy: (field: string, row: PopupRow) => any, onFillCode: (row: PopupRow) => any }} props */
 function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
   const [shown, setShown] = useState("");
   const [busy, setBusy] = useState(false);
@@ -114,6 +123,25 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
   );
 }
 
+/**
+ * Replies and values below come from the background worker as parsed messages, so those stay `any`.
+ * @param {{
+ *   state: string, os: string, label?: string, site: string,
+ *   logins: PopupLogin[], codes: PopupRow[], caps?: any, note?: string, noteTone?: string,
+ *   nudge?: any, syncSteps: string[], onSyncAll: () => any, pinError?: string, showFavicons?: boolean,
+ *   update?: any, installingUpdate?: boolean, checkingUpdate?: boolean,
+ *   onVerify: (pin: string) => Promise<boolean>, onNewCode: () => any,
+ *   onFill: (loginName: string) => any, onFillCode: (row: PopupRow) => any,
+ *   onCopy: (field: string, row: PopupRow) => any, onLookup: (value: string) => any,
+ *   onOpenApp: (page: string, query?: string) => any,
+ *   onAddLogin?: (login: { site: string, username: string, password: string }) => Promise<any>,
+ *   onTotpScan?: () => Promise<any>, onTotpPaste: (text: string) => Promise<any>,
+ *   onTotpAdd: (target: string) => Promise<any>, onTotpCopyKey: () => Promise<any>,
+ *   onCheckCodes: () => Promise<PopupRow[]>, onLock: () => any, onRefresh: () => any, onSettings: () => any,
+ *   onReport: () => any, onOpenUpdate: () => any, onInstallUpdate: () => any, onDismissUpdate: () => any,
+ *   onCheckUpdate?: () => any,
+ * }} props
+ */
 export function PopupScreen({
   state,
   os,
@@ -173,6 +201,7 @@ export function PopupScreen({
     const startedAt = Date.now();
     setWatch("waiting");
     const timer = setInterval(async () => {
+      /** @type {PopupRow[]} */
       let rows = [];
       try {
         rows = await onCheckCodes();
@@ -207,6 +236,7 @@ export function PopupScreen({
     } catch {}
   }, []);
 
+  /** @param {string | undefined} a @param {string | undefined} b */
   const isSameUser = (a, b) => (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
   const shownLogins = filterByUsername(logins, userQuery);
   const shownCodes = codesForLogins(codes, shownLogins, userQuery);
@@ -218,11 +248,13 @@ export function PopupScreen({
   const ungroupedCodes = shownCodes.filter((row) => !groupedCodes.has(row));
   const noMatch = logins.length > 0 && !!userQuery.trim() && shownLogins.length === 0;
 
+  /** @param {string} value */
   async function submitPin(value) {
     const ok = await onVerify(value);
     if (!ok) setPin("");
   }
 
+  /** @param {string} value */
   function onPinChange(value) {
     const next = value.replace(/\D/g, "").slice(0, 6);
     setPin(next);

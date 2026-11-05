@@ -19,7 +19,7 @@ const IS_EDGE = !!/** @type {Navigator & { userAgentData?: { brands?: { brand: s
 
 function OptionsApp() {
   const locale = useLocale();
-  const [settings, setSettings] = useState(DEFAULTS);
+  const [settings, setSettings] = useState(/** @type {import("./options-screen.jsx").OptionsSettings} */ (DEFAULTS));
   const [isLoaded, setIsLoaded] = useState(false);
   const [lists, setLists] = useState(() => Object.fromEntries(LIST_KEYS.map((k) => [k, ""])));
   const [agentLog, setAgentLog] = useState(/** @type {{ t: number, op: string, host: string, username: string, result: string }[]} */ ([]));
@@ -43,7 +43,7 @@ function OptionsApp() {
 
   useEffect(() => {
     settingsStore().get(DEFAULTS, (saved) => {
-      const next = { ...DEFAULTS, ...saved };
+      const next = /** @type {import("./options-screen.jsx").OptionsSettings} */ ({ ...DEFAULTS, ...saved });
       if (!Number(next.clipboardClearMs)) {
         next.clipboardClearMs = DEFAULTS.clipboardClearMs;
         settingsStore().set({ clipboardClearMs: next.clipboardClearMs });
@@ -53,11 +53,13 @@ function OptionsApp() {
       setLists(Object.fromEntries(LIST_KEYS.map((k) => [k, (next[k] || []).join("\n")])));
     });
     chrome.storage.local.get({ agentLog: [] }, (o) => setAgentLog(Array.isArray(o.agentLog) ? o.agentLog : []));
+    /** @param {Record<string, { newValue?: any }>} changes @param {string} area */
     const onLog = (changes, area) => {
       if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
     // the save bar can add a site while this page is open; take it in so a later save never writes the old list back
+    /** @param {Record<string, { newValue?: any }>} changes @param {string} area */
     const onAllowlist = (changes, area) => {
       if (area !== SETTINGS_AREA || !changes.agentAllowlist || isBlurListDirty.current) return;
       const next = changes.agentAllowlist.newValue || [];
@@ -68,6 +70,7 @@ function OptionsApp() {
     try {
       chrome.storage.session.get({ agentRelay: "" }, (o) => setRelay(/** @type {string} */ (o.agentRelay || "")));
     } catch {}
+    /** @param {Record<string, { newValue?: any }>} changes @param {string} area */
     const onRelay = (changes, area) => {
       if (area === "session" && changes.agentRelay) setRelay(changes.agentRelay.newValue || "");
     };
@@ -124,6 +127,7 @@ function OptionsApp() {
     } catch {}
   }
 
+  /** @param {boolean} on */
   async function onPasskeyToggle(on) {
     setPasskeyNote("");
     if (on) {
@@ -140,11 +144,13 @@ function OptionsApp() {
     } catch {}
   }
 
+  /** @param {boolean} on */
   async function onAllSites(on) {
     setAllSites(on);
     await chrome.storage.local.set({ passkeysAllSites: on });
   }
 
+  /** @param {boolean} on */
   async function onStayUnlocked(on) {
     setStayUnlocked(on);
     await chrome.storage.local.set({ passkeysStayUnlocked: on });
@@ -155,16 +161,19 @@ function OptionsApp() {
     setSyncSteps(res?.steps || []);
   }
 
+  /** @param {File | undefined} file */
   async function onPasskeyPick(file) {
     if (!file) return;
     setPasskeyResults([]);
+    // parseExport is async but is not awaited here; typed any so the code stays as it is (see PR notes)
+    /** @type {any} */
     let parsed;
     try {
       parsed = parseExport(await file.text());
     } catch (e) {
       return setPasskeyResults([{ label: file.name, status: "failed", reason: e?.message || "" }]);
     }
-    const results = parsed.skipped.map((s) => ({ label: s.label, status: "skipped", reason: s.reason }));
+    const results = parsed.skipped.map((/** @type {{ label: string, reason: string }} */ s) => ({ label: s.label, status: "skipped", reason: s.reason }));
     const total = parsed.records.length;
     for (let i = 0; i < total; i++) {
       setPasskeyProgress({ done: i, total });
@@ -188,28 +197,33 @@ function OptionsApp() {
     persist({ [BLUR_SAVED_LIST]: domainLines(listsRef.current[BLUR_SAVED_LIST]) });
   }
 
+  /** @param {any} r the native helper reply @param {string} message */
   function applyPolicy(r, message) {
     setHelpers((h) => ({ ...h, policy: r.missing ? "missing" : "present" }));
     if (r.missing) setPolicy({ hidden: false, message: "" });
     else setPolicy((p) => ({ hidden: r.ok ? !!r.hidden : p.hidden, message }));
   }
 
+  /** @param {Record<string, any>} partial */
   function persist(partial) {
     setSettings((s) => ({ ...s, ...partial }));
     queueSettings(partial);
   }
 
+  /** @param {Record<string, any>} partial */
   function onChange(partial) {
     persist(partial);
     if ("theme" in partial) flushSettings();
   }
 
+  /** @param {string} key @param {string} text */
   function onListChange(key, text) {
     setLists((l) => ({ ...l, [key]: text }));
     if (key === BLUR_SAVED_LIST) isBlurListDirty.current = true;
     else persist({ [key]: domainLines(text) });
   }
 
+  /** @param {string} key */
   function onListBlur(key) {
     if (key === BLUR_SAVED_LIST) return saveBlurList();
     setLists((l) => ({ ...l, [key]: domainLines(l[key]).join("\n") }));
@@ -219,11 +233,13 @@ function OptionsApp() {
     chrome.storage.local.remove("mru:v1").then(() => setIsMruCleared(true), () => {});
   }
 
+  /** @param {boolean} isOn */
   async function onPolicy(isOn) {
     const r = await sendPolicy(isOn ? "set" : "clear");
     applyPolicy(r, policyMessage(r, true));
   }
 
+  /** @param {"bubble" | "address"} key @param {boolean} isOn */
   function onPrivacy(key, isOn) {
     if (key === "bubble") setPrivacy("passwordSavingEnabled", isOn, setBubble, "suppressSaveBubble");
     else setPrivacy("autofillAddressEnabled", isOn, setAddress, "suppressAddressAutofill");
@@ -250,7 +266,7 @@ function OptionsApp() {
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
         passkeys={passkeysView(IS_WINDOWS)}
         passkeyStore={IS_WINDOWS ? { isOn: passkeyOn, onToggle: onPasskeyToggle, onPick: onPasskeyPick, progress: passkeyProgress, results: passkeyResults, note: passkeyNote, allSites, onAllSites, stayUnlocked, onStayUnlocked, syncSteps, onSyncAll } : null}
-        onOpenUrl={(url) => chrome.tabs.create({ url })}
+        onOpenUrl={(/** @type {string} */ url) => chrome.tabs.create({ url })}
         onShortcuts={() => chrome.tabs.create({ url: "chrome://extensions/shortcuts" })}
         onPasswordSettings={IS_EDGE ? null : () => chrome.tabs.create({ url: "chrome://password-manager/settings" })}
       />
@@ -258,6 +274,10 @@ function OptionsApp() {
   );
 }
 
+/**
+ * @param {string} action
+ * @returns {Promise<any>} the native helper reply, or { error, missing }
+ */
 function sendPolicy(action) {
   return new Promise((resolve) => {
     try {
@@ -273,10 +293,11 @@ function sendPolicy(action) {
   });
 }
 
+/** @param {string} name @param {(row: { shown: boolean, checked: boolean, disabled: boolean }) => void} setRow */
 function readPrivacy(name, setRow) {
-  const pref = chrome.privacy?.services?.[name];
+  const pref = /** @type {any} */ (chrome.privacy?.services)?.[name];
   if (!pref?.get) return;
-  pref.get({}, (d) => {
+  pref.get({}, (/** @type {any} */ d) => { // chrome.privacy details
     if (chrome.runtime.lastError || !d) return;
     const controllable = d.levelOfControl === "controllable_by_this_extension" || d.levelOfControl === "controlled_by_this_extension";
     setRow({ shown: true, checked: d.value === false, disabled: !controllable });
@@ -286,6 +307,7 @@ function readPrivacy(name, setRow) {
 // sync allows 120 writes a minute, and the domain lists save on every keystroke: batch them
 let pendingSettings = {};
 let flushTimer = 0;
+/** @param {Record<string, any>} partial */
 function queueSettings(partial) {
   Object.assign(pendingSettings, partial);
   clearTimeout(flushTimer);
@@ -301,8 +323,9 @@ function flushSettings() {
   });
 }
 
+/** @param {string} name @param {boolean} on @param {(row: { shown: boolean, checked: boolean, disabled: boolean }) => void} setRow @param {string} storageKey */
 function setPrivacy(name, on, setRow, storageKey) {
-  const pref = chrome.privacy?.services?.[name];
+  const pref = /** @type {any} */ (chrome.privacy?.services)?.[name];
   if (!pref) return;
   settingsStore().set({ [storageKey]: on });
   const done = () => readPrivacy(name, setRow);

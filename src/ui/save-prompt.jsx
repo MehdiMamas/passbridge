@@ -11,6 +11,7 @@ document.documentElement.style.colorScheme = params.get("scheme") || "";
 
 // "close" only tells the page to remove the bar; the password never goes through window.postMessage,
 // where the page's own listeners would see it. Save talks to the background directly.
+/** @param {string} action */
 function close(action) {
   parent.postMessage({ token, action }, "*");
 }
@@ -45,6 +46,7 @@ function SavePrompt() {
   }, []);
 
   // asNew makes a separate login even when one with this username and site exists
+  /** @param {boolean} [asNew] */
   async function save(asNew) {
     try { await chrome.runtime.sendMessage({ type: "confirmSave", username: username.trim(), password, site: site.trim(), asNew: asNew === true, allowAgent: offer.show && allowAgent }); } catch {}
     close("save");

@@ -1,3 +1,4 @@
+/** @param {any} msg any extension message; the reply is whatever the background sends */
 export function send(msg) {
   return new Promise((resolve) => {
     if (!globalThis.chrome?.runtime?.sendMessage) {

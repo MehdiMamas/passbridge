@@ -4,6 +4,7 @@ const CACHE_KEY = "pbTheme";
 
 export function followTheme() {
   const root = document.documentElement;
+  /** @param {any} theme the stored value, checked by colorSchemeFor */
   const apply = (theme) => {
     root.style.colorScheme = colorSchemeFor(theme);
     try {
