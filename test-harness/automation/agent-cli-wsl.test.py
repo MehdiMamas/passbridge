@@ -63,5 +63,13 @@ ok("save with an empty stdin is refused", r.returncode == 2, r.stderr)
 r = cli("osr-linux", "save", "7")
 ok("save without a username is refused", r.returncode == 2, r.stderr)
 
+r = cli("osr-wsl", "save", "--url", "https://site.example/login", "u@x.com", stdin="Sup3r-secret\n")
+argv = (TMP / "argv").read_text().splitlines()
+ok("wsl: save --url passes through with the password on stdin only", r.returncode == 0 and argv == ["-3", "C:\\wsl\\cli.py", "save", "--url", "https://site.example/login", "u@x.com"] and (TMP / "stdin").read_text() == "Sup3r-secret\n", argv)
+r = cli("osr-linux", "save", "--url", "https://site.example/login")
+ok("save --url without a username is refused", r.returncode == 2, r.stderr)
+r = cli("osr-linux", "save", "--url", "https://site.example/login", "u@x.com", stdin="")
+ok("save --url with an empty stdin is refused", r.returncode == 2, r.stderr)
+
 shutil.rmtree(TMP, ignore_errors=True)
 sys.exit(0 if all(results) else 1)

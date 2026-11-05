@@ -61,9 +61,9 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 | `status` | none | reports the state, touches no tab |
 | `logins` | `tabId` (number), `site` (optional string) | lists the saved usernames for that tab's site |
 | `sign_in` | `tabId` (number), `username` (optional string), `site` (optional string) | fills that login into the tab's sign-in form |
-| `save` | `tabId` (number), `username` (string), `password` (string), `site` (optional string) | adds a new login for the tab's site. Add-only: if that username already has a login for the site, the reply is `exists` and nothing changes |
+| `save` | `tabId` (number) or `url` (string, `https://`), not both; `username` (string), `password` (string), `site` (optional string) | adds a new login for the tab's site, or for the site of `url` when no tab is named. Add-only: if that username already has a login for the site, the reply is `exists` and nothing changes |
 
-`save` needs Let agents save new logins, not the allowlist. The tab must be `https:` and not a local host. The password is sent in the request, is never in a reply, and is never written to the Activity list (it keeps the op, tab, site and username). Apple's Passwords may show its own prompt for the new login; if nobody answers it in time, the reply is `needs_user`. The extension shows a notification for each saved login. `save` counts toward the `sign_in` rate limit.
+`save` needs Let agents save new logins, not the allowlist. The tab, or the `url`, must be `https:` and not a local host. Send exactly one of `tabId` and `url`; both or neither is `bad_request`, and so is a `url` that does not parse; a `url` that is not `https:` is `not_allowed`. Only `save` takes `url`: `logins` and `sign_in` with a `url` are `bad_request`. The Activity list keeps the origin of a `url`, never its path or query. The password is sent in the request, is never in a reply, and is never written to the Activity list (it keeps the op, tab, site and username). Apple's Passwords may show its own prompt for the new login; if nobody answers it in time, the reply is `needs_user`. The extension shows a notification for each saved login. `save` counts toward the `sign_in` rate limit.
 
 `site` is the site the client believes the tab is on, a host or a URL. If the tab's host is not that site or a subdomain of it, the reply is `not_allowed` with `reason: "site_mismatch"`. A client that leaves `site` out still works. Send it, so a tab that navigated away between your steps is refused.
 
@@ -100,7 +100,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 |---|---|
 | `not_enabled` | agent sign-in is off in Settings |
 | `unknown_op` | the op isn't `status`, `logins`, `sign_in` or `save` |
-| `bad_request` | the line isn't a JSON object, or `id` or `op` is missing, or `save` has no `username` or `password` |
+| `bad_request` | the line isn't a JSON object, or `id` or `op` is missing, or `save` has no `username` or `password`, or `save` names both or neither of `tabId` and `url`, or `url` does not parse, or `logins` or `sign_in` has a `url` |
 | `exists` | `save`: a login with that username already exists for the site |
 | `no_tab` | no tab with that id, or it has no URL |
 | `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Let agents save new logins is off (`reason: "save_off"`) |
@@ -112,7 +112,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `timeout` | the extension didn't answer within 90 s (sent by the host) |
 | `extension_gone` | the browser or extension went away mid-request (sent by the host) |
 
-The reference CLI: `status`, `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`.
+The reference CLI: `status`, `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>` or `save --url <https-url> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`, or `... save --url https://github.com/login octocat`.
 
 The reference CLI adds two codes of its own, without an `id`: `no_host`, when it can't connect, and `no_reply`, when the connection closed with no answer. Wait at least 90 s for a reply, because a Touch ID prompt can take that long. The CLI waits 100 s.
 

@@ -309,6 +309,22 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("agent: save on plain http is not_allowed", (await save({}, saveDeps({ getTab: async () => ({ id: 1, url: "http://shop.example.org/" }) }))).reply.error === "not_allowed");
   ok("agent: save on a dev host is not_allowed", (await save({}, saveDeps({ getTab: async () => ({ id: 1, url: "https://localhost/" }) }))).reply.error === "not_allowed");
   ok("agent: save with a site that does not match the tab is site_mismatch", (await save({ site: "other.com" })).reply.reason === "site_mismatch");
+  // save by url: no tab
+  saves = [];
+  const byUrl = (msg: any = {}, d = saveDeps({ getTab: async () => { throw new Error("no tab expected"); } })) => run({ op: "save", url: "https://github.com/login", username: "new@x.com", password: "Sup3r-secret", ...msg }, d, createLimiter());
+  const viaUrl = await byUrl();
+  ok("agent: save by url adds a login with no tab", viaUrl.reply.ok && viaUrl.reply.domain === "github.com" && saves.length === 1 && saves[0][0] === undefined && saves[0][1] === "https://github.com/login" && saves[0][3] === "Sup3r-secret");
+  ok("agent: save by url on plain http is not_allowed", (await byUrl({ url: "http://github.com/login" })).reply.error === "not_allowed");
+  ok("agent: save by url on a dev host is not_allowed", (await byUrl({ url: "https://localhost/login" })).reply.error === "not_allowed");
+  ok("agent: save by url that is not a url is bad_request", (await byUrl({ url: "not a url" })).reply.error === "bad_request" && (await byUrl({ url: 5 })).reply.error === "bad_request");
+  ok("agent: save with both tabId and url is bad_request", (await byUrl({ tabId: 1 })).reply.error === "bad_request");
+  ok("agent: save with neither tabId nor url is bad_request", (await run({ op: "save", username: "new@x.com", password: "Sup3r-secret" }, saveDeps(), createLimiter())).reply.error === "bad_request");
+  ok("agent: logins and sign_in with a url are bad_request", (await run({ op: "logins", url: "https://github.com/" }, saveDeps(), createLimiter())).reply.error === "bad_request" && (await run({ op: "sign_in", url: "https://github.com/" }, saveDeps(), createLimiter())).reply.error === "bad_request");
+  saves = [];
+  ok("agent: save by url of an existing username is exists", (await byUrl({ username: "A@x.com" })).reply.error === "exists" && saves.length === 0);
+  ok("agent: save by url with a site that does not match is site_mismatch", (await byUrl({ site: "other.com" })).reply.reason === "site_mismatch");
+  const urlEntry = logEntry({ op: "save", url: "https://github.com/login?next=/secret", username: "new@x.com", password: "Sup3r-secret" }, viaUrl, sanitizeReply(viaUrl.reply), 5);
+  ok("agent: the url save log entry has the origin, no tabId, path, query or password", urlEntry.url === "https://github.com" && !("tabId" in urlEntry) && !JSON.stringify(urlEntry).includes("Sup3r-secret") && !JSON.stringify(urlEntry).includes("secret?") && !JSON.stringify(urlEntry).includes("/login"));
   ok("agent: save an unpaired client is needs_user", (await save({}, saveDeps({ client: { ready: false } }))).reply.error === "needs_user");
   ok("agent: save with an unanswered Apple prompt is needs_user", (await save({}, saveDeps({ saveLogin: async () => { throw new Error("timeout"); } }))).reply.error === "needs_user");
   const slim = createLimiter(1, 1000);

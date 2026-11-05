@@ -67,8 +67,27 @@ await main(async () => {
     ok(t("a second save is exists"), again.ok === false && again.error === "exists", JSON.stringify(again));
     const old = await cli(appDir, "other-Pass", "save", tabId, "old@pb-e2e.invalid");
     ok(t("an existing login is exists and not overwritten"), old.error === "exists" && helper.saved.length === 1 && helper.vault.logins.find((l) => l.username === "old@pb-e2e.invalid")?.password === "old-Pass", JSON.stringify(old));
+    // save by url: no tab named, then logins on the tab of that site lists it
+    const URL_SITE = "https://urlsave.pb-e2e.example/";
+    await ctx.route(URL_SITE + "**", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>urlsave</title><form><input name=username><input name=password type=password></form>" }));
+    const urlOnly = await cli(appDir, PASSWORD, "save", "--url", URL_SITE + "login?next=/x", "byurl@pb-e2e.invalid");
+    ok(t("save by url succeeds"), urlOnly.ok === true && urlOnly.username === "byurl@pb-e2e.invalid" && urlOnly.domain === "urlsave.pb-e2e.example", JSON.stringify(urlOnly));
+    ok(t("the helper got the url login"), helper.saved.length === 2 && helper.saved[1].username === "byurl@pb-e2e.invalid" && helper.saved[1].password === PASSWORD);
+    const page2 = await ctx.newPage();
+    await page2.goto(URL_SITE, { waitUntil: "domcontentloaded" });
+    await page2.waitForTimeout(500);
+    const tabId2 = String(await sw.evaluate(async (u) => (await chrome.tabs.query({})).find((x) => x.url?.startsWith(u))?.id, URL_SITE));
+    await sw.evaluate(() => chrome.storage.sync.set({ agentAllowlist: ["save.pb-e2e.example", "urlsave.pb-e2e.example"] }));
+    await page2.waitForTimeout(300);
+    const list2 = await cli(appDir, "", "logins", tabId2);
+    ok(t("logins on a tab of that site lists the url save"), list2.ok && (list2.usernames ?? []).includes("byurl@pb-e2e.invalid"), JSON.stringify(list2));
+    const urlAgain = await cli(appDir, "other-Pass", "save", "--url", URL_SITE, "BYURL@pb-e2e.invalid");
+    ok(t("a second save by url is exists"), urlAgain.ok === false && urlAgain.error === "exists", JSON.stringify(urlAgain));
+    const urlHttp = await cli(appDir, "other-Pass", "save", "--url", "http://urlsave.pb-e2e.example/", "x@pb-e2e.invalid");
+    ok(t("save by an http url is not_allowed"), urlHttp.error === "not_allowed", JSON.stringify(urlHttp));
     const log = JSON.stringify(await sw.evaluate(() => chrome.storage.local.get("agentLog")));
-    ok(t("no reply and no log entry carries the password"), ![status, off, saved, list, again, old].some((r) => JSON.stringify(r).includes(PASSWORD)) && !log.includes(PASSWORD) && log.includes("new@pb-e2e.invalid"), log);
+    ok(t("no reply and no log entry carries the password"), ![status, off, saved, list, again, old, urlOnly, list2, urlAgain].some((r) => JSON.stringify(r).includes(PASSWORD)) && !log.includes(PASSWORD) && log.includes("new@pb-e2e.invalid") && log.includes('"url":"https://urlsave.pb-e2e.example"') && !log.includes("next=/x"), log);
+    await page2.close();
     await page.close();
     await home.close();
   }
