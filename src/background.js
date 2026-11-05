@@ -1965,4 +1965,7 @@ initAgent({
   siteLogins,
   uniqueByUsername,
   fillLoginOnTab,
+  saveLogin: (tabId, url, username, password) => client.saveLogin(tabId, url, username, password, { reportTimeout: true }),
+  notifySaved: (host, username) =>
+    chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("agentSavedLogin", [host, username]) }),
 });

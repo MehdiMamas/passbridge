@@ -17,7 +17,7 @@ RELAY = ROOT / "native" / "passbridge-agent.py"
 CLI = ROOT / "native" / "passbridge-agent-cli.py"
 WINDOWS = os.name == "nt"
 TMP = tempfile.mkdtemp(prefix="pb-agent-")
-ENV = {**os.environ, "PASSBRIDGE_APPDIR": TMP}
+ENV = {**os.environ, "PASSBRIDGE_APPDIR": TMP, "PASSBRIDGE_NO_WSL_REEXEC": "1"}
 results = []
 
 

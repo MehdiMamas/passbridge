@@ -23,4 +23,5 @@ PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Ap
 
 ## Gotchas
 - Disable Apple's own iCloud Passwords extension first: both use the same extension id.
+- The vault is reachable only from macOS or Windows. From WSL, `native/passbridge-agent-cli.py` re-runs itself through the Windows Python (`PASSBRIDGE_NO_WSL_REEXEC=1` turns it off; tests set it). See `docs/agent-protocol.md`.
 - `dist/`, `node_modules/`, `*.zip`, `*.pem` and `test-harness/automation/.builds/` are gitignored.

@@ -39,6 +39,7 @@ const DRIVERS = [
   ["E2E passkey store against the simulated helper (win)", "drive-e2e-passkeys.ts"],
   ["E2E Touch ID denied or unanswered, relogin and re-pair", "drive-e2e-auth.ts"],
   ["E2E agent relay sign-in through the browser's native host", "drive-e2e-agent.ts"],
+  ["E2E agent save through the browser's native host", "drive-e2e-save.ts"],
   ["Unit (matching, otpauth, protocol, SRP, update)", "unit.test.ts"],
 ];
 

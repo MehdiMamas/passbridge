@@ -1,9 +1,11 @@
 #!/usr/bin/python3
-# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username]
+# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username>  (save reads the password from stdin)
 import getpass
 import json
 import os
+import shutil
 import socket
+import subprocess
 import sys
 import uuid
 
@@ -16,6 +18,31 @@ APPDIR = os.path.expanduser(os.environ.get("PASSBRIDGE_APPDIR", _default))
 SOCK = os.path.join(APPDIR, "agent.sock")
 KEYFILE = os.path.join(APPDIR, "agent.key")
 PIPE = r"\\.\pipe\passbridge-agent-" + getpass.getuser()
+
+
+def under_wsl():
+    # the named pipe and agent.key exist only on the Windows side, so a WSL shell hands the call to Windows Python.
+    # PASSBRIDGE_NO_WSL_REEXEC=1 turns it off; PASSBRIDGE_OSRELEASE points the check at another file (tests)
+    if os.environ.get("PASSBRIDGE_NO_WSL_REEXEC"):
+        return False
+    try:
+        with open(os.environ.get("PASSBRIDGE_OSRELEASE", "/proc/sys/kernel/osrelease")) as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
+
+def wsl_reexec(argv):
+    # py.exe -3, else python.exe; stdin passes straight through, so a password never touches argv
+    py = shutil.which("py.exe") or ("/mnt/c/Windows/py.exe" if os.path.exists("/mnt/c/Windows/py.exe") else None)
+    cmd = [py, "-3"] if py else ([shutil.which("python.exe")] if shutil.which("python.exe") else None)
+    if not cmd:
+        return None
+    try:
+        script = subprocess.run(["wslpath", "-w", os.path.abspath(__file__)], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return subprocess.call(cmd + [script] + argv)
 
 
 def ask_pipe(req):
@@ -48,9 +75,13 @@ def ask_socket(req):
 
 
 def main(argv):
-    if not argv or argv[0] not in ("status", "logins", "sign_in"):
+    if not argv or argv[0] not in ("status", "logins", "sign_in", "save"):
         print(__doc__.strip().splitlines()[0], file=sys.stderr)
         return 2
+    if under_wsl():
+        code = wsl_reexec(argv)
+        if code is not None:
+            return code
     req = {"id": uuid.uuid4().hex, "op": argv[0]}
     if argv[0] != "status":
         if len(argv) < 2 or not argv[1].isdigit():
@@ -59,6 +90,15 @@ def main(argv):
         req["tabId"] = int(argv[1])
     if argv[0] == "sign_in" and len(argv) > 2:
         req["username"] = argv[2]
+    if argv[0] == "save":
+        if len(argv) < 3:
+            print("usage: save <tabId> <username>, password on stdin", file=sys.stderr)
+            return 2
+        req["username"] = argv[2]
+        req["password"] = sys.stdin.read().rstrip("\r\n")
+        if not req["password"]:
+            print("the password must come on stdin", file=sys.stderr)
+            return 2
     line = (ask_pipe if WINDOWS else ask_socket)(req)
     if line is None:
         print(json.dumps({"ok": False, "error": "no_host"}))
