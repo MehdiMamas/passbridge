@@ -15,24 +15,24 @@ import { followTheme } from "./page-theme.js";
 const LIST_KEYS = ["blockedDomains", "excludedDomains", "agentAllowlist"];
 const BLUR_SAVED_LIST = "agentAllowlist";
 const IS_WINDOWS = isWindows();
-const IS_EDGE = !!navigator.userAgentData?.brands?.some((b) => b.brand === "Microsoft Edge");
+const IS_EDGE = !!/** @type {Navigator & { userAgentData?: { brands?: { brand: string }[] } }} */ (navigator).userAgentData?.brands?.some((b) => b.brand === "Microsoft Edge");
 
 function OptionsApp() {
   const locale = useLocale();
   const [settings, setSettings] = useState(DEFAULTS);
   const [isLoaded, setIsLoaded] = useState(false);
   const [lists, setLists] = useState(() => Object.fromEntries(LIST_KEYS.map((k) => [k, ""])));
-  const [agentLog, setAgentLog] = useState([]);
+  const [agentLog, setAgentLog] = useState(/** @type {{ t: number, op: string, host: string, username: string, result: string }[]} */ ([]));
   const [relay, setRelay] = useState("");
   const [passkeyOn, setPasskeyOn] = useState(false);
   const [passkeyNote, setPasskeyNote] = useState("");
   const [allSites, setAllSites] = useState(true);
   const [stayUnlocked, setStayUnlocked] = useState(false);
   const [syncSteps, setSyncSteps] = useState([]);
-  const [passkeyProgress, setPasskeyProgress] = useState(null);
-  const [passkeyResults, setPasskeyResults] = useState([]);
+  const [passkeyProgress, setPasskeyProgress] = useState(/** @type {{ done: number, total: number } | null} */ (null));
+  const [passkeyResults, setPasskeyResults] = useState(/** @type {{ label: string, status: string, reason?: string }[]} */ ([]));
   const [tab, setTab] = useState(() => tabFromHash(location.hash));
-  const [helpers, setHelpers] = useState({ policy: "checking", updater: "checking" });
+  const [helpers, setHelpers] = useState(/** @type {{ policy: import("./options-model.js").HelperState, updater: import("./options-model.js").HelperState }} */ ({ policy: "checking", updater: "checking" }));
   const [policy, setPolicy] = useState({ hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
   const [address, setAddress] = useState({ shown: false, checked: false, disabled: true });
@@ -66,7 +66,7 @@ function OptionsApp() {
     };
     chrome.storage.onChanged.addListener(onAllowlist);
     try {
-      chrome.storage.session.get({ agentRelay: "" }, (o) => setRelay(o.agentRelay || ""));
+      chrome.storage.session.get({ agentRelay: "" }, (o) => setRelay(/** @type {string} */ (o.agentRelay || "")));
     } catch {}
     const onRelay = (changes, area) => {
       if (area === "session" && changes.agentRelay) setRelay(changes.agentRelay.newValue || "");
@@ -170,6 +170,7 @@ function OptionsApp() {
       setPasskeyProgress({ done: i, total });
       const rec = parsed.records[i];
       const label = `${rec.rpId} / ${rec.userName}`;
+      /** @type {{ ok?: boolean, result?: string, error?: string } | null} */
       let res = null;
       try {
         res = await chrome.runtime.sendMessage({ type: "passkeySave", record: rec });

@@ -2,9 +2,12 @@ import { frameOffsetFromWindow } from "./adapter/frame-offset.js";
 import { t } from "./i18n/runtime.js";
 
 
+/** @type {HTMLCanvasElement | HTMLImageElement | SVGSVGElement | null} */
 let qrImageEl = null;
 let qrImageAt = 0;
+/** @type {HTMLDivElement | null} */
 let totpHost = null;
+/** @type {((e: MessageEvent) => void) | null} */
 let totpOnMsg = null;
 
 function asPicture(node) {
@@ -62,7 +65,7 @@ export function hideTotpBar() {
 }
 
 /**
- * @param {object} payload
+ * @param {{ mode?: string, issuer?: string, account?: string, usernames?: string[], error?: string, filled?: boolean, launched?: boolean, hasKey?: boolean, detail?: string }} payload
  * @param {string} colorScheme
  * @returns {void}
  */
