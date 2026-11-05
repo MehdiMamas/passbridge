@@ -136,6 +136,7 @@
   "clipboardClear": { "message": "Clear clipboard after" },
   "clipboardHelp": { "message": "Clears anything PassBridge copies (passwords, usernames, codes) after this time. Windows clipboard history and clipboard apps keep their own copy." },
   "clearMru": { "message": "Clear recently used order" },
+  "clearMruHelp": { "message": "Forget which login you used last on each site, so suggestions go back to their default order." },
   "clearMruDone": { "message": "Cleared" },
   "clear10s": { "message": "10 seconds" },
   "clear20s": { "message": "20 seconds" },

@@ -318,7 +318,7 @@ function AutofillTab({ settings, onChange, lists, onListChange, onListBlur, isMr
           <Select ids={ids} value={String(settings.clipboardClearMs)} disabled={isDisabled} options={clearOptions} onChange={(v) => onChange({ clipboardClearMs: Number(v) })} />
         )}
       </Row>
-      <ButtonRow label={t("clearMru")} button={isMruCleared ? t("clearMruDone") : t("clearMru")} onClick={onClearMru} />
+      <ButtonRow label={t("clearMru")} help={t("clearMruHelp")} button={isMruCleared ? t("clearMruDone") : t("clearMru")} onClick={onClearMru} />
     </>
   );
 }

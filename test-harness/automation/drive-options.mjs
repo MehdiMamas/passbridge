@@ -12,6 +12,7 @@ const AUTOFILL_ROWS = [
   "Never-save sites",
   "Copy codes after filling",
   "Clear clipboard after",
+  "Clear recently used order",
 ];
 const BROWSER_ROWS = [
   "Right-click menu",
