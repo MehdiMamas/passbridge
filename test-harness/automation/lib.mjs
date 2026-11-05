@@ -1,6 +1,6 @@
 // shared driver plumbing: playwright, extension launch with throwaway profiles, the pierced menu, results
 
-import { mkdtemp, readFile, rm } from "fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { createServer } from "http";
 import { tmpdir } from "os";
 import { dirname, extname, join, normalize } from "path";
@@ -40,15 +40,27 @@ export async function serveStatic(dir, port = 0) {
 const open = [];
 
 // openpw.test is the cross-origin host; map it so no hosts-file entry is needed
-export async function launchExtension(ext) {
+// opts.hosts maps a native-messaging host name to the executable that serves it; they are registered in the
+// profile's NativeMessagingHosts folder for this extension only. opts.env is added to the browser's environment.
+export async function launchExtension(ext, opts = {}) {
   // under WSLg Chrome would draw to the Wayland display instead of the virtual X one, get no frames, and every Playwright click would wait for "stable" until it timed out
   const { WAYLAND_DISPLAY: _wayland, ...env } = process.env;
   const profile = await mkdtemp(join(tmpdir(), "pb-"));
   const entry = { profile, ctx: null };
   open.push(entry);
+  if (opts.hosts) {
+    const dir = join(profile, "NativeMessagingHosts");
+    await mkdir(dir, { recursive: true });
+    const origin = `chrome-extension://${await extensionId(ext)}/`;
+    for (const [name, path] of Object.entries(opts.hosts)) {
+      await chmod(path, 0o755).catch(() => {});
+      const manifest = { name, description: `${name} for tests`, path, type: "stdio", allowed_origins: [origin] };
+      await writeFile(join(dir, `${name}.json`), JSON.stringify(manifest));
+    }
+  }
   entry.ctx = await chromium.launchPersistentContext(profile, {
     headless: false,
-    env,
+    env: { ...env, ...opts.env },
     locale: "en-US",
     args: [
       `--disable-extensions-except=${ext}`,
@@ -62,6 +74,17 @@ export async function launchExtension(ext) {
   return entry.ctx;
 }
 
+// the id Chrome derives from the manifest key: first 16 bytes of the SHA-256 of the key, each nibble as a-p
+export async function extensionId(ext) {
+  const { createHash } = await import("crypto");
+  const { key } = JSON.parse(await readFile(join(ext, "manifest.json"), "utf8"));
+  const digest = createHash("sha256").update(Buffer.from(key, "base64")).digest().subarray(0, 16);
+  return [...digest].map((b) => String.fromCharCode(97 + (b >> 4)) + String.fromCharCode(97 + (b & 15))).join("");
+}
+
+const cleanupHooks = [];
+export const onCleanup = (fn) => cleanupHooks.push(fn);
+
 async function cleanup() {
   for (const { ctx, profile } of open.splice(0)) {
     await Promise.race([ctx?.close().catch(() => {}), new Promise((r) => setTimeout(r, 20000))]);
@@ -69,6 +92,7 @@ async function cleanup() {
       console.error(`could not remove profile ${profile}: ${e.message}`);
     });
   }
+  for (const fn of cleanupHooks.splice(0)) await fn().catch(() => {});
 }
 
 const results = [];

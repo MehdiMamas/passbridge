@@ -17,4 +17,11 @@ for (const kind of KINDS) {
   await buildExtension({ out: dst, mockKind: kind, quiet: true });
   console.log(`built ${kind} -> ${dst}`);
 }
+// e2e builds: the release client (empty mock kind), talking to the fake Apple helper. They report the
+// platform of their name, so both the mac and the Windows code paths run on Linux CI.
+for (const platform of ["mac", "win"]) {
+  const dst = join(OUT, `real-${platform}`);
+  await buildExtension({ out: dst, mockKind: "", testPlatform: platform, quiet: true });
+  console.log(`built real-${platform} -> ${dst}`);
+}
 console.log("\nDone. Test builds are in test-harness/automation/.builds/");

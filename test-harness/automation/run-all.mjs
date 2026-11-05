@@ -33,10 +33,16 @@ const DRIVERS = [
   ["Options page (tabs, help lines, helper notices, saving)", "drive-options.mjs"],
   ["Passkeys (create, two signed gets, wrong origin, detached elsewhere)", "drive-passkeys.mjs"],
   ["Folder update on Chrome's file system (OPFS)", "drive-update-fs.mjs"],
+  ["E2E pairing with the simulated Apple helper (mac and win)", "drive-e2e-pair.mjs"],
+  ["E2E fill and save against the simulated helper", "drive-e2e-fill-save.mjs"],
+  ["E2E verification codes against the simulated helper", "drive-e2e-otp.mjs"],
+  ["E2E passkey store against the simulated helper (win)", "drive-e2e-passkeys.mjs"],
+  ["E2E Touch ID denied or unanswered, relogin and re-pair", "drive-e2e-auth.mjs"],
+  ["E2E agent relay sign-in through the browser's native host", "drive-e2e-agent.mjs"],
   ["Unit (matching, otpauth, protocol, SRP, update)", "unit.test.mjs"],
 ];
 
-if (!existsSync(join(HERE, ".builds", "unlocked"))) {
+if (!["unlocked", "real-mac", "real-win"].every((kind) => existsSync(join(HERE, ".builds", kind)))) {
   console.error("Mock builds missing. Run:  node build-test-extensions.mjs");
   process.exit(2);
 }

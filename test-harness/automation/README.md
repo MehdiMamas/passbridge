@@ -27,7 +27,7 @@ node automation/drive-pin.mjs
 ```
 
 `npm test` (from the repo root) runs the suites that need no browser: `unit`,
-`pin-session`, `windows-host`, and `native-hosts.test.py` when Python 3 is on PATH.
+`pin-session`, `windows-host`, `fake-helper` (the simulated Apple helper against the real protocol), and `native-hosts.test.py` when Python 3 is on PATH.
 
 Nothing needs a hosts-file entry: the cross-origin host `openpw.test` is mapped to
 127.0.0.1 by a Chrome launch flag. Each browser gets a throwaway profile under the
@@ -66,6 +66,19 @@ Env vars, all optional:
 | `windows-host.test.mjs` | none | iCloud for Windows quirks (string MSG/ErrCode/SMSG); wrong PIN, other ErrCode and forged HAMK are rejected |
 | `unit.test.mjs` | none | Adapter units: fill script, port names, lookup hosts, setup links; the update check and the folder update (zip reader, swap and rollback, recovery, folder access, release lookup) |
 | `native-hosts.test.py` | none | Python hosts' `--selftest` modes; Windows policy host over native messaging, including `OPENPASSWORDS_NO_ELEVATE` |
+
+| `drive-e2e-*.mjs` | `real-mac`, `real-win` | The real extension (no mock client) against the simulated Apple helper in `test-harness/fake-apple-helper`, on both platforms: pairing, fill and save, codes, passkeys (win), denied or unanswered approval and relogin, and the agent relay. No Apple account and no person. |
+
+## End to end against the simulated helper
+
+`build-test-extensions.mjs` also builds `.builds/real-mac` and `.builds/real-win`: the production code with an empty mock
+kind and the platform fixed at build time. `drive-e2e-*.mjs` start a `FakeHelper` in the driver process and register two
+native-messaging hosts in the throwaway profile (`com.apple.passwordmanager` is `fake-apple-helper/host.mjs`, a relay to
+the helper over a unix socket named by `PB_FAKE_HELPER_SOCK`; `com.passbridge.agent` is `native/passbridge-agent.py`,
+with `PASSBRIDGE_APPDIR` pointing at a temp folder). The helper's vault, the code on its screen and the Touch ID answer
+(`helper.auth = "approve" | "deny" | "timeout"`) are plain properties a driver sets. Run one driver with the harness
+served as above and `xvfb-run -a node automation/drive-e2e-pair.mjs`; `drive-e2e-auth.mjs` takes about two minutes
+because it waits out an unanswered approval.
 
 Helpers: `lib.mjs` (Playwright, extension launch, results, the CDP view of the
 closed-shadow menu), `srp-reference.mjs` (independent SRP used by the mock helpers),

@@ -27,6 +27,7 @@ import { confirmLoginAdded, countLogins, useNewLoginSheet } from "./session/add-
 import { invalidateLocale, resolveLocale, t } from "./i18n/runtime.js";
 import { ALL_SITES_SETTING, PASSKEY_SETTING, STAY_UNLOCKED_SETTING, createPasskeyProxy } from "./passkeys/proxy.js";
 import { MOCK_KIND } from "./session/mock-kind.js";
+import { TEST_PLATFORM } from "./session/test-platform.js";
 import { isPasskeyLogin } from "./passkeys/record.js";
 import { savePasskey } from "./passkeys/store.js";
 
@@ -50,7 +51,7 @@ const passkeyProxy = createPasskeyProxy({
   // Windows only: on macOS Chrome already uses iCloud passkeys and attaching would hide them
   // (the passkeys test build runs on Linux CI, so it skips the check)
   enabled: async () =>
-    (MOCK_KIND === "passkeys" || (await chrome.runtime.getPlatformInfo()).os === "win") &&
+    (MOCK_KIND === "passkeys" || (TEST_PLATFORM || (await chrome.runtime.getPlatformInfo()).os) === "win") &&
     (await chrome.storage.local.get({ [PASSKEY_SETTING]: false }))[PASSKEY_SETTING] === true,
   getTab: () => focusedTab(),
   settings: async () => {
@@ -93,7 +94,7 @@ let platformOs = "mac";
 const platformReady = new Promise((resolve) => {
   try {
     chrome.runtime.getPlatformInfo((info) => {
-      platformOs = info?.os || "mac";
+      platformOs = TEST_PLATFORM || info?.os || "mac";
       setDeviceLabel(labelForOs(platformOs));
       resolve(platformOs);
     });

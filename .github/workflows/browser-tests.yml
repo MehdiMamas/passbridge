@@ -1,7 +1,10 @@
 name: Browser tests
 
-# headless Chromium suite (run-all.mjs); manual only, it takes a few minutes
+# headless Chromium suite (run-all.mjs), including the e2e drivers against the simulated Apple helper
 on:
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
