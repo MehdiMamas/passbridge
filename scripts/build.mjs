@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { build } from "esbuild";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { execFileSync } from "child_process";

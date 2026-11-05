@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Download one pinned upstream and show the diff against vendor/<name>/.
 // Usage: node scripts/sync-upstream.mjs <bitwarden|au2001|open-passwords> [commit] [--accept]
 // --accept copies the download over the vendor mirror and writes PINNED.
@@ -10,6 +9,7 @@ import { fileURLToPath } from "url";
 
 const root = process.cwd();
 
+/** @param {string} text */
 function normalize(text) {
   return text.replace(/\r\n/g, "\n");
 }
@@ -18,6 +18,10 @@ export async function loadCatalog(dir = root) {
   return JSON.parse(await readFile(join(dir, "upstreams.json"), "utf8"));
 }
 
+/**
+ * @param {{ pathsFile?: string, paths: string[] }} spec
+ * @param {string} [dir]
+ */
 export async function trackedPaths(spec, dir = root) {
   return spec.pathsFile
     ? (await readFile(join(dir, spec.pathsFile), "utf8")).split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"))
@@ -26,9 +30,16 @@ export async function trackedPaths(spec, dir = root) {
 
 // Download the tracked files at a commit into a fresh stamp folder.
 // Returns the upstream paths that did not download as [{ path, status }].
+/**
+ * @param {{ repo: string, strip?: string }} spec
+ * @param {string[]} paths
+ * @param {string} commit
+ * @param {string} stamp
+ */
 export async function downloadTracked(spec, paths, commit, stamp) {
   await rm(stamp, { recursive: true, force: true });
   await mkdir(stamp, { recursive: true });
+  /** @type {{ path: string, status: number }[]} */
   const missing = [];
   for (const rel of paths) {
     const url = `https://raw.githubusercontent.com/${spec.repo}/${commit}/${rel}`;
@@ -46,7 +57,12 @@ export async function downloadTracked(spec, paths, commit, stamp) {
 }
 
 // Compare a stamp folder with the vendor mirror: [{ rel, kind: "new" | "changed" }].
+/**
+ * @param {string} stamp
+ * @param {string} mirror
+ */
 export async function diffAgainstMirror(stamp, mirror) {
+  /** @type {{ rel: string, kind: "new" | "changed" }[]} */
   const out = [];
   for (const file of await collectedFiles(stamp)) {
     const rel = relative(stamp, file);
@@ -63,6 +79,10 @@ export async function diffAgainstMirror(stamp, mirror) {
   return out;
 }
 
+/**
+ * @param {string} dir
+ * @returns {Promise<string[]>}
+ */
 async function collectedFiles(dir) {
   const out = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // npm test: the unit and handshake suites, plus the Python host checks when a Python 3 is on PATH.
 // The browser suite (test-harness/automation/run-all.mjs) needs Chromium and runs separately.
 
@@ -20,11 +19,17 @@ function findPython() {
   return null;
 }
 
+/** @type {string[]} */
 const failed = [];
+/**
+ * @param {string} label
+ * @param {string} cmd
+ * @param {string[]} args
+ */
 function run(label, cmd, args) {
   console.log(`\n▶ ${label}`);
   const r = spawnSync(cmd, args, { stdio: "inherit" });
-  if (r.status !== 0) failed.push(`${label} (exit ${r.status ?? r.error?.code})`);
+  if (r.status !== 0) failed.push(`${label} (exit ${r.status ?? /** @type {NodeJS.ErrnoException | undefined} */ (r.error)?.code})`);
 }
 
 // static locale check first: fails fast on a missing key or placeholder mismatch

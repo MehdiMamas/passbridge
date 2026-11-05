@@ -1,4 +1,3 @@
-// @ts-nocheck
 // static locale check, run by npm test:
 // 1. every key the code uses (a t("key") literal call in src/ or overlay/) exists in _locales/en
 // 2. every en key exists in each locale file (no missing translations)
@@ -10,17 +9,21 @@ import { join, dirname, relative } from "path";
 import { fileURLToPath } from "url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+/** @param {...string} p */
 const at = (...p) => join(REPO, ...p);
 
 const LOC_DIR = at("_locales");
 const locales = readdirSync(LOC_DIR).filter((d) => statSync(join(LOC_DIR, d)).isDirectory());
 if (!locales.includes("en")) throw new Error("_locales/en is missing");
 
+/** @param {string} locale */
 const load = (locale) => JSON.parse(readFileSync(at("_locales", locale, "messages.json"), "utf8"));
 const en = load("en");
 
 // collect source files that can call t()
+/** @type {string[]} */
 const codeFiles = [];
+/** @param {string} dir */
 const walk = (dir) => {
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
     if (ent.name === "node_modules" || ent.name.startsWith(".")) continue;
