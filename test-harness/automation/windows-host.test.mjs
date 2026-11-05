@@ -1,4 +1,3 @@
-// @ts-nocheck
 // iCloud for Windows speaks the same SRP session, with two encoding quirks:
 // MSG (and sometimes ErrCode) arrive as strings, and SMSG arrives as a JSON string.
 

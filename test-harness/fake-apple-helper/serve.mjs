@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Puts a FakeHelper on a unix socket so the native host (host.mjs, started by the browser) can reach it.
 // The test process owns the helper, so the vault and the code on screen outlive each host process.
 // One JSON object per line: host -> {msg}, helper -> {reply}.
@@ -6,12 +5,17 @@
 import { createServer } from "node:net";
 import { rm } from "node:fs/promises";
 
+/**
+ * @param {import("./helper.mjs").FakeHelper} helper
+ * @param {string} sockPath
+ */
 export async function serveHelper(helper, sockPath) {
   await rm(sockPath, { force: true });
+  /** @type {Set<import("node:net").Socket>} */
   const sockets = new Set();
   const server = createServer((socket) => {
     sockets.add(socket);
-    const link = helper.connect((reply) => {
+    const link = helper.connect((/** @type {unknown} */ reply) => {
       if (!socket.destroyed) socket.write(JSON.stringify({ reply }) + "\n");
     });
     let buf = "";
@@ -32,7 +36,7 @@ export async function serveHelper(helper, sockPath) {
     socket.on("close", done);
     socket.on("error", done);
   });
-  await new Promise((resolve, reject) => server.once("error", reject).listen(sockPath, resolve));
+  await new Promise((resolve, reject) => server.once("error", reject).listen(sockPath, () => resolve(undefined)));
   return {
     sockPath,
     close: async () => {

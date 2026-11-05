@@ -1,4 +1,3 @@
-// @ts-nocheck
 // i18n suite: catalog parity, locale resolution, substitution, manifest wiring and menu output.
 import { readFileSync } from "fs";
 import { resolveLocale, setLocale, normalizeLocale, substitute, t, SUPPORTED_LOCALES } from "../../src/i18n/runtime.js";
