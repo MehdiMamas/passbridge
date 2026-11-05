@@ -85,6 +85,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   if (!settings.agentSignIn) return done(fail("not_enabled"));
   if (!["logins", "sign_in"].includes(op)) return done(fail("unknown_op"));
 
+  /** @type {{ id?: number, url?: string } | null} */
   let tab = null;
   try {
     tab = await deps.getTab(Number(msg.tabId));
@@ -167,8 +168,10 @@ const setRelay = (state) => {
 
 export function initAgent(deps) {
   const limiter = createLimiter();
+  /** @type {chrome.runtime.Port | null} */
   let port = null;
-  let timer = null;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
   let delay = 1000;
   let loaded = false;
 
