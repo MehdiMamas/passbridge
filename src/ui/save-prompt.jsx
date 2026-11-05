@@ -26,6 +26,7 @@ function SavePrompt() {
   const [offer, setOffer] = useState({ show: false, host: "" });
   const [allowAgent, setAllowAgent] = useState(false);
   const [canNewSheet, setCanNewSheet] = useState(false);
+  const [drag, setDrag] = useState({ x: 0, y: 0 });
 
   // the captured values are read from the background, not passed in the iframe URL
   useEffect(() => {
@@ -44,7 +45,49 @@ function SavePrompt() {
     }).catch(() => setLoaded(true));
   }, []);
 
-  // asNew makes a separate login even when one with this username and site exists
+  // drag the bar by its empty areas: title, labels, buttons
+  useEffect(() => {
+    const bar = document.querySelector("[data-passbridge=save-bar]");
+    if (!bar) return;
+    let startX = 0, startY = 0, originX = 0, originY = 0;
+    let dragging = false;
+
+    const down = (e) => {
+      // let clicks on inputs, buttons and labels through
+      if (e.target.closest("input, button, label, a, [contenteditable]")) return;
+      dragging = true;
+      const rect = bar.getBoundingClientRect();
+      originX = rect.left;
+      originY = rect.top;
+      startX = e.clientX;
+      startY = e.clientY;
+      e.preventDefault();
+    };
+    const move = (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const maxX = window.innerWidth - bar.offsetWidth;
+      const maxY = window.innerHeight - bar.offsetHeight;
+      setDrag({ x: Math.min(Math.max(0, originX + dx), maxX), y: Math.min(Math.max(0, originY + dy), maxY) });
+    };
+    const up = () => { dragging = false; };
+
+    bar.addEventListener("mousedown", down);
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+    return () => {
+      bar.removeEventListener("mousedown", down);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+  }, []);
+
+  // send the new position to the parent so the host element moves
+  useEffect(() => {
+    if (drag.x || drag.y) parent.postMessage({ token, action: "drag", x: drag.x, y: drag.y }, "*");
+  }, [drag]);
+
   async function save(asNew) {
     try { await chrome.runtime.sendMessage({ type: "confirmSave", username: username.trim(), password, site: site.trim(), asNew: asNew === true, allowAgent: offer.show && allowAgent }); } catch {}
     close("save");
@@ -52,7 +95,7 @@ function SavePrompt() {
 
   const noUser = !username.trim();
   return (
-    <div data-passbridge="save-bar" className="w-[360px] rounded-2xl border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] p-3.5 text-[CanvasText] shadow-xl">
+    <div data-passbridge="save-bar" className="w-[360px] rounded-2xl border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] p-3.5 text-[CanvasText] shadow-xl cursor-move" style={{ position: "fixed", left: `${drag.x}px`, top: `${drag.y}px` }}>
       <p className="text-sm font-semibold">{update ? t("updateTitle") : t("saveTitle")}</p>
 
       <label className="mt-2 block text-xs opacity-70">
@@ -94,7 +137,7 @@ function SavePrompt() {
             onChange={(e) => setPassword(e.target.value)}
             className={`${field} border-[color-mix(in_srgb,CanvasText_25%,Canvas)]`}
           />
-          <button type="button" data-action="toggle" className="mt-1 px-1.5 text-[13px] opacity-80" onClick={() => setShown(!shown)}>
+          <button type="button" data-action="toggle" className="mt-1 px-1.5 text-[13px] opacity-80 shrink-0 whitespace-nowrap" onClick={() => setShown(!shown)}>
             {shown ? t("hide") : t("show")}
 
           </button>
