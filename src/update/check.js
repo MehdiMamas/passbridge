@@ -10,15 +10,22 @@ export const UPDATE_CHECK_MS = 30 * 60 * 1000;
 export const UPDATE_PAGE = "src/update.html";
 export const LATEST_RELEASE_URL = RELEASE_SOURCE?.latestUrl ?? `https://api.github.com/repos/${REPORT_REPO}/releases/latest`;
 
+/** @param {string} tag */
 export function releasePageUrl(tag) {
   return `https://github.com/${REPORT_REPO}/releases/tag/${encodeURIComponent(tag)}`;
 }
 
+/** @param {unknown} tag */
 function parseVersion(tag) {
   const m = /^v?(\d+(?:\.\d+){0,3})$/.exec(String(tag ?? "").trim());
   return m ? m[1].split(".").map(Number) : null;
 }
 
+/**
+ * @param {unknown} latest
+ * @param {unknown} current
+ * @returns {boolean}
+ */
 export function isNewerVersion(latest, current) {
   const a = parseVersion(latest);
   const b = parseVersion(current);
@@ -31,6 +38,10 @@ export function isNewerVersion(latest, current) {
 }
 
 // a failed or refused request leaves updateCheckedAt alone so the next alarm retries
+/**
+ * @param {number} now
+ * @param {boolean} force
+ */
 async function runCheck(now, force) {
   if (!(await getSettings()).canCheckForUpdates) return false;
   const { updateCheckedAt } = await chrome.storage.local.get("updateCheckedAt");
@@ -70,7 +81,7 @@ export async function availableUpdate(currentVersion = chrome.runtime.getManifes
   if (latestRelease === dismissedRelease || latestRelease === latestUnsigned || !isNewerVersion(latestRelease, currentVersion)) return null;
   return {
     version: /** @type {number[]} */ (parseVersion(latestRelease)).join("."),
-    url: releasePageUrl(latestRelease),
+    url: releasePageUrl(/** @type {string} */ (latestRelease)),
   };
 }
 

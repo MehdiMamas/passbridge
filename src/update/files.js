@@ -10,34 +10,58 @@ const BACKUP = `${WORK_PREFIX}backup`;
 export const JOURNAL = `${WORK_PREFIX}journal.json`;
 const PROBE = `${WORK_PREFIX}probe`;
 
+/** @param {string} path */
 function split(path) {
   const parts = path.split("/");
   return { dirs: parts.slice(0, -1), name: parts.at(-1) };
 }
 
+/**
+ * @param {FileSystemDirectoryHandle} root
+ * @param {string[]} dirs
+ * @param {boolean} create
+ */
 async function dirAt(root, dirs, create) {
   let d = root;
   for (const part of dirs) d = await d.getDirectoryHandle(part, { create });
   return d;
 }
 
+/**
+ * @param {FileSystemDirectoryHandle} root
+ * @param {string} path
+ */
 async function fileAt(root, path) {
   const { dirs, name } = split(path);
-  return (await dirAt(root, dirs, false)).getFileHandle(name);
+  return (await dirAt(root, dirs, false)).getFileHandle(/** @type {string} */ (name));
 }
 
+/**
+ * @param {FileSystemDirectoryHandle} root
+ * @param {string} path
+ * @param {string | Uint8Array} data
+ */
 async function writeFile(root, path, data) {
   const { dirs, name } = split(path);
-  const w = await (await (await dirAt(root, dirs, true)).getFileHandle(name, { create: true })).createWritable();
-  await w.write(data);
+  const w = await (await (await dirAt(root, dirs, true)).getFileHandle(/** @type {string} */ (name), { create: true })).createWritable();
+  await w.write(/** @type {FileSystemWriteChunkType} */ (data));
   await w.close();
 }
 
+/**
+ * @param {FileSystemDirectoryHandle} root
+ * @param {string} path
+ */
 async function removeFile(root, path) {
   const { dirs, name } = split(path);
-  await (await dirAt(root, dirs, false)).removeEntry(name);
+  await (await dirAt(root, dirs, false)).removeEntry(/** @type {string} */ (name));
 }
 
+/**
+ * @param {FileSystemDirectoryHandle} root
+ * @param {string} path
+ * @returns {Promise<string | null>}
+ */
 async function readText(root, path) {
   try {
     return await (await (await fileAt(root, path)).getFile()).text();
@@ -47,15 +71,27 @@ async function readText(root, path) {
 }
 
 // move() renames in place where chrome has it, older versions copy and delete
+/**
+ * @param {FileSystemDirectoryHandle} fromRoot
+ * @param {string} path
+ * @param {FileSystemDirectoryHandle} toRoot
+ */
 async function moveFile(fromRoot, path, toRoot) {
-  const handle = await fileAt(fromRoot, path);
+  // move() is not in the DOM typings yet
+  const handle = /** @type {any} */ (await fileAt(fromRoot, path));
   const { dirs, name } = split(path);
   if (typeof handle.move === "function") return handle.move(await dirAt(toRoot, dirs, true), name);
   await writeFile(toRoot, path, new Uint8Array(await (await handle.getFile()).arrayBuffer()));
   await removeFile(fromRoot, path);
 }
 
+/**
+ * @param {any} d a directory handle; entries() is not in the DOM typings
+ * @param {string} [prefix]
+ * @returns {Promise<string[]>}
+ */
 async function listFiles(d, prefix = "") {
+  /** @type {string[]} */
   const out = [];
   for await (const [name, h] of d.entries()) {
     if (!prefix && name.startsWith(WORK_PREFIX)) continue;
@@ -65,6 +101,11 @@ async function listFiles(d, prefix = "") {
   return out;
 }
 
+/**
+ * @param {any} d a directory handle; entries() is not in the DOM typings
+ * @param {boolean} [top]
+ * @returns {Promise<boolean>}
+ */
 async function pruneEmptyDirs(d, top = true) {
   let empty = true;
   for (const [name, h] of await Array.fromAsync(d.entries())) {
@@ -78,12 +119,14 @@ async function pruneEmptyDirs(d, top = true) {
   return empty;
 }
 
+/** @param {FileSystemDirectoryHandle} root */
 async function dropWork(root) {
   for (const name of [STAGING, BACKUP]) await root.removeEntry(name, { recursive: true }).catch(() => {});
   await root.removeEntry(JOURNAL).catch(() => {});
 }
 
 // puts every backed-up file back and drops the files the update added. safe to run again after a crash
+/** @param {FileSystemDirectoryHandle} root */
 async function rollback(root) {
   const journal = JSON.parse((await readText(root, JOURNAL)) || "{}");
   const backup = await root.getDirectoryHandle(BACKUP).catch(() => null);
@@ -118,7 +161,7 @@ export async function applyUpdate(root, files, { version, onProgress }) {
   const oldSet = new Set(oldPaths);
   const newSet = new Set(files.map((f) => f.path));
   const added = files.map((f) => f.path).filter((p) => !oldSet.has(p));
-  const removed = oldPaths.filter((p) => !newSet.has(p));
+  const removed = oldPaths.filter((/** @type {string} */ p) => !newSet.has(p));
   const total = files.length * 2 + removed.length;
   let done = 0;
   const tick = () => onProgress?.(++done, total);
