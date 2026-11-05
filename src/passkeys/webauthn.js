@@ -11,6 +11,12 @@ const AT = 0x40;
 
 const te = new TextEncoder();
 
+/** @typedef {any} WebAuthnDetails parsed requestDetailsJson from the browser; shape is the WebAuthn request */
+
+/**
+ * @param {...Uint8Array} parts
+ * @returns {Uint8Array}
+ */
 export function cat(...parts) {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let at = 0;
@@ -22,11 +28,20 @@ export function cat(...parts) {
 }
 
 // Small CBOR writer: unsigned and negative ints, byte strings, text strings, maps.
+/**
+ * @param {number} major
+ * @param {number} n
+ * @returns {Uint8Array}
+ */
 function head(major, n) {
   if (n < 24) return Uint8Array.of((major << 5) | n);
   if (n < 256) return Uint8Array.of((major << 5) | 24, n);
   return Uint8Array.of((major << 5) | 25, n >> 8, n & 255);
 }
+/**
+ * @param {unknown} v
+ * @returns {Uint8Array}
+ */
 export function cbor(v) {
   if (v instanceof Uint8Array) return cat(head(2, v.length), v);
   if (typeof v === "string") {
@@ -38,17 +53,26 @@ export function cbor(v) {
   throw new Error("cbor: unsupported value");
 }
 
-/** An error in the shape completeCreateRequest / completeGetRequest take. */
+/**
+ * An error in the shape completeCreateRequest / completeGetRequest take.
+ * @param {string} name
+ * @param {string} message
+ */
 export function requestError(name, message) {
   return { name, message };
 }
 
+/** @param {Uint8Array} data */
 async function sha256(data) {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", /** @type {BufferSource} */ (data)));
 }
 
-/** WebCrypto signs ECDSA as r||s (64 bytes); WebAuthn wants ASN.1 DER. */
+/**
+ * WebCrypto signs ECDSA as r||s (64 bytes); WebAuthn wants ASN.1 DER.
+ * @param {Uint8Array} sig
+ */
 export function rawToDer(sig) {
+  /** @param {Uint8Array} x */
   const int = (x) => {
     let i = 0;
     while (i < x.length - 1 && x[i] === 0) i++;
@@ -61,7 +85,11 @@ export function rawToDer(sig) {
   return cat(Uint8Array.of(0x30, r.length + s.length), r, s);
 }
 
-/** The browser checks the page's origin against the rp id; this is the extension's own check. */
+/**
+ * The browser checks the page's origin against the rp id; this is the extension's own check.
+ * @param {string | undefined} rpId
+ * @param {string | undefined} origin
+ */
 export function rpIdMatchesOrigin(rpId, origin) {
   if (!rpId || !origin) return false;
   try {
@@ -72,30 +100,46 @@ export function rpIdMatchesOrigin(rpId, origin) {
   }
 }
 
+/**
+ * @param {string} type
+ * @param {WebAuthnDetails} details
+ * @param {string} origin
+ */
 function clientData(type, details, origin) {
   return te.encode(JSON.stringify({ type, challenge: details.challenge, origin, crossOrigin: false }));
 }
 
+/**
+ * @param {string} rpId
+ * @param {number} flags
+ * @param {Uint8Array} [attested]
+ */
 async function authData(rpId, flags, attested) {
   return cat(await sha256(te.encode(rpId)), Uint8Array.of(flags), new Uint8Array(4), attested || new Uint8Array(0));
 }
 
+/** @param {WebAuthnDetails} details */
 function originOf(details) {
   return details?.extensions?.remoteDesktopClientOverride?.origin;
 }
 
-/** Everything a create request needs from its details; throws a requestError. */
+/**
+ * Everything a create request needs from its details; throws a requestError.
+ * @param {WebAuthnDetails} details
+ */
 export function checkCreate(details) {
   const origin = originOf(details);
   const rpId = details?.rp?.id;
   if (!rpIdMatchesOrigin(rpId, origin)) throw requestError("SecurityError", "The relying party ID does not match the page origin");
-  if (!(details.pubKeyCredParams || []).some((p) => p.alg === -7)) throw requestError("NotSupportedError", "PassBridge passkeys support ES256 only");
+  if (!(details.pubKeyCredParams || []).some((/** @type {any} */ p) => p.alg === -7)) throw requestError("NotSupportedError", "PassBridge passkeys support ES256 only");
   return { origin, rpId };
 }
 
 /**
  * Make a new passkey. Returns { record, responseJson } for the caller to store, then answer with.
  * userVerified is false for a create: nothing in the vault is read, so no user verification happened.
+ * @param {WebAuthnDetails} details
+ * @param {{ userVerified?: boolean }} [opts]
  */
 export async function createPasskey(details, { userVerified = false } = {}) {
   const { origin, rpId } = checkCreate(details);
@@ -135,7 +179,10 @@ export async function createPasskey(details, { userVerified = false } = {}) {
   return { record, responseJson: JSON.stringify(response) };
 }
 
-/** Checks a get request's origin and rp id; returns { origin, rpId } or throws a requestError. */
+/**
+ * Checks a get request's origin and rp id; returns { origin, rpId } or throws a requestError.
+ * @param {WebAuthnDetails} details
+ */
 export function checkGet(details) {
   const origin = originOf(details);
   const rpId = details?.rpId;
@@ -143,20 +190,29 @@ export function checkGet(details) {
   return { origin, rpId };
 }
 
-/** True when the request allows this record (an empty allow list allows every credential of the rp). */
+/**
+ * True when the request allows this record (an empty allow list allows every credential of the rp).
+ * @param {WebAuthnDetails} details
+ * @param {import("./record.js").PasskeyRecord} record
+ */
 export function allowsRecord(details, record) {
   const allow = details?.allowCredentials || [];
-  return record.rpId === details?.rpId && (!allow.length || allow.some((c) => c.id === record.credentialId));
+  return record.rpId === details?.rpId && (!allow.length || allow.some((/** @type {any} */ c) => c.id === record.credentialId));
 }
 
-/** Sign a get request with a stored record. userVerified sets the UV flag. Returns the response JSON. */
+/**
+ * Sign a get request with a stored record. userVerified sets the UV flag. Returns the response JSON.
+ * @param {WebAuthnDetails} details
+ * @param {import("./record.js").PasskeyRecord} record
+ * @param {{ userVerified?: boolean }} [opts]
+ */
 export async function signAssertion(details, record, { userVerified = false } = {}) {
   const { origin, rpId } = checkGet(details);
   if (!allowsRecord(details, record)) throw requestError("NotAllowedError", "No matching passkey");
   const key = await crypto.subtle.importKey("pkcs8", unb64u(record.key), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
   const ad = await authData(rpId, UP | BE | BS | (userVerified ? UV : 0));
   const cdj = clientData("webauthn.get", details, origin);
-  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, cat(ad, await sha256(cdj))));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, /** @type {BufferSource} */ (cat(ad, await sha256(cdj)))));
   const response = {
     id: record.credentialId,
     rawId: record.credentialId,
