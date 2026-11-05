@@ -33,6 +33,22 @@ function mockPlugin(kind) {
   };
 }
 
+// The e2e builds report this platform instead of the browser's own, so the mac and Windows code paths both run on Linux.
+// Release builds bundle src/session/test-platform.js as is (empty).
+function testPlatformPlugin(platform) {
+  return {
+    name: "passbridge-test-platform",
+    setup(b) {
+      if (!platform) return;
+      b.onResolve({ filter: /(^|[\\/])test-platform\.js$/ }, () => ({ path: "test-platform", namespace: "pb-mock" }));
+      b.onLoad({ filter: /^test-platform$/, namespace: "pb-mock" }, () => ({
+        contents: `export const TEST_PLATFORM = ${JSON.stringify(platform)};\n`,
+        loader: "js",
+      }));
+    },
+  };
+}
+
 // Test builds may also point the update at a local server and a test key; without one the real
 // src/update/source.js (null: GitHub and the pinned key) is bundled.
 function releaseSourcePlugin(source) {
@@ -116,8 +132,9 @@ export function buildStamp(cwd = REPO) {
   }
 }
 
-export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "", stamp = !process.env.PASSBRIDGE_RELEASE } = {}) {
+export async function buildExtension({ out = at("dist"), mockKind = "", preview = false, quiet = false, releaseSource = null, version = "", testPlatform = "", stamp = !process.env.PASSBRIDGE_RELEASE } = {}) {
   if ((releaseSource || version) && !mockKind) throw new Error("releaseSource and version are for test builds (mockKind) only");
+  if (testPlatform && !["mac", "win"].includes(testPlatform)) throw new Error("testPlatform is mac or win");
   await clean(out);
   const dst = (...p) => join(out, ...p);
 
@@ -150,7 +167,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
     entryPoints: [at("src/background.js")],
     format: "esm",
     outfile: dst("src/background.js"),
-    plugins: [mockPlugin(mockKind), releaseSourcePlugin(releaseSource)],
+    plugins: [mockPlugin(mockKind), testPlatformPlugin(testPlatform), releaseSourcePlugin(releaseSource)],
   });
 
   await build({
