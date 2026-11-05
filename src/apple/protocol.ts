@@ -494,7 +494,7 @@ export class ApplePasswords {
   }
 
   // ACT maybeAdd lets the helper decide add-vs-update and drive the native save prompt
-  async saveLogin(tabId: number | undefined, url: string, username: string | null | undefined, password: string) {
+  async saveLogin(tabId: number | undefined, url: string, username: string | null | undefined, password: string, opts: { reportTimeout?: boolean } = {}) {
     if (!this.ready) throw new Error("not unlocked");
     if (!password) throw new Error("no password to save");
     const { hostname } = new URL(url);
@@ -523,7 +523,7 @@ export class ApplePasswords {
       try {
         await this._send(Command.SET_PASSWORD_FOR_LOGIN_NAME_URL, body, 3000);
       } catch (e) {
-        if (!/timeout/i.test(String(e?.message ?? e))) throw e;
+        if (opts.reportTimeout || !/timeout/i.test(String(e?.message ?? e))) throw e;
       }
       return true;
     });

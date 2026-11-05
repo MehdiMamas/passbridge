@@ -25,6 +25,8 @@ export const SETTINGS_DEFAULTS = {
   agentAllowlist: ["github.com", "google.com", "vercel.com", "apple.com"],
   // any https site with a login saved for it, not only the list above
   agentAllowAll: false,
+  // a local program may add a new login for a site it just signed up on; never overwrites or reads one
+  agentSave: false,
   canCheckForUpdates: true,
   // installs a newer signed release on its own when the update helper is there
   autoInstallUpdates: true,

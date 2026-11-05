@@ -533,6 +533,12 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
         state={settings.agentSignIn === true ? state : "locked"}
         {...toggleProps(settings, onChange, "agentAllowAll")}
       />
+      <SwitchRow
+        label={t("agentSave")}
+        help={t("agentSaveHelp")}
+        state={settings.agentSignIn === true ? state : "locked"}
+        {...toggleProps(settings, onChange, "agentSave")}
+      />
       <ListRow
         label={t("allowedSites")}
         help={t("allowedHelp")}

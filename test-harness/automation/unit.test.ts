@@ -11,7 +11,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { createLimiter, handleAgentRequest, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { agentSaveAllowed, createLimiter, handleAgentRequest, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -278,6 +278,43 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   );
   ok("agent: frame choice keeps allowlisted subdomain frames only", fr.length === 1 && fr[0].frameId === 3 && fr[0].host === "idmsa.apple.com");
   ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
+
+  // save: add-only, gated by its own setting
+  let saves: any[] = [];
+  const saveDeps = (over = {}, settings = {}) =>
+    deps({
+      getSettings: async () => ({ agentSignIn: true, agentSave: true, agentAllowlist: [], ...settings }),
+      isLocalDevHost: (h: any) => h === "localhost",
+      siteLogins: async () => [{ username: "a@x.com" }],
+      saveLogin: async (...a: any[]) => { saves.push(a); return true; },
+      notifySaved: () => {},
+      ...over,
+    });
+  const save = (msg = {}, d = saveDeps(), l = createLimiter()) => run({ op: "save", tabId: 1, username: "new@x.com", password: "Sup3r-secret", ...msg }, d, l);
+  ok("agent: agentSaveAllowed returns the setting", agentSaveAllowed({ agentSave: true }) === true && agentSaveAllowed({ agentSave: false }) === false && agentSaveAllowed({}) === false && agentSaveAllowed(null) === false);
+  const off = await save({}, saveDeps({}, { agentSave: false }));
+  ok("agent: save with the setting off is not_allowed and saves nothing", off.reply.error === "not_allowed" && off.reply.reason === "save_off" && saves.length === 0);
+  const none = await save({}, saveDeps({}, { agentSave: undefined }));
+  ok("agent: save with the setting missing is not_allowed", none.reply.error === "not_allowed");
+  const added = await save();
+  ok("agent: save adds a new login on a site not on the allowlist", added.reply.ok && added.reply.username === "new@x.com" && added.reply.domain === "github.com" && saves.length === 1 && saves[0][3] === "Sup3r-secret");
+  ok("agent: the save reply and the log entry hold no password", !JSON.stringify(sanitizeReply({ ...added.reply, id: "1" })).includes("Sup3r-secret") && !JSON.stringify(logEntry({ op: "save", tabId: 1, username: "new@x.com", password: "Sup3r-secret" }, added, sanitizeReply(added.reply))).includes("Sup3r-secret"));
+  const entry = logEntry({ op: "save", tabId: 1, username: "new@x.com", password: "Sup3r-secret" }, added, sanitizeReply(added.reply), 5);
+  ok("agent: the save log entry is op, tabId, site and username", entry.op === "save" && entry.tabId === 1 && entry.host === "github.com" && entry.username === "new@x.com" && !("password" in entry));
+  saves = [];
+  const dup = await save({ username: " A@x.com " });
+  ok("agent: save of an existing username is exists and never calls the save", dup.reply.error === "exists" && saves.length === 0 && !JSON.stringify(dup).includes("Sup3r-secret"));
+  ok("agent: save without a password is bad_request", (await save({ password: "" })).reply.error === "bad_request");
+  ok("agent: save without a username is bad_request", (await save({ username: "" })).reply.error === "bad_request");
+  ok("agent: save on plain http is not_allowed", (await save({}, saveDeps({ getTab: async () => ({ id: 1, url: "http://shop.example.org/" }) }))).reply.error === "not_allowed");
+  ok("agent: save on a dev host is not_allowed", (await save({}, saveDeps({ getTab: async () => ({ id: 1, url: "https://localhost/" }) }))).reply.error === "not_allowed");
+  ok("agent: save with a site that does not match the tab is site_mismatch", (await save({ site: "other.com" })).reply.reason === "site_mismatch");
+  ok("agent: save an unpaired client is needs_user", (await save({}, saveDeps({ client: { ready: false } }))).reply.error === "needs_user");
+  ok("agent: save with an unanswered Apple prompt is needs_user", (await save({}, saveDeps({ saveLogin: async () => { throw new Error("timeout"); } }))).reply.error === "needs_user");
+  const slim = createLimiter(1, 1000);
+  await save({}, saveDeps(), slim);
+  ok("agent: save counts toward the rate limit", (await save({}, saveDeps(), slim)).reply.error === "rate_limited");
+  ok("agent: status shows save", (await run({ op: "status" }, saveDeps())).save === true && (await run({ op: "status" }, saveDeps({}, { agentSave: false }))).save === false);
 
   // every-site: the host is off the list and the setting decides
   const isDev = (h: any) => h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".localhost") || h.endsWith(".test");

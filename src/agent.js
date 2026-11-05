@@ -15,6 +15,8 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(tabId: number, url: string) => Promise<any[]>} siteLogins
  * @property {(logins: any[]) => any[]} uniqueByUsername
  * @property {(tab: any, username: string, opts: Record<string, unknown>) => Promise<any>} fillLoginOnTab
+ * @property {(tabId: number, url: string, username: string, password: string) => Promise<any>} [saveLogin] adds a login, reports an unanswered Apple prompt as an error
+ * @property {(host: string, username: string) => void} [notifySaved]
  */
 
 const HOST = "com.passbridge.agent";
@@ -87,6 +89,28 @@ export function createLimiter(max = RATE_MAX, windowMs = RATE_WINDOW_MS) {
   };
 }
 
+// the one gate for the save op. the approval model is decided separately; a per-save prompt would plug in here
+/**
+ * @param {{ agentSave?: boolean } | null | undefined} settings
+ */
+export function agentSaveAllowed(settings) {
+  return settings?.agentSave === true;
+}
+
+// what the request log keeps of a request: never the password
+/**
+ * @param {any} msg
+ * @param {any} out handleAgentRequest result
+ * @param {any} safe the sanitized reply
+ * @param {number} [now]
+ */
+export function logEntry(msg, out, safe, now = Date.now()) {
+  /** @type {Record<string, unknown>} */
+  const entry = { t: now, op: String(msg?.op || ""), host: out?.host || "", username: out?.username || "", result: safe?.ok ? "ok" : safe?.reason || safe?.error };
+  if (msg?.op === "save") entry.tabId = Number(msg.tabId);
+  return entry;
+}
+
 // every reply goes through here: any key that could carry a secret is dropped at any depth
 const SECRET_KEYS = /^(password|passwd|pass|code|otp|secret|token)$/i;
 /**
@@ -130,7 +154,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   const op = msg?.op;
   const settings = await deps.getSettings();
   if (op === "status") {
-    return { ok: true, paired: !!deps.client.ready, enabled: !!settings.agentSignIn, allowlist: settings.agentAllowlist || [], allowAll: settings.agentAllowAll === true };
+    return { ok: true, paired: !!deps.client.ready, enabled: !!settings.agentSignIn, allowlist: settings.agentAllowlist || [], allowAll: settings.agentAllowAll === true, save: agentSaveAllowed(settings) };
   }
   const base = { host: "", username: "" };
   /**
@@ -139,7 +163,11 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
    */
   const done = (reply, extra) => Object.assign(base, extra, { reply });
   if (!settings.agentSignIn) return done(fail("not_enabled"));
-  if (!["logins", "sign_in"].includes(op)) return done(fail("unknown_op"));
+  if (!["logins", "sign_in", "save"].includes(op)) return done(fail("unknown_op"));
+  if (op === "save" && !agentSaveAllowed(settings)) return done(fail("not_allowed", { reason: "save_off" }));
+  /** @type {string} */
+  const saveName = op === "save" && typeof msg.username === "string" ? msg.username.trim() : "";
+  if (op === "save" && (!saveName || typeof msg.password !== "string" || !msg.password)) return done(fail("bad_request"));
 
   /** @type {{ id?: number, url?: string } | null} */
   let tab = null;
@@ -157,7 +185,10 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   if (!host || hostBlocked(host, settings.blockedDomains)) return done(fail("not_allowed"));
   // every-site: the setting is on, https only, never a dev host. what it fills is limited to logins saved for this host
   let everySite = false;
-  if (hostAllowed(host, settings.agentAllowlist)) {
+  if (op === "save") {
+    // the setting is the gate, so no allowlist. https only, never a dev host
+    if (!/^https:\/\//i.test(tab.url) || deps.isLocalDevHost(host)) return done(fail("not_allowed"));
+  } else if (hostAllowed(host, settings.agentAllowlist)) {
     if (!(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
   } else if (settings.agentAllowAll === true && /^https:\/\//i.test(tab.url) && !deps.isLocalDevHost(host)) {
     everySite = true;
@@ -172,6 +203,15 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
     if (everySite) found = found.filter((l) => loginSavedFor(host, l.saved));
     const logins = deps.uniqueByUsername(found);
     const names = logins.map((l) => l.username);
+    if (op === "save") {
+      base.username = saveName;
+      // add-only: an existing login is never touched
+      if (names.some((n) => same(n, saveName))) return done(fail("exists"));
+      if (!deps.saveLogin) return done(fail("fill_failed"));
+      await deps.saveLogin(tab.id, tab.url, saveName, msg.password);
+      deps.notifySaved?.(host, saveName);
+      return done({ ok: true, domain: host, username: saveName });
+    }
     if (op === "logins") return done({ ok: true, domain: host, usernames: names });
 
     if (op === "sign_in") {
@@ -276,7 +316,7 @@ export function initAgent(deps) {
       p.postMessage(safe);
     } catch {}
     if (msg?.op !== "status") {
-      appendLog({ t: Date.now(), op: String(msg?.op || ""), host: out.host || "", username: out.username || "", result: safe.ok ? "ok" : safe.reason || safe.error });
+      appendLog(logEntry(msg, out, safe));
     }
   }
 
