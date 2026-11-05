@@ -170,7 +170,6 @@
   "passkeysBtn": { "message": "How it works" },
   "passkeyStore": { "message": "使用此電腦上的密碼金鑰" },
   "passkeyStoreHelp": { "message": "讓 PassBridge 使用存放在 iCloud 鑰匙圈中的密碼金鑰登入，僅限已匯入密碼金鑰的網站。需要授予權限，並解鎖 iCloud 密碼庫。" },
-  "passkeyNoPermission": { "message": "未授予權限，密碼金鑰保持關閉。" },
   "passkeysAllSites": { "message": "在所有網站擷取新的密碼金鑰" },
   "passkeysAllSitesHelp": { "message": "開啟後，Chrome 會對所有密碼金鑰使用 PassBridge：此瀏覽器中的安全金鑰、Windows Hello 和手機登入將暫停。" },
   "passkeysStayUnlocked": { "message": "不用觸控 ID 即可登入" },
