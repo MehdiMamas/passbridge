@@ -11,7 +11,7 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(id: number) => Promise<any>} getTab
  * @property {(url: string) => any} hostnameOf the host, or null for an unparsable url
  * @property {(url: string) => Promise<boolean>} isFillUrlAllowed
- * @property {(host: string) => boolean} isLocalDevHost
+ * @property {(host: string) => boolean | undefined} isLocalDevHost
  * @property {(tabId: number, url: string) => Promise<any[]>} siteLogins
  * @property {(logins: any[]) => any[]} uniqueByUsername
  * @property {(tab: any, username: string, opts: Record<string, unknown>) => Promise<any>} fillLoginOnTab
