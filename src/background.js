@@ -1781,13 +1781,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "requestChallenge": {
           // top frame or popup only, so a hostile sub-frame cant spam native prompts
           if (fromContent && sender.frameId !== 0) return sendResponse({ ok: false, error: "forbidden" });
-          await platformReady;
-          await ensureConnected();
-          const issued = await withTimeout(
-            client.requestChallenge({ ifNeeded: !!msg.ifNeeded }),
-            8000,
-            "challenge timed out",
-          );
+          const issued = await startPairing({ ifNeeded: !!msg.ifNeeded });
           // the Windows toast steals focus and closes this popup; reopen it once the code is up
           if (platformOs === "win" && fromUi && issued !== false) {
             setTimeout(() => {
@@ -1802,29 +1796,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "verifyPin": {
           if (fromContent && sender.frameId !== 0) return sendResponse({ ok: false, error: "forbidden" });
-          await platformReady;
-          await ensureConnected();
-          try {
-            await withTimeout(client.verifyPin(msg.pin), 8000, "verification timed out");
-          } catch (e) {
-            // a spent challenge cant be retried, put a fresh code up or the user retypes a dead code forever
-            let newCode = e?.code === "challenge_reissued";
-            if (!newCode && !client.hasChallenge && client.state === State.NeedsPin) {
-              try {
-                await withTimeout(client.requestChallenge(), 8000, "challenge timed out");
-                newCode = true;
-              } catch (_) {}
-            }
-            return sendResponse({
-              ok: false,
-              error: String(e?.message ?? e),
-              newCode,
-              state: client.state,
-            });
-          }
-          sendResponse({ ok: true, state: client.state });
-          if (client.ready) flushPendingSaves();
-          break;
+          return sendResponse(await submitPin(msg.pin));
         }
 
         case "getLogins": {
@@ -1955,8 +1927,47 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
+/**
+ * Ask Apple for a pairing code. Shared by the popup and the agent.
+ * @param {{ ifNeeded?: boolean }} [opts]
+ * @returns {Promise<any>} false when no new code was needed
+ */
+async function startPairing({ ifNeeded = false } = {}) {
+  await platformReady;
+  await ensureConnected();
+  return withTimeout(client.requestChallenge({ ifNeeded }), 8000, "challenge timed out");
+}
+
+/**
+ * Check the pairing code. Shared by the popup and the agent.
+ * @param {string} pin
+ * @returns {Promise<{ ok: boolean, state: any, error?: string, newCode?: boolean }>}
+ */
+async function submitPin(pin) {
+  await platformReady;
+  await ensureConnected();
+  try {
+    await withTimeout(client.verifyPin(pin), 8000, "verification timed out");
+  } catch (e) {
+    // a spent challenge cant be retried, put a fresh code up or the user retypes a dead code forever
+    let newCode = e?.code === "challenge_reissued";
+    if (!newCode && !client.hasChallenge && client.state === State.NeedsPin) {
+      try {
+        await withTimeout(client.requestChallenge(), 8000, "challenge timed out");
+        newCode = true;
+      } catch (_) {}
+    }
+    return { ok: false, error: String(e?.message ?? e), newCode, state: client.state };
+  }
+  const state = client.state;
+  if (client.ready) flushPendingSaves();
+  return { ok: true, state };
+}
+
 initAgent({
   client,
+  pairStart: startPairing,
+  pairPin: submitPin,
   getSettings,
   getTab: (id) => chrome.tabs.get(id),
   hostnameOf,
