@@ -18,6 +18,7 @@ import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, loginSavedFor, pickAllowedFrames } from "./agent.js";
 import { UPDATE_PAGE, availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
+import { reloadIfStale } from "./update/stale.js";
 import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
 import { reinjectContentScripts } from "./reload-recovery.js";
@@ -419,8 +420,15 @@ chrome.alarms.onAlarm.addListener((a) => {
 const UPDATE_ALARM = "update-check";
 chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: 30 });
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === UPDATE_ALARM) (async () => { await checkForUpdate(); await autoInstallUpdate(); })().catch(() => {});
+  if (a.name !== UPDATE_ALARM) return;
+  (async () => {
+    if (await reloadIfStale()) return;
+    await checkForUpdate();
+    await autoInstallUpdate();
+  })().catch(() => {});
 });
+// another profile on the same unpacked folder may have updated it while this one slept
+reloadIfStale().catch(() => {});
 
 async function ensureConnected() {
   if (client.state === State.Disconnected) {
