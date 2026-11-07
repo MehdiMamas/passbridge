@@ -279,6 +279,46 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   ok("agent: frame choice keeps allowlisted subdomain frames only", fr.length === 1 && fr[0].frameId === 3 && fr[0].host === "idmsa.apple.com");
   ok("agent: status reports pairing without a tab", (await run({ op: "status" })).paired === true);
 
+  // pairing: no tab, a pin of exactly 6 digits, 5 wrong in a row lock until pair_start
+  {
+    const store: Record<string, any> = {};
+    (globalThis as any).chrome = { storage: { session: { get: async (k: string) => ({ [k]: store[k] }), set: async (o: any) => Object.assign(store, o) } } };
+    const asked: any[] = [];
+    const tried: string[] = [];
+    let good = "123456";
+    const pd = (over = {}) =>
+      deps({
+        client: { ready: false },
+        pairStart: async (o: any) => { asked.push(o); },
+        pairPin: async (pin: string) => { tried.push(pin); return pin === good ? { ok: true, state: "ready" } : { ok: false, error: "x" }; },
+        getTab: async () => { throw new Error("no tab needed"); },
+        ...over,
+      });
+    ok("agent: pair_start while disabled is not_enabled", (await run({ op: "pair_start" }, deps({ getSettings: async () => ({ agentSignIn: false }) }))).reply.error === "not_enabled");
+    ok("agent: pair_start needs no tab and asks for a code", (await run({ op: "pair_start" }, pd())).reply.state === "needs_pin" && asked[0].ifNeeded === true);
+    const already = await run({ op: "pair_start" }, pd({ client: { ready: true } }));
+    ok("agent: pair_start when already paired says paired and asks for nothing", already.reply.state === "paired" && asked.length === 1);
+    for (const pin of [undefined, 123456, "12345", "1234567", "12ab56", " 12345"]) {
+      ok(`agent: pair_pin ${JSON.stringify(pin)} is bad_pin`, (await run({ op: "pair_pin", pin }, pd())).reply.error === "bad_pin");
+    }
+    ok("agent: a bad_pin never reaches Apple", tried.length === 0);
+    const wrong = await run({ op: "pair_pin", pin: "000000" }, pd());
+    ok("agent: a wrong pin is wrong_pin", wrong.reply.ok === false && wrong.reply.error === "wrong_pin");
+    for (let i = 0; i < 4; i++) await run({ op: "pair_pin", pin: "000000" }, pd());
+    const lockedOut = await run({ op: "pair_pin", pin: good }, pd());
+    ok("agent: after 5 wrong pins even the right one is locked", lockedOut.reply.error === "locked" && !tried.includes(good));
+    await run({ op: "pair_start" }, pd());
+    const okPin = await run({ op: "pair_pin", pin: good }, pd());
+    ok("agent: pair_start unlocks and the right pin pairs", okPin.reply.ok === true && okPin.reply.state === "paired");
+    ok("agent: the pair reply has only ok and state", Object.keys(okPin.reply).sort().join() === "ok,state");
+    const entry = logEntry({ op: "pair_pin", pin: "123456" }, okPin, okPin.reply);
+    ok("agent: the log entry for pair_pin has no pin", !JSON.stringify(entry).includes("123456") && entry.op === "pair_pin");
+    const rl = createLimiter(1, 1000);
+    await run({ op: "pair_pin", pin: "000000" }, pd(), rl);
+    ok("agent: both pair ops count toward the rate limit", (await run({ op: "pair_start" }, pd(), rl)).reply.error === "rate_limited");
+    delete (globalThis as any).chrome;
+  }
+
   // save: add-only, gated by its own setting
   let saves: any[] = [];
   const saveDeps = (over = {}, settings = {}) =>

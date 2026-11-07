@@ -8,6 +8,8 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @typedef {object} AgentDeps
  * @property {() => Promise<any>} getSettings
  * @property {{ ready?: boolean }} client
+ * @property {(opts: { ifNeeded?: boolean }) => Promise<any>} [pairStart] asks Apple for a pairing code
+ * @property {(pin: string) => Promise<{ ok: boolean, state?: any, error?: string }>} [pairPin] checks the code
  * @property {(id: number) => Promise<any>} getTab
  * @property {(url: string) => any} hostnameOf the host, or null for an unparsable url
  * @property {(url: string) => Promise<boolean>} isFillUrlAllowed
@@ -22,6 +24,8 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
 const HOST = "com.passbridge.agent";
 const LOG_KEY = "agentLog";
 const LOG_MAX = 200;
+const PIN_FAILS_KEY = "agentPinFails";
+export const PIN_FAILS_MAX = 5;
 export const RATE_MAX = 10;
 export const RATE_WINDOW_MS = 10 * 60 * 1000;
 
@@ -150,6 +154,53 @@ const same = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").
  */
 const fail = (error, extra) => ({ ok: false, error, ...extra });
 
+// wrong codes in a row, kept in session storage so a worker restart does not reset the lockout
+async function pinFails() {
+  try {
+    const o = await chrome.storage.session.get(PIN_FAILS_KEY);
+    return Number(o[PIN_FAILS_KEY]) || 0;
+  } catch {
+    return 0;
+  }
+}
+/**
+ * @param {number} n
+ */
+async function setPinFails(n) {
+  try {
+    await chrome.storage.session.set({ [PIN_FAILS_KEY]: n });
+  } catch {}
+}
+
+// pairing from another device: no tab, no host. the pin is never logged or echoed
+/**
+ * @param {string} op
+ * @param {any} msg
+ * @param {AgentDeps} deps
+ */
+async function pair(op, msg, deps) {
+  if (!deps.pairStart || !deps.pairPin) return fail("fill_failed");
+  try {
+    if (op === "pair_start") {
+      if (deps.client.ready) return { ok: true, state: "paired" };
+      await setPinFails(0);
+      await deps.pairStart({ ifNeeded: true });
+      return { ok: true, state: "needs_pin" };
+    }
+    if (typeof msg.pin !== "string" || !/^\d{6}$/.test(msg.pin)) return fail("bad_pin");
+    if ((await pinFails()) >= PIN_FAILS_MAX) return fail("locked");
+    const r = await deps.pairPin(msg.pin);
+    if (r?.ok) {
+      await setPinFails(0);
+      return { ok: true, state: "paired" };
+    }
+    await setPinFails((await pinFails()) + 1);
+    return fail("wrong_pin");
+  } catch {
+    return fail("fill_failed");
+  }
+}
+
 // the whole request flow, deps injected so it runs without chrome
 /**
  * @param {any} msg request from the native host, any JSON
@@ -171,6 +222,10 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
    */
   const done = (reply, extra) => Object.assign(base, extra, { reply });
   if (!settings.agentSignIn) return done(fail("not_enabled"));
+  if (op === "pair_start" || op === "pair_pin") {
+    if (!limiter.take(now)) return done(fail("rate_limited"));
+    return done(await pair(op, msg, deps));
+  }
   if (!["logins", "sign_in", "save"].includes(op)) return done(fail("unknown_op"));
   if (op === "save" && !agentSaveAllowed(settings)) return done(fail("not_allowed", { reason: "save_off" }));
   /** @type {string} */

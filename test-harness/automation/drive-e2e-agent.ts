@@ -7,17 +7,20 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { BASE, main, ok } from "./lib.ts";
 import { seedVault } from "../fake-apple-helper/helper.ts";
-import { AGENT_CLI, PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.ts";
+import { AGENT_CLI, PLATFORMS, startE2E } from "./e2e-lib.ts";
 
-const cli = (appDir: string, ...args: string[]) =>
+const cli = (appDir: string, ...args: string[]) => cliIn(appDir, "", ...args);
+// stdin is how pair-pin gets the code (never argv)
+const cliIn = (appDir: string, input: string, ...args: string[]) =>
   new Promise<any>((resolve) => {
-    execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir, PASSBRIDGE_NO_WSL_REEXEC: "1" }, timeout: 110000 }, (err, stdout) => {
+    const child = execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir, PASSBRIDGE_NO_WSL_REEXEC: "1" }, timeout: 110000 }, (err, stdout) => {
       try {
         resolve(JSON.parse(stdout));
       } catch {
         resolve({ ok: false, error: `unreadable: ${stdout} ${err?.message ?? ""}` });
       }
     });
+    child.stdin?.end(input);
   });
 
 // a second login that nothing has read yet, so a denied approval is not answered from the extension's memory
@@ -47,7 +50,26 @@ await main(async () => {
     const locked = await cli(appDir, "sign_in", String(tabId));
     ok(t("sign_in before pairing needs the user"), locked.ok === false && locked.error === "needs_user", JSON.stringify(locked));
 
-    ok(t("paired"), await pairFromMenu(page, helper));
+    // pair through the agent: pair_start shows the code, pair_pin takes it from stdin
+    const started = await cli(appDir, "pair-start");
+    ok(t("pair-start asks for a code"), started.ok === true && started.state === "needs_pin", JSON.stringify(started));
+    await page.waitForTimeout(1500);
+    const badPin = await cliIn(appDir, "12ab\n", "pair-pin");
+    ok(t("a pin that is not 6 digits is bad_pin"), badPin.ok === false && badPin.error === "bad_pin", JSON.stringify(badPin));
+    const wrong = helper.code === "000000" ? "111111" : "000000";
+    const wrongPin = await cliIn(appDir, wrong + "\n", "pair-pin");
+    ok(t("a wrong pin is wrong_pin"), wrongPin.ok === false && wrongPin.error === "wrong_pin", JSON.stringify(wrongPin));
+    const restart = await cli(appDir, "pair-start");
+    ok(t("a spent code is replaced by pair-start"), restart.ok === true && restart.state === "needs_pin", JSON.stringify(restart));
+    await page.waitForTimeout(1500);
+    const paired = await cliIn(appDir, helper.code + "\n", "pair-pin");
+    ok(t("the right pin pairs"), paired.ok === true && paired.state === "paired" && helper.paired, JSON.stringify(paired));
+    const again = await cli(appDir, "pair-start");
+    ok(t("pair-start when paired says paired"), again.ok === true && again.state === "paired", JSON.stringify(again));
+    const log = (await sw.evaluate(async () => (await chrome.storage.local.get("agentLog")).agentLog ?? [])) as any[];
+    ok(t("the request log has the pair ops"), log.filter((e: any) => e.op === "pair_pin").length === 3, JSON.stringify(log));
+    // the timestamp is 13 digits by design, so look at every other field
+    ok(t("the request log holds no run of 6 digits"), !/\d{6}/.test(JSON.stringify(log.map((e: any) => ({ ...e, t: 0 })))), JSON.stringify(log));
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForTimeout(500);
     const status = await cli(appDir, "status");

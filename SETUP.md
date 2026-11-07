@@ -59,13 +59,15 @@ A local program can ask PassBridge to fill a saved login into a tab on sites you
 ```bash
 P="$HOME/Library/Application Support/PassBridge"
 "$P/passbridge-agent-cli.py" status
+"$P/passbridge-agent-cli.py" pair-start
+"$P/passbridge-agent-cli.py" pair-pin   # reads the 6-digit code shown on the Mac from stdin
 "$P/passbridge-agent-cli.py" logins <tabId>
 "$P/passbridge-agent-cli.py" sign_in <tabId> [username]
 ```
 
 Apple's Passwords asks for Touch ID every time a password is read (except within 15 s of the last read), so each agent sign-in needs one Touch ID approval; when no saved login exists the agent gets `no_login` and the person signs in themselves.
 
-Errors you may see: `not_enabled`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
+Errors you may see: `not_enabled`, `bad_pin`, `wrong_pin`, `locked`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
 
 ### Agent sign-in (Windows)
 
@@ -77,6 +79,8 @@ The same feature on Windows. It needs Python, like the other helpers.
 
 ```bat
 py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" status
+py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" pair-start
+py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" pair-pin
 py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" logins <tabId>
 py "%LOCALAPPDATA%\PassBridge\passbridge-agent-cli.py" sign_in <tabId> [username]
 ```

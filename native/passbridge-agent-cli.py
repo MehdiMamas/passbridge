@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# usage: passbridge-agent-cli.py status | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | save --url <https-url> <username>  (save reads the password from stdin)
+# usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | save --url <https-url> <username>  (save reads the password from stdin)
 import getpass
 import json
 import os
@@ -75,16 +75,19 @@ def ask_socket(req):
 
 
 def main(argv):
-    if not argv or argv[0] not in ("status", "logins", "sign_in", "save"):
+    if not argv or argv[0] not in ("status", "pair-start", "pair-pin", "logins", "sign_in", "save"):
         print(__doc__.strip().splitlines()[0], file=sys.stderr)
         return 2
     if under_wsl():
         code = wsl_reexec(argv)
         if code is not None:
             return code
-    req = {"id": uuid.uuid4().hex, "op": argv[0]}
+    req = {"id": uuid.uuid4().hex, "op": argv[0].replace("-", "_")}
+    pairing = argv[0] in ("pair-start", "pair-pin")
+    if argv[0] == "pair-pin":
+        req["pin"] = sys.stdin.readline().strip()
     by_url = argv[0] == "save" and len(argv) > 1 and argv[1] == "--url"
-    if argv[0] != "status" and not by_url:
+    if argv[0] != "status" and not pairing and not by_url:
         if len(argv) < 2 or not argv[1].isdigit():
             print("tabId must be a number", file=sys.stderr)
             return 2

@@ -43,14 +43,14 @@ The macOS socket uses newline-delimited JSON; the Windows pipe uses one message 
 
 ## Pairing
 
-There is no per-client pairing. On macOS any process of the same user that can open the socket may send requests; on Windows any process of the same user that can read `agent.key`. What protects you:
+There is no per-client pairing of the socket. On macOS any process of the same user that can open the socket may send requests; on Windows any process of the same user that can read `agent.key`. What protects you:
 - the setting is off by default;
 - only allowlisted sites can be filled, unless the user also turns on Allow every site (*) (see below);
-- `sign_in` is rate limited;
+- `sign_in`, `save`, `pair_start` and `pair_pin` are rate limited;
 - each password read still needs your approval in Apple's Passwords (Touch ID);
-- every request except `status` is logged in the extension.
+- every request except `status` is logged in the extension; `pair_pin` is logged without the digits.
 
-"Paired" means the extension itself is paired with Apple's Passwords. That is the 6-digit code shown on the Mac, entered in the PassBridge popup. If it isn't paired, `status` shows `"paired": false` and the other requests fail with `needs_user`. After the extension reloads, it reports `paired: false` until you open the popup once.
+"Paired" means the extension itself is paired with Apple's Passwords. That is the 6-digit code shown on the Mac, entered in the PassBridge popup, or sent through the agent with `pair_start` and `pair_pin` (below). If it isn't paired, `status` shows `"paired": false` and the other requests fail with `needs_user`. After the extension reloads, it reports `paired: false` until you open the popup once.
 
 ## Requests
 
@@ -61,7 +61,11 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 | `status` | none | reports the state, touches no tab |
 | `logins` | `tabId` (number), `site` (optional string) | lists the saved usernames for that tab's site |
 | `sign_in` | `tabId` (number), `username` (optional string), `site` (optional string) | fills that login into the tab's sign-in form |
+| `pair_start` | none | asks Apple's Passwords to show a pairing code. Replies `{"ok":true,"state":"paired"}` when already paired, else `{"ok":true,"state":"needs_pin"}` (a new code, or the one already on screen) |
+| `pair_pin` | `pin` (string, exactly 6 digits) | checks the code shown on the Mac. Replies `{"ok":true,"state":"paired"}`, or `wrong_pin` |
 | `save` | `tabId` (number) or `url` (string, `https://`), not both; `username` (string), `password` (string), `site` (optional string) | adds a new login for the tab's site, or for the site of `url` when no tab is named. Add-only: if that username already has a login for the site, the reply is `exists` and nothing changes |
+
+`pair_start` and `pair_pin` need Allow agent sign-in but no tab and no allowlist, and both count toward the rate limit. After 5 wrong codes in a row, `pair_pin` answers `locked` until a `pair_start` issues a fresh code. The pin is never in a reply or the Activity list.
 
 `save` needs Let agents save new logins, not the allowlist. The tab, or the `url`, must be `https:` and not a local host. Send exactly one of `tabId` and `url`; both or neither is `bad_request`, and so is a `url` that does not parse; a `url` that is not `https:` is `not_allowed`. Only `save` takes `url`: `logins` and `sign_in` with a `url` are `bad_request`. The Activity list keeps the origin of a `url`, never its path or query. The password is sent in the request, is never in a reply, and is never written to the Activity list (it keeps the op, tab, site and username). Apple's Passwords may show its own prompt for the new login; if nobody answers it in time, the reply is `needs_user`. The extension shows a notification for each saved login. `save` counts toward the `sign_in` rate limit.
 
@@ -99,8 +103,11 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | error | meaning |
 |---|---|
 | `not_enabled` | agent sign-in is off in Settings |
-| `unknown_op` | the op isn't `status`, `logins`, `sign_in` or `save` |
+| `unknown_op` | the op isn't `status`, `pair_start`, `pair_pin`, `logins`, `sign_in` or `save` |
 | `bad_request` | the line isn't a JSON object, or `id` or `op` is missing, or `save` has no `username` or `password`, or `save` names both or neither of `tabId` and `url`, or `url` does not parse, or `logins` or `sign_in` has a `url` |
+| `bad_pin` | `pair_pin`: `pin` is not exactly 6 digits |
+| `wrong_pin` | `pair_pin`: Apple rejected the code |
+| `locked` | `pair_pin`: 5 wrong codes in a row; send `pair_start` for a fresh code |
 | `exists` | `save`: a login with that username already exists for the site |
 | `no_tab` | no tab with that id, or it has no URL |
 | `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Let agents save new logins is off (`reason: "save_off"`) |
@@ -112,7 +119,8 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `timeout` | the extension didn't answer within 90 s (sent by the host) |
 | `extension_gone` | the browser or extension went away mid-request (sent by the host) |
 
-The reference CLI: `status`, `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>` or `save --url <https-url> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`, or `... save --url https://github.com/login octocat`.
+The reference CLI: `status`, `pair-start`, `pair-pin` (reads the 6 digits as one line from stdin, never from the command line, for example `printf '%s
+' 123456 | python3 passbridge-agent-cli.py pair-pin`), `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>` or `save --url <https-url> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`, or `... save --url https://github.com/login octocat`.
 
 The reference CLI adds two codes of its own, without an `id`: `no_host`, when it can't connect, and `no_reply`, when the connection closed with no answer. Wait at least 90 s for a reply, because a Touch ID prompt can take that long. The CLI waits 100 s.
 
