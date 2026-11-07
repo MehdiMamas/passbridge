@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-# usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | save --url <https-url> <username>  (save reads the password from stdin)
 import getpass
 import json
 import os
@@ -8,6 +7,8 @@ import socket
 import subprocess
 import sys
 import uuid
+
+USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | save --url <https-url> <username>  (save reads the password from stdin)"
 
 WINDOWS = os.name == "nt"
 if WINDOWS:
@@ -75,8 +76,11 @@ def ask_socket(req):
 
 
 def main(argv):
+    if argv and argv[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
     if not argv or argv[0] not in ("status", "pair-start", "pair-pin", "logins", "sign_in", "save"):
-        print(__doc__.strip().splitlines()[0], file=sys.stderr)
+        print(USAGE, file=sys.stderr)
         return 2
     if under_wsl():
         code = wsl_reexec(argv)
