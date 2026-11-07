@@ -1,6 +1,6 @@
 # Releasing
 
-1. Bump the version in manifest.json, package.json and the lock file, merge, then push the tag `vX.Y.Z`.
+1. Bump the version in manifest.json and package.json, merge, then push the tag `vX.Y.Z`.
 2. The Release workflow builds `passbridge.zip`, `passbridge-macos-helper.zip` and `passbridge-windows-helper.zip` and attaches them. Each helper zip holds a `VERSION` file with the release version.
 3. Sign all three zips on the maintainer's Mac (the key is in the Keychain), and upload the three `.sig` files to the release:
 
