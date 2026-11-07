@@ -52,10 +52,10 @@ function OptionsApp() {
       setIsLoaded(true);
       setLists(Object.fromEntries(LIST_KEYS.map((k) => [k, (next[k] || []).join("\n")])));
     });
-    chrome.storage.local.get({ agentLog: [] }, (o) => setAgentLog(Array.isArray(o.agentLog) ? o.agentLog : []));
+    chrome.storage.session.get({ agentLog: [] }, (o) => setAgentLog(Array.isArray(o.agentLog) ? o.agentLog : []));
     /** @param {Record<string, { newValue?: any }>} changes @param {string} area */
     const onLog = (changes, area) => {
-      if (area === "local" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
+      if (area === "session" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
     // the save bar can add a site while this page is open; take it in so a later save never writes the old list back

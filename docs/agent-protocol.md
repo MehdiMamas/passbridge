@@ -48,7 +48,7 @@ There is no per-client pairing of the socket. On macOS any process of the same u
 - only allowlisted sites can be filled, unless the user also turns on Allow every site (*) (see below);
 - `sign_in`, `save`, `pair_start` and `pair_pin` are rate limited;
 - each password read still needs your approval in Apple's Passwords (Touch ID);
-- every request except `status` is logged in the extension; `pair_pin` is logged without the digits.
+- every request except `status` is logged in the extension; `pair_pin` is logged without the digits. The log (Agents > Activity) is kept in session storage only, so it clears when the browser closes.
 
 "Paired" means the extension itself is paired with Apple's Passwords. That is the 6-digit code shown on the Mac, entered in the PassBridge popup, or sent through the agent with `pair_start` and `pair_pin` (below). If it isn't paired, `status` shows `"paired": false` and the other requests fail with `needs_user`. After the extension reloads, it reports `paired: false` until you open the popup once.
 

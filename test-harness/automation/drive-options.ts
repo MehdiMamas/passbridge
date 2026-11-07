@@ -145,7 +145,7 @@ await main(async () => {
     const users = ["ada@example.com", "grace.hopper.with.a.long.address@example-enterprise.com", ""];
     const results = ["ok", "not_allowed", "rate_limited", "choose_login"];
     const agentLog = Array.from({ length: 60 }, (_, i) => ({ t: Date.UTC(2026, 9, 28, 9, i), op: i % 3 ? "sign_in" : "logins", host: i % 2 ? host : "github.com", username: users[i % 3], result: results[i % 4] }));
-    return chrome.storage.local.set({ agentLog });
+    return chrome.storage.session.set({ agentLog });
   }, longHost);
   await page.locator('[data-row="Activity"] table').waitFor();
   const activity = await row("Activity").evaluate((el, host) => {
@@ -172,7 +172,7 @@ await main(async () => {
   ok("options: every activity row stays on one line", activity.tallestRow <= 34, `tallest=${activity.tallestRow}`);
   ok("options: activity times are short", !activity.firstTime.includes("2026") && activity.firstTime.length <= 18, activity.firstTime);
   ok("options: a cut-off site shows in full on hover", activity.hasHostTitle);
-  await sw.evaluate(() => chrome.storage.local.remove("agentLog"));
+  await sw.evaluate(() => chrome.storage.session.remove("agentLog"));
 
   await page.goto(`${optionsUrl}#updates`);
   await note.waitFor();
