@@ -66,7 +66,7 @@ await main(async () => {
     ok(t("the right pin pairs"), paired.ok === true && paired.state === "paired" && helper.paired, JSON.stringify(paired));
     const again = await cli(appDir, "pair-start");
     ok(t("pair-start when paired says paired"), again.ok === true && again.state === "paired", JSON.stringify(again));
-    const log = (await sw.evaluate(async () => (await chrome.storage.local.get("agentLog")).agentLog ?? [])) as any[];
+    const log = (await sw.evaluate(async () => (await chrome.storage.session.get("agentLog")).agentLog ?? [])) as any[];
     ok(t("the request log has the pair ops"), log.filter((e: any) => e.op === "pair_pin").length === 3, JSON.stringify(log));
     // the timestamp is 13 digits by design, so look at every other field
     ok(t("the request log holds no run of 6 digits"), !/\d{6}/.test(JSON.stringify(log.map((e: any) => ({ ...e, t: 0 })))), JSON.stringify(log));

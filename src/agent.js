@@ -320,10 +320,10 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
  */
 async function appendLog(entry) {
   try {
-    const o = await chrome.storage.local.get(LOG_KEY);
+    const o = await chrome.storage.session.get(LOG_KEY);
     const list = Array.isArray(o[LOG_KEY]) ? o[LOG_KEY] : [];
     list.push(entry);
-    await chrome.storage.local.set({ [LOG_KEY]: list.slice(-LOG_MAX) });
+    await chrome.storage.session.set({ [LOG_KEY]: list.slice(-LOG_MAX) });
   } catch {}
 }
 
@@ -351,6 +351,10 @@ const setRelay = (state) => {
  * @param {AgentDeps} deps
  */
 export function initAgent(deps) {
+  // the log used to live in local storage; it is session-only now, so drop any old copy
+  try {
+    chrome.storage.local.remove(LOG_KEY).catch(() => {});
+  } catch {}
   const limiter = createLimiter();
   /** @type {chrome.runtime.Port | null} */
   let port = null;
