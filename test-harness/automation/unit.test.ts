@@ -18,6 +18,7 @@ import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts 
 import { digestHex, verifyRelease } from "../../src/update/verify.js";
 import { downloadRelease, latestRelease } from "../../src/update/release.js";
 import { autoInstallUpdate, installUpdate, updateHelper } from "../../src/update/install.js";
+import { reloadIfStale } from "../../src/update/stale.js";
 import { isWindows, updateRoute } from "../../src/update/platform.js";
 import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
@@ -425,6 +426,16 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
 ok("update: a higher release tag is newer", isNewerVersion("v1.4.0", "1.3.1") && isNewerVersion("1.3.10", "1.3.9"));
 ok("update: the same or an older release is not newer", !isNewerVersion("v1.3.1", "1.3.1") && !isNewerVersion("1.3", "1.3.0") && !isNewerVersion("v1.2.9", "1.3.0"));
 ok("update: a tag that is no version is never newer", !isNewerVersion("desktop-preview", "1.3.1") && !isNewerVersion(undefined, "1.3.1"));
+{
+  const run = async (fetchManifest: () => Promise<unknown>, running = "1.4.26") => {
+    let reloads = 0;
+    const did = await reloadIfStale({ fetchManifest, running, reload: () => void reloads++ });
+    return did && reloads === 1 ? "reloaded" : !did && reloads === 0 ? "kept" : "mismatch";
+  };
+  ok("stale: newer files on disk reload this profile", (await run(async () => ({ version: "1.4.27" }))) === "reloaded");
+  ok("stale: the same or an older version on disk keeps running", (await run(async () => ({ version: "1.4.26" }))) === "kept" && (await run(async () => ({ version: "1.4.25" }))) === "kept");
+  ok("stale: a failed read or a manifest with no version keeps running", (await run(async () => { throw new Error("gone"); })) === "kept" && (await run(async () => null)) === "kept" && (await run(async () => ({ version: "garbage" }))) === "kept");
+}
 
 // chrome.storage.local in memory, callback and promise forms, plus a fetch that counts its calls
 const realFetch = globalThis.fetch;
