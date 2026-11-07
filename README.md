@@ -9,6 +9,8 @@
   macOS and Windows. Not affiliated with Apple or Bitwarden.
 </p>
 
+<p align="center">🇨🇳 <a href="README.zh-CN.md">简体中文</a></p>
+
 PassBridge started as a fork of [Open Passwords](https://github.com/ManiForoughi2/open-passwords). It speaks Apple's native-messaging protocol (`com.apple.passwordmanager`) so the live vault stays in iCloud, and it takes field detection lists from [Bitwarden's browser extension](https://github.com/bitwarden/clients). How to pull a newer Bitwarden, au2001, or open-passwords commit is in [UPSTREAMS.md](UPSTREAMS.md).
 
 Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension is attached to each [release](https://github.com/MehdiMamas/passbridge/releases). Unzip it and load that folder unpacked.
