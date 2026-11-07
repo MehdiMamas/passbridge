@@ -2117,7 +2117,6 @@ async function maybeOfferSave(/** @type {Scope | HTMLFormElement | Document} */ 
   // fire and forget, awaiting would let a navigating submit kill us
   console.debug("[PassBridge] handing save to background", {
     host: location.hostname,
-    user: cred.username || "(none)",
     generated,
     newPwCtx,
   });

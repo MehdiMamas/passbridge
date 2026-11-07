@@ -17,11 +17,19 @@ await main(async () => {
     await page.waitForTimeout(400);
     await page.fill("input[name=username]", user);
     await page.fill("input[name=password]", pass);
-    await page.click("button[type=submit]");
+    await page.locator("button[type=submit]").press("Enter");
   };
 
   const page = await ctx.newPage();
-  await submit(page, "alice@example.org", "hunter2-pw");
+  const username = "alice@example.org";
+  const [saveLog] = await Promise.all([
+    page.waitForEvent("console", {
+      predicate: (message) => message.text().startsWith("[PassBridge] handing save to background"),
+    }),
+    submit(page, username, "hunter2-pw"),
+  ]);
+  const diagnostics = await saveLog.args()[1].jsonValue();
+  ok("save diagnostics omit the username", !JSON.stringify(diagnostics).includes(username));
   const bar = (await barOf(page) as import("playwright-core").Frame);
   ok("save prompt appears", !!bar, "no save-bar frame");
   const u = bar.locator("[data-field=username]");
