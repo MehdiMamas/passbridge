@@ -41,7 +41,3 @@ Read the printed diff, rebuild, run the tests, and only then add `--accept`. Det
 - Site-specific autofill fixes go in `patches/site-fixes.md` with the page they cover.
 - Update `README.md`, `SETUP.md` or `AGENTS.md` when you change how something works.
 - By contributing you agree your work is released under the project's [GPL-3.0 license](LICENSE).
-
-## Reporting security problems
-
-Do not post vulnerabilities in a public issue. Use the repository's "Report a vulnerability" button under the Security tab.
