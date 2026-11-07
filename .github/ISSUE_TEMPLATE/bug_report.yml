@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not fill, save or install the way it should
+labels: [bug]
+body:
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.1, Windows 11 24H2
+    validations:
+      required: true
+  - type: input
+    id: chrome
+    attributes:
+      label: Chrome version
+      description: Open chrome://version
+      placeholder: "130.0.6723.92"
+    validations:
+      required: true
+  - type: input
+    id: extension
+    attributes:
+      label: PassBridge version
+      description: Shown in chrome://extensions and in the Options sidebar.
+    validations:
+      required: true
+  - type: input
+    id: helper
+    attributes:
+      label: Helper version
+      description: Read the `VERSION` file in the helper zip you installed, or the helper-version line in Options. Write "none" if you did not install the helper.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The site or a test page, and what you clicked. Do not include real passwords or usernames.
+    validations:
+      required: true

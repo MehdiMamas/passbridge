@@ -9,11 +9,29 @@
   macOS and Windows. Not affiliated with Apple or Bitwarden.
 </p>
 
+<p align="center">
+  <a href="https://github.com/MehdiMamas/passbridge/actions/workflows/ci.yml"><img src="https://github.com/MehdiMamas/passbridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/MehdiMamas/passbridge/releases/latest"><img src="https://img.shields.io/github/v/release/MehdiMamas/passbridge" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/MehdiMamas/passbridge" alt="License: GPL-3.0"></a>
+</p>
+
 <p align="center">🇨🇳 <a href="README.zh-CN.md">简体中文</a></p>
+
+<p align="center">
+  <img src="docs/demo.gif" width="620" alt="Clicking a username field on a sign-in page and picking a saved login fills both fields">
+</p>
 
 PassBridge started as a fork of [Open Passwords](https://github.com/ManiForoughi2/open-passwords). It speaks Apple's native-messaging protocol (`com.apple.passwordmanager`) so the live vault stays in iCloud, and it takes field detection lists from [Bitwarden's browser extension](https://github.com/bitwarden/clients). How to pull a newer Bitwarden, au2001, or open-passwords commit is in [UPSTREAMS.md](UPSTREAMS.md).
 
 Start here: **[SETUP.md](SETUP.md)** for macOS and Windows. The built extension is attached to each [release](https://github.com/MehdiMamas/passbridge/releases). Unzip it and load that folder unpacked.
+
+Quick install (details and checks in [SETUP.md](SETUP.md)):
+
+1. Turn off Apple's own iCloud Passwords extension in Chrome. Both use the same extension id.
+2. Download `passbridge.zip` from the [latest release](https://github.com/MehdiMamas/passbridge/releases/latest) and unzip it.
+3. Open `chrome://extensions`, turn on Developer mode, click Load unpacked and choose the unzipped folder.
+4. Click the toolbar icon and type the 6-digit code that macOS or iCloud for Windows shows.
+5. Optional helper: on macOS run `sh native/install.sh` from `passbridge-macos-helper.zip`; on Windows unzip `passbridge-windows-helper.zip` and double-click `install.cmd`.
 
 <p align="center">
   <img src="docs/images/popup-light.png" width="300" alt="PassBridge popup with saved logins for the current site">
