@@ -35,6 +35,10 @@ await main(async () => {
       ok("icons: every popup and update page icon comes from Lucide", handDrawn === 0 && (await page.locator("[data-screen] svg.lucide").count()) > 0, `hand-drawn=${handDrawn}`);
       const header = page.locator('[data-screen="unlocked"][data-scheme="light"] header');
       ok("icons: refresh is an icon, not a text glyph", (await header.locator('button[aria-label="Refresh passwords"] svg.lucide-refresh-cw').count()) === 1 && !(await header.innerText()).includes("↻"));
+      const headerButtons = await header.locator("button").evaluateAll((els: HTMLElement[]) => els.map((e) => e.getAttribute("aria-label")).join());
+      ok("header: lock sits after refresh while unlocked", headerButtons === "Refresh passwords,Lock" && (await header.locator('button[aria-label="Lock"] svg.lucide-lock').count()) === 1, headerButtons);
+      ok("header: no lock before unlock", (await page.locator('[data-screen="needs_pin"][data-scheme="light"] header button[aria-label="Lock"]').count()) === 0);
+      ok("footer: lock left the footer", (await page.locator('[data-screen="unlocked"][data-scheme="light"] footer').getByRole("button", { name: "Lock", exact: true }).count()) === 0);
       const updatePage = (title: string) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
       const first = (await updatePage("ready_first").innerText()).replace(/\s+/g, " ");
       ok("update page: shows the installed and the new version with the release link", first.includes("1.4.1") && first.includes("1.4.2") && (await updatePage("ready_first").locator('a[href$="/releases/tag/v1.4.2"]').count()) === 1, first);
@@ -72,7 +76,7 @@ await main(async () => {
       const copyCount = await frame.locator('button[aria-label="Copy verification code"]').count();
       ok("grouped: every code row keeps its copy button", copyCount === 6, `copy buttons=${copyCount}`);
       const codeIcons = frame.locator('button[aria-label="Copy verification code"] svg');
-      ok("grouped: code copy icon is the clock the page menu shows, not a lock", (await codeIcons.count()) === (await frame.locator("button[aria-label=\"Copy verification code\"] svg.lucide-clock").count()) && (await frame.locator("svg.lucide-lock").count()) === 0, "wrong icon on the code rows");
+      ok("grouped: code copy icon is the clock the page menu shows, not a lock", (await codeIcons.count()) === (await frame.locator("button[aria-label=\"Copy verification code\"] svg.lucide-clock").count()) && (await frame.locator("li svg.lucide-lock").count()) === 0, "wrong icon on the code rows");
     } finally {
       await browser.close();
     }

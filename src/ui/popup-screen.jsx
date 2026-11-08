@@ -1,4 +1,4 @@
-import { Clock, KeyRound, RefreshCw, User, X } from "lucide-react";
+import { Clock, KeyRound, Lock, RefreshCw, User, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
@@ -200,6 +200,7 @@ export function PopupScreen({
   const [loginBusy, setLoginBusy] = useState(false);
   const win = os === "win";
   const unlocked = state === "unlocked";
+  const headerButton = "grid h-7 w-7 place-items-center rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
 
   useEffect(() => {
     try {
@@ -243,7 +244,7 @@ export function PopupScreen({
         {(unlocked || state === "needs_pin") && (
           <button
             type="button"
-            className="grid h-7 w-7 place-items-center rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)]"
+            className={headerButton}
             aria-label={t("refreshPasswords")}
             title={t("refreshPasswords")}
             onClick={() => {
@@ -252,6 +253,11 @@ export function PopupScreen({
             }}
           >
             <RefreshCw size={14} />
+          </button>
+        )}
+        {unlocked && (
+          <button type="button" className={`${headerButton} ml-1.5`} aria-label={t("lock")} title={t("lock")} onClick={onLock}>
+            <Lock size={14} />
           </button>
         )}
         <StatusDot state={state} />
@@ -564,14 +570,7 @@ export function PopupScreen({
             )}
           </div>
         )}
-        <div className="flex items-center justify-between">
-          {unlocked ? (
-            <button type="button" className="text-xs text-accent" onClick={onLock}>
-              {t("lock")}
-            </button>
-          ) : (
-            <span />
-          )}
+        <div className="flex items-center justify-end">
           <span className="flex items-center gap-3">
             <button type="button" className="text-xs text-accent" onClick={onReport}>
               {t("reportThisPage")}
