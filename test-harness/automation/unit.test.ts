@@ -104,11 +104,14 @@ ok(
     childSteps.some((s) => s.envelope === "augustana.edu" && s.search === "login.augustana.edu"),
 );
 
-ok("a subdomain also looks up its site", siteLookupHosts("account.apple.com").join(",") === "account.apple.com,apple.com");
-ok("deep subdomains walk up to the site and stop", siteLookupHosts("a.b.example.com").join(",") === "a.b.example.com,b.example.com,example.com");
-ok("a site host looks up only itself", siteLookupHosts("apple.com").join(",") === "apple.com");
+ok("a subdomain also looks up its site", siteLookupHosts("account.apple.com").join(",") === "account.apple.com,apple.com,www.apple.com");
+ok("deep subdomains walk up to the site and stop", siteLookupHosts("a.b.example.com").join(",") === "a.b.example.com,b.example.com,example.com,www.example.com");
+ok("a site host also looks up its www form", siteLookupHosts("apple.com").join(",") === "apple.com,www.apple.com");
+ok("a www host is not asked twice", siteLookupHosts("www.apple.com").join(",") === "www.apple.com,apple.com");
+ok("a login subdomain also asks the www sibling", siteLookupHosts("login.example.com").join(",") === "login.example.com,example.com,www.example.com");
+ok("a single-label host looks up only itself", siteLookupHosts("localhost").join(",") === "localhost");
 ok("never save on a subdomain covers the whole site", registrableDomain("login.example.com") === "example.com" && registrableDomain("www.example.com") === "example.com");
-ok("a two-label public suffix is never queried", siteLookupHosts("account.bbc.co.uk").join(",") === "account.bbc.co.uk,bbc.co.uk" && registrableDomain("bbc.co.uk") === "bbc.co.uk");
+ok("a two-label public suffix is never queried", siteLookupHosts("account.bbc.co.uk").join(",") === "account.bbc.co.uk,bbc.co.uk,www.bbc.co.uk" && registrableDomain("bbc.co.uk") === "bbc.co.uk");
 ok("an IP address is not split", siteLookupHosts("192.168.1.10").join(",") === "192.168.1.10");
 const viaSteps = passwordSearchSteps("account.apple.com", ["apple.com"], undefined, "apple.com");
 ok(
