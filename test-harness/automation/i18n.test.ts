@@ -25,6 +25,16 @@ for (const locale of SUPPORTED_LOCALES) {
   ok(`catalog ${locale}: placeholders match en`, phMismatch.length === 0, phMismatch.join(", ") || undefined);
 }
 
+// ellipsis: only on a label that asks for more input before it finishes, and always the single character
+const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
+const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
+const missingDots = ASKS_FOR_INPUT.filter((k) => !en[k].message.endsWith("…"));
+ok("copy en: a label that asks for more input ends with …", missingDots.length === 0, missingDots.join(", ") || undefined);
+const extraDots = OPENS_ONLY.filter((k) => en[k].message.endsWith("…"));
+ok("copy en: a label that only opens a page has no …", extraDots.length === 0, extraDots.join(", ") || undefined);
+const threeDots = Object.keys(en).filter((k) => en[k].message.includes("..."));
+ok("copy en: ellipsis is one character, not three dots", threeDots.length === 0, threeDots.join(", ") || undefined);
+
 // locale resolution
 ok("normalize: zh-CN and zh map to zh_CN", normalizeLocale("zh-CN") === "zh_CN" && normalizeLocale("zh") === "zh_CN");
 ok("normalize: en-US and en map to en", normalizeLocale("en-US") === "en" && normalizeLocale("en") === "en");
