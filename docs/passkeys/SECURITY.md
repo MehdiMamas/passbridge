@@ -4,12 +4,12 @@ Sources are in [RESEARCH.md](RESEARCH.md).
 
 ## Passkey store on Windows (opt-in)
 
-- **Keys sit in the user's iCloud Passwords vault**, in the same place as passwords, reached through Apple's helper. PassBridge adds no server, no sync and no file. A key is read only for the request being answered, and not kept after, unless "Sign in without Touch ID" is on (below).
+- **Keys sit in the user's iCloud Passwords vault**, in the same place as passwords, reached through Apple's helper. PassBridge adds no server, no sync and no file. A key is read only for the request being answered, and not kept after, unless "Sign in without Windows Hello" is on (below).
 - **The import file is unprotected.** A Credential Exchange export holds the private keys in clear text. The options page tells the user to delete it right after import.
 - **ES256 only.** Other key types are skipped with a reason.
 - **Origin and site id** come from the browser's own request details, and the extension refuses a relying-party id that is not the page's site.
 - **Attach rule.** Attaching suspends native WebAuthn (below). With "Catch new passkeys on every site" on (the default once the store is on, kept on this machine only) the proxy is attached on every web page, so a registration on any site is caught and security keys, Windows Hello and phone sign-in are paused in this browser. With it off, the proxy is attached only on sites with a stored passkey. The permission is optional and removed when the switch is turned off.
-- **Sign in without Touch ID (opt-in, off by default).** When on, a passkey read for a sign-in is kept in `chrome.storage.session` (memory only, keyed by site and credential id) until Chrome quits, so later sign-ins skip the helper, even while it is locked. Anyone using this Chrome profile can sign in with those passkeys. Turning the setting or the passkey store off clears the cache at once. The setting is not synced.
+- **Sign in without Windows Hello (opt-in, off by default).** When on, a passkey read for a sign-in is kept in `chrome.storage.session` (memory only, keyed by site and credential id) until Chrome quits, so later sign-ins skip the helper, even while it is locked. Anyone using this Chrome profile can sign in with those passkeys. Turning the setting or the passkey store off clears the cache at once. The setting is not synced.
 - **Nudge.** When a site asks for a passkey the vault does not hold, only its site id and a time are saved in `chrome.storage.session` so the popup can offer Sync all.
 - **Per-login user verification.** The UV flag is set only when the vault read itself asked for verification (Windows Hello); otherwise it is off.
 - **No counter.** Signature counters are 0, which sites accept for synced passkeys.
