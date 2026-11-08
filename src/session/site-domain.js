@@ -53,7 +53,8 @@ export function registrableDomain(host) {
   return lastTwo;
 }
 
-// account.apple.com -> account.apple.com, apple.com. the page host always comes first
+// account.apple.com -> account.apple.com, apple.com, www.apple.com. the page host always comes first.
+// www.<site> is asked last: a sign-in page on login.<site> often has its login saved from www.<site>
 /**
  * @param {unknown} host
  * @returns {string[]}
@@ -62,13 +63,16 @@ export function siteLookupHosts(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
   if (!h) return [];
   const site = registrableDomain(h);
-  if (!site || site === h || !h.endsWith("." + site)) return [h];
+  if (!site || isIpLiteral(site) || !site.includes(".")) return [h];
+  if (site !== h && !h.endsWith("." + site)) return [h];
   const out = [h];
   const labels = h.split(".");
-  for (let i = 1; i < labels.length; i++) {
+  for (let i = 1; site !== h && i < labels.length; i++) {
     const parent = labels.slice(i).join(".");
     out.push(parent);
     if (parent === site) break;
   }
+  const www = `www.${site}`;
+  if (!out.includes(www)) out.push(www);
   return out;
 }
