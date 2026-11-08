@@ -81,13 +81,15 @@ for (const locale of SUPPORTED_LOCALES) {
   ok(`catalog ${locale}: inlineNoLogins present`, typeof cat.inlineNoLogins?.message === "string" && cat.inlineNoLogins.message.length > 0);
 }
 
-// text the UI shows comes from the catalog, never from code
+// jsx text and labels come from the catalog, never from code
 const UI_TEXT = [/>\s*([A-Z][a-z]+ [^<>{}]*?)\s*</g, /(?:aria-label|title|placeholder)="([A-Z][^"]*)"/g];
+const JSX_TEXT_WITH_VALUES = /(?<!=)>\s*((?:[^<>{};=]|\{[^{}]*\})+?)\s*</g;
 const hardcoded = readdirSync(new URL("../../src/ui/", import.meta.url)).filter((f) => f.endsWith(".jsx") && f !== "preview.jsx").flatMap((f) => {
   const src = readFileSync(new URL(`../../src/ui/${f}`, import.meta.url), "utf8");
-  return UI_TEXT.flatMap((re) => [...src.matchAll(re)].map((m) => `${f}: ${m[1].trim()}`));
+  const withValues = [...src.matchAll(JSX_TEXT_WITH_VALUES)].map((m) => m[1]).filter((s) => s.includes("{") && /[a-z]{2}/i.test(s.replace(/\{[^{}]*\}/g, "")));
+  return [...UI_TEXT.flatMap((re) => [...src.matchAll(re)].map((m) => m[1])), ...withValues].map((s) => `${f}: ${s.trim()}`);
 });
-ok("ui: every visible string comes from the catalog", hardcoded.length === 0, hardcoded.join("; ") || undefined);
+ok("ui: jsx text and labels come from the catalog", hardcoded.length === 0, hardcoded.join("; ") || undefined);
 const background = readFileSync(new URL("../../src/background.js", import.meta.url), "utf8");
 const rawErrors = ["no tab", "no active tab", "refusing to fill on a non-HTTPS page"].filter((e) => background.includes(`"${e}"`));
 ok("background: errors the popup shows come from the catalog", rawErrors.length === 0, rawErrors.join(", ") || undefined);

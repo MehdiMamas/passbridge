@@ -46,7 +46,7 @@ function ReportApp() {
         <span className="font-medium">{report.url}</span>
         <br />
         <span className={muted}>
-          PassBridge {report.version} · {report.frames.length} frame{report.frames.length === 1 ? "" : "s"} captured
+          {t(report.frames.length === 1 ? "reportCapturedOne" : "reportCapturedMany", [report.version, report.frames.length])}
         </span>
       </p>
       {!report.frames.length && (
