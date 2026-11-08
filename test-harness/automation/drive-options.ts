@@ -90,6 +90,12 @@ await main(async () => {
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
   const navTop = await page.locator("nav").evaluate((n) => n.getBoundingClientRect().top);
   ok("options: the tabs stay in view at the bottom of a long tab", navTop >= 0 && navTop < 200, `nav top ${navTop}`);
+  const version = await page.evaluate(() => {
+    const p = document.querySelector("aside nav + p") as HTMLElement;
+    const icon = document.querySelector("nav a svg") as Element;
+    return { text: p.innerText.trim(), textLeft: p.getBoundingClientRect().left + parseFloat(getComputedStyle(p).paddingLeft), iconLeft: icon.getBoundingClientRect().left };
+  });
+  ok("options: the sidebar version reads v<version> and lines up with the tab icons", /^v\d+\.\d+\.\d+/.test(version.text) && Math.abs(version.textLeft - version.iconLeft) <= 1, JSON.stringify(version));
   await page.evaluate(() => scrollTo(0, 0));
 
   const offSwitch = row("Autofill on page load").locator('[role="switch"]');
