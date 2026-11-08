@@ -31,12 +31,20 @@ The interface font is Open Runde, licensed under the SIL Open Font License 1.1.
   Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
   The license text ships in fonts/OFL.txt, next to the font files.
 
+The icons come from Lucide (the lucide and lucide-react packages), licensed
+under the ISC License; the ones derived from Feather are under the MIT License.
+  https://github.com/lucide-icons/lucide
+  Copyright (c) 2026 Lucide Icons and Contributors
+  Copyright (c) 2013-present Cole Bemis
+  The license text ships in licenses/Lucide-ISC.txt.
+
 The files taken from Open Passwords and icloud-passwords-firefox have been
 modified for PassBridge; the git history records each change. A copy of the
 Apache License, Version 2.0 is in licenses/Apache-2.0.txt.
 
 This combined work is licensed under the GNU General Public License, Version 3.
-See the LICENSE file. The font stays under the SIL Open Font License.
+See the LICENSE file. The font stays under the SIL Open Font License, the icons
+under their ISC and MIT licenses.
 
 "Apple", "iCloud", "iCloud Keychain", and "Passwords" are trademarks of Apple
 Inc. This project is not affiliated with, authorized, or endorsed by Apple.

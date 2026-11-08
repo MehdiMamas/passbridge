@@ -30,6 +30,11 @@ await main(async () => {
       ok("update: the notice names the new version and links its release", noticeText.startsWith("v1.4.0 is available!") && noticeText.includes("View release"), noticeText);
       ok("update: the notice offers Update now even without the helper", noticeText.includes("Update now"), noticeText);
       ok("update: the notice can be dismissed", (await notice.locator('button[aria-label="Dismiss update notice"]').count()) === 1, "no dismiss button");
+      ok("icons: the update notice closes with an X icon, not a text glyph", (await notice.locator('button[aria-label="Dismiss update notice"] svg.lucide-x').count()) === 1 && !noticeText.includes("×"), noticeText);
+      const handDrawn = await page.locator("[data-screen] svg:not(.lucide), [data-update-screen] svg:not(.lucide)").count();
+      ok("icons: every popup and update page icon comes from Lucide", handDrawn === 0 && (await page.locator("[data-screen] svg.lucide").count()) > 0, `hand-drawn=${handDrawn}`);
+      const header = page.locator('[data-screen="unlocked"][data-scheme="light"] header');
+      ok("icons: refresh is an icon, not a text glyph", (await header.locator('button[aria-label="Refresh passwords"] svg.lucide-refresh-cw').count()) === 1 && !(await header.innerText()).includes("↻"));
       const updatePage = (title: string) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
       const first = (await updatePage("ready_first").innerText()).replace(/\s+/g, " ");
       ok("update page: shows the installed and the new version with the release link", first.includes("1.4.1") && first.includes("1.4.2") && (await updatePage("ready_first").locator('a[href$="/releases/tag/v1.4.2"]').count()) === 1, first);
@@ -39,6 +44,8 @@ await main(async () => {
       ok("update page: the progress bar reports its value", (await bar.getAttribute("aria-valuenow")) === "72");
       const states = await updatePage("working").locator("[data-step]").evaluateAll((els: HTMLElement[]) => els.map((e) => `${e.dataset.step}:${e.dataset.state}`).join());
       ok("update page: the steps before the current one are done", states === "download:done,verify:done,write:active,restart:todo", states);
+      const doneSteps = updatePage("working").locator('[data-step][data-state="done"]');
+      ok("update page: a done step shows a check icon, not a text glyph", (await doneSteps.locator("svg.lucide-check").count()) === 2 && !(await doneSteps.allInnerTexts()).join("").includes("✓"));
       ok("update page: no folder change while files are being replaced", (await updatePage("working").locator("button", { hasText: "Change folder" }).count()) === 0);
       const failedText = await updatePage("failed").innerText();
       ok("update page: a failed write says the old version is back", failedText.includes("Couldn't write the new files.") && failedText.includes("previous version was restored"), failedText);

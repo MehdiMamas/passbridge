@@ -1,3 +1,4 @@
+import { KeyRound, Lock, RefreshCw, User, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
@@ -34,33 +35,6 @@ function IconButton({ label, onClick, children }) {
   );
 }
 
-function UserIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="5.5" r="2.25" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M3.5 13.25c.6-2.1 2.3-3.25 4.5-3.25s3.9 1.15 4.5 3.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function KeyIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="5.5" cy="8" r="2.75" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M8 8h5.25M11.5 8v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 /** @param {{ row: PopupRow, site: string, grouped: boolean, onCopy: (field: string, row: PopupRow) => any, onFillCode: (row: PopupRow) => any }} props */
 function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
   const [shown, setShown] = useState("");
@@ -84,7 +58,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
               <span className="font-mono text-sm tracking-widest">{shown}</span>
             ) : (
               <IconButton label={t("copyCode")} onClick={() => onCopy("otp", row)}>
-                <LockIcon />
+                <Lock size={16} />
               </IconButton>
             )}
             {!shown && (
@@ -269,14 +243,15 @@ export function PopupScreen({
         {(unlocked || state === "needs_pin") && (
           <button
             type="button"
-            className="rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-2 py-0.5 text-base"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)]"
             aria-label={t("refreshPasswords")}
+            title={t("refreshPasswords")}
             onClick={() => {
               if (state === "needs_pin") setPin("");
               onRefresh();
             }}
           >
-            ↻
+            <RefreshCw size={14} />
           </button>
         )}
         <StatusDot state={state} />
@@ -305,10 +280,10 @@ export function PopupScreen({
             type="button"
             aria-label="Dismiss update notice"
             title={t("dismiss")}
-            className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg text-sm opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
+            className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
             onClick={onDismissUpdate}
           >
-            ×
+            <X size={14} />
           </button>
         </div>
       )}
@@ -401,10 +376,10 @@ export function PopupScreen({
                       <span className="truncate text-[13px] font-medium">{login.username || t("noUsername")}</span>
                     </span>
                     <IconButton label={t("copyUsername")} onClick={() => onCopy("username", login)}>
-                      <UserIcon />
+                      <User size={16} />
                     </IconButton>
                     <IconButton label={t("copyPassword")} onClick={() => onCopy("password", login)}>
-                      <KeyIcon />
+                      <KeyRound size={16} />
                     </IconButton>
                     <button
                       type="button"
