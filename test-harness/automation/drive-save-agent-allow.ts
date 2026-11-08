@@ -1,6 +1,6 @@
 import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.ts";
 
-// the save bar offers "Let agents sign in on <site>"; only a click in the bar's own frame adds it to the allowlist
+// the save bar offers "Allow agents to sign in on <site>"; only a click in the bar's own frame adds it to the allowlist
 await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0];

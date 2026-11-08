@@ -24,7 +24,7 @@ const BROWSER_ROWS = [
   "Hide the browser's password manager",
   "The browser's saved passwords",
 ];
-const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Let agents save new logins", "Allowed sites", "Activity"];
+const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allow agents to save new logins", "Allowed sites", "Activity"];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el: Element) {
@@ -128,7 +128,7 @@ await main(async () => {
   const browserRows = await page.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
   ok("options: browser rows in order", browserRows.join("|") === BROWSER_ROWS.join("|"), browserRows.join("|"));
   const passkeysText = await row("Passkeys").innerText();
-  ok("options: passkeys row shows the text for this platform", /Your browser can use your iCloud Keychain passkeys directly/.test(passkeysText) && !/QR code/.test(passkeysText), passkeysText);
+  ok("options: passkeys row shows the text for this platform", /Your browser can use passkeys saved in iCloud Passwords directly/.test(passkeysText) && !/QR code/.test(passkeysText), passkeysText);
   ok("options: passkeys row has a How it works button", (await row("Passkeys").getByRole("button", { name: /How it works/ }).count()) === 1);
   const [passwordSettings] = await Promise.all([ctx.waitForEvent("page"), row("The browser's saved passwords").getByRole("button", { name: /Open password settings/ }).click()]);
   ok("options: Open password settings opens the browser's password settings", passwordSettings.url() === "chrome://password-manager/settings", passwordSettings.url());
@@ -178,7 +178,7 @@ await main(async () => {
 
   await page.goto(`${optionsUrl}#updates`);
   await note.waitFor();
-  const autoSwitch = row("Install updates automatically with the helper").locator('[role="switch"]');
+  const autoSwitch = row("Install updates automatically with the PassBridge helper").locator('[role="switch"]');
   ok("options: no updater locks auto-install with its synced value", (await autoSwitch.isChecked()) && (await autoSwitch.isDisabled()));
   ok("options: no updater keeps Check now usable", await page.locator("button", { hasText: "Check now" }).isEnabled());
   const [updatePage] = await Promise.all([ctx.waitForEvent("page"), page.locator("button", { hasText: "Check now" }).click()]);
@@ -296,7 +296,7 @@ await main(async () => {
   ok("options: the password-manager row is not one big click target", (await policyRow.evaluate((e) => e.tagName)) !== "LABEL");
   await policyRow.locator('[role="switch"]').click();
   await helped.waitForTimeout(300);
-  ok("options: a toggle with no helper note still shows the restart line", (await policyRow.innerText()).includes("Fully quit and reopen the browser to apply this."), await policyRow.innerText());
+  ok("options: a toggle with no helper note still shows the restart line", (await policyRow.innerText()).includes("Quit and reopen the browser to apply this."), await policyRow.innerText());
 
   await helped.goto(`${optionsUrl}#agents`);
   await allowedSites().fill("github.com\nexample.org");

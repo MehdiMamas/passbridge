@@ -28,6 +28,28 @@ for (const locale of SUPPORTED_LOCALES) {
 const chromeOnly = Object.keys(en).filter((k) => /\bChrome\b/.test(en[k].message));
 ok("copy en: no message names Chrome, every Chromium browser runs PassBridge", chromeOnly.length === 0, chromeOnly.join(", ") || undefined);
 
+// one name per thing in the en copy
+const MIXED_NAMES: [RegExp, string][] = [
+  [/System default/, "System"],
+  [/iCloud Keychain|Apple Passwords|Passwords vault/, "iCloud Passwords"],
+  [/(?:\bin|\bto|\bopen) Passwords\b(?! app)|^Passwords\b(?! app)/, "the Passwords app"],
+  [/\bPassword helper\b|Passwords helper|updater helper|PassBridge helper not reachable/, "Apple's password helper or the PassBridge helper"],
+  [/Needs the verification code|verification code was|Enter the code|for a new code|the new code\b|Request a new code/, "unlock code"],
+  [/Look up/, "Search"],
+  [/\bLet agents\b/, "Allow"],
+  [/Create a login|New login in/, "Add login"],
+  [/No saved passwords|No saved login\b/, "No saved logins"],
+  [/fully quit|Restart your browser/i, "Quit and reopen the browser"],
+  [/What's new on GitHub/, "View release"],
+  [/Code from Messages/, "Verification code from Messages"],
+  [/Click Update again/, "Update now"],
+  [/without Touch ID/, "Windows Hello on the Windows-only passkey row"],
+];
+for (const [re, name] of MIXED_NAMES) {
+  const hits = Object.keys(en).filter((k) => re.test(en[k].message));
+  ok(`copy en: one name per thing, say ${name}`, hits.length === 0, hits.join(", ") || undefined);
+}
+
 // ellipsis: only on a label that asks for more input before it finishes, and always the single character
 const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
 const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
