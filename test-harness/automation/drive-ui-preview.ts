@@ -100,6 +100,18 @@ await main(async () => {
       const darkTip = await tipColors();
       ok("tooltip: a dark popup gets a dark tooltip", lightness(darkTip.bg) < 100 && lightness(darkTip.fg) > 160, JSON.stringify(darkTip));
       await page.mouse.move(1, 1);
+      const isSpinning = async (button: ReturnType<typeof page.locator>, icon: string) => (await button.isDisabled()) && (await button.getAttribute("aria-busy")) === "true" && (await button.locator("svg.lucide-loader-circle").count()) === 1 && (await button.locator(`svg.lucide-${icon}`).count()) === 0;
+      const darkReport = darkPopup.locator('footer button[aria-label="Report this page"]');
+      await darkReport.click();
+      ok("busy: a working icon locks and spins", await isSpinning(darkReport, "flag"));
+      const isFlagBack = await darkReport.locator("svg.lucide-flag").waitFor({ timeout: 3000 }).then(() => true, () => false);
+      ok("busy: the icon comes back when the work ends", isFlagBack && !(await darkReport.isDisabled()) && (await darkReport.getAttribute("aria-busy")) !== "true");
+      const darkRefresh = darkPopup.locator('header button[aria-label="Refresh passwords"]');
+      await darkRefresh.click();
+      ok("busy: refresh spins while the list reloads", await isSpinning(darkRefresh, "refresh-cw"));
+      const darkAddLogin = darkPopup.locator('footer button[aria-label="Add login…"]');
+      await darkAddLogin.click();
+      ok("busy: a plain toggle never spins", !(await darkAddLogin.isDisabled()) && (await darkAddLogin.locator("svg.lucide-loader-circle").count()) === 0 && (await darkAddLogin.getAttribute("aria-expanded")) === "true");
       const updatePage = (title: string) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
       const first = (await updatePage("ready_first").innerText()).replace(/\s+/g, " ");
       ok("update page: shows the installed and the new version with the release link", first.includes("1.4.1") && first.includes("1.4.2") && (await updatePage("ready_first").locator('a[href$="/releases/tag/v1.4.2"]').count()) === 1, first);

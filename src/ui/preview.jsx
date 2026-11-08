@@ -3,6 +3,7 @@ import { PopupScreen } from "./popup-screen.jsx";
 import { UpdateScreen } from "./update-screen.jsx";
 
 const noop = () => {};
+const slow = () => new Promise((resolve) => setTimeout(resolve, 800));
 /** @type {[string, any][]} demo props are partial, merged into the screen */
 const screens = [
   ["no_helper", { state: "no_helper", os: "win" }],
@@ -79,9 +80,9 @@ function Frame({ title, scheme, props }) {
         onAddLogin={async () => ({})}
         onTotpScan={async () => ({})}
         onLock={noop}
-        onRefresh={noop}
+        onRefresh={slow}
         onSettings={noop}
-        onReport={noop}
+        onReport={slow}
         onOpenUpdate={noop}
         onDismissUpdate={noop}
         {...props}

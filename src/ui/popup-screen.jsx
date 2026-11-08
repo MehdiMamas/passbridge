@@ -1,4 +1,4 @@
-import { Clock, ClockPlus, Dices, ExternalLink, Eye, EyeOff, Flag, KeyRound, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
+import { Clock, ClockPlus, Dices, ExternalLink, Eye, EyeOff, Flag, KeyRound, LoaderCircle, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n/runtime.js";
@@ -53,24 +53,34 @@ function Tooltip({ anchor, text }) {
   );
 }
 
-/** @param {{ label: string, onClick: () => void, isExpanded?: boolean, className?: string, children?: any }} props */
+/** @param {{ label: string, onClick: () => any, isExpanded?: boolean, className?: string, children?: any }} props */
 function IconButton({ label, onClick, isExpanded, className = "text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]", children }) {
   const [tipAnchor, setTipAnchor] = useState(/** @type {HTMLElement | null} */ (null));
+  const [isBusy, setIsBusy] = useState(false);
   return (
     <button
       type="button"
       aria-label={label}
       aria-expanded={isExpanded}
-      className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${className}`}
+      aria-busy={isBusy}
+      disabled={isBusy}
+      className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg disabled:cursor-progress ${className}`}
       onPointerEnter={(e) => setTipAnchor(e.currentTarget)}
       onPointerLeave={() => setTipAnchor(null)}
       onFocus={(e) => {
         if (e.currentTarget.matches(":focus-visible")) setTipAnchor(e.currentTarget);
       }}
       onBlur={() => setTipAnchor(null)}
-      onClick={onClick}
+      onClick={() => {
+        const work = onClick();
+        if (!work?.then) return;
+        setTipAnchor(null);
+        setIsBusy(true);
+        const done = () => setIsBusy(false);
+        work.then(done, done);
+      }}
     >
-      {children}
+      {isBusy ? <LoaderCircle size={children?.props?.size ?? 16} className="animate-spin" /> : children}
       {tipAnchor && <Tooltip anchor={tipAnchor} text={label} />}
     </button>
   );
@@ -295,7 +305,7 @@ export function PopupScreen({
             className={headerButton}
             onClick={() => {
               if (state === "needs_pin") setPin("");
-              onRefresh();
+              return onRefresh();
             }}
           >
             <RefreshCw size={14} />
