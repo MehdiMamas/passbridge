@@ -325,7 +325,7 @@ await main(async () => {
   await helped.reload();
   await allSwitch.waitFor();
   ok("options: every-site is disabled while agent sign-in is off", await allSwitch.isDisabled());
-  ok("options: its help line stays readable while disabled", (await allSites.locator("[data-help]").innerText()).includes("Off by default"));
+  ok("options: its help line stays readable while disabled", (await allSites.locator("[data-help]").innerText()).includes("When on, an agent can sign in"));
   await sw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));
   await helped.reload();
   await allowedSites().fill("github.com\nexample.net");

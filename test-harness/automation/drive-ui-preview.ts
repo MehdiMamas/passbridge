@@ -33,7 +33,7 @@ await main(async () => {
       ok("preview: a dark frame sits on a dark canvas so its title stays readable", darkFrameBg.startsWith("rgb(") && lightness(darkFrameBg) < 60, darkFrameBg);
       const notice = page.locator('[data-screen="update_available"][data-scheme="light"] [data-passbridge="update"]');
       const noticeText = (await notice.innerText()).replace(/\s+/g, " ").trim();
-      ok("update: the notice names the new version and links its release", noticeText.startsWith("v1.4.0 is available!") && noticeText.includes("View release"), noticeText);
+      ok("update: the notice names the new version and links its release", noticeText.startsWith("v1.4.0 is available") && noticeText.includes("View release"), noticeText);
       ok("update: the notice offers Update now even without the helper", noticeText.includes("Update now"), noticeText);
       ok("update: the notice can be dismissed", (await notice.locator('button[aria-label="Dismiss update notice"]').count()) === 1, "no dismiss button");
       ok("icons: the update notice closes with an X icon, not a text glyph", (await notice.locator('button[aria-label="Dismiss update notice"] svg.lucide-x').count()) === 1 && !noticeText.includes("×"), noticeText);

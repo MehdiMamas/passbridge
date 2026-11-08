@@ -60,6 +60,21 @@ ok("copy en: a label that only opens a page has no …", extraDots.length === 0,
 const threeDots = Object.keys(en).filter((k) => en[k].message.includes("..."));
 ok("copy en: ellipsis is one character, not three dots", threeDots.length === 0, threeDots.join(", ") || undefined);
 
+// writing style in the en copy
+const STYLE: [RegExp, string][] = [
+  [/!/, "no exclamation marks"],
+  [/Strong Password|Special Characters/, "sentence case"],
+  [/^(?:Fill|Copy) password without/, "a password without special characters"],
+  [/This QR\b|\bQR is\b/, "That QR code"],
+  [/otpauth/, "setup key, not the link scheme"],
+  [/^Off by default\./, "no default in the help line, the switch shows it"],
+  [/^When the /, "a help line is a full sentence"],
+];
+for (const [re, rule] of STYLE) {
+  const hits = Object.keys(en).filter((k) => re.test(en[k].message));
+  ok(`copy en: style, ${rule}`, hits.length === 0, hits.join(", ") || undefined);
+}
+
 // locale resolution
 ok("normalize: zh-CN and zh map to zh_CN", normalizeLocale("zh-CN") === "zh_CN" && normalizeLocale("zh") === "zh_CN");
 ok("normalize: en-US and en map to en", normalizeLocale("en-US") === "en" && normalizeLocale("en") === "en");
