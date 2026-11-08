@@ -113,6 +113,17 @@ await main(async () => {
       ok("footer: one click opens the Passwords app sheet, the next one the app", sheetMode === "new" && searchMode === "search", `${sheetMode} ${searchMode}`);
       await addLogin.click();
       ok("add login: the icon closes the form again", (await addLogin.getAttribute("aria-expanded")) === "false" && (await siteField.count()) === 0);
+      const noSheet = page.locator('[data-screen="update_available"][data-scheme="light"]');
+      await noSheet.locator('footer button[aria-label="Add login…"]').click();
+      const loginForm = noSheet.locator('[data-passbridge="add-login"]');
+      const passField = loginForm.locator('[data-field="new-password"]');
+      const isIconOnly = async (label: string, icon: string) => (await loginForm.locator(`button[aria-label="${label}"][title="${label}"] svg.lucide-${icon}`).count()) === 1 && !(await loginForm.locator(`button[aria-label="${label}"]`).innerText()).trim();
+      ok("add login: generate and show are icon buttons", (await isIconOnly("Generate", "dices")) && (await isIconOnly("Show", "eye")));
+      await loginForm.locator('button[aria-label="Show"]').click();
+      ok("add login: show turns into hide", (await passField.getAttribute("type")) === "text" && (await isIconOnly("Hide", "eye-off")));
+      await loginForm.locator('button[aria-label="Hide"]').click();
+      await loginForm.locator('button[aria-label="Generate"]').click();
+      ok("add login: generate fills a password and reveals it", !!(await passField.inputValue()) && (await passField.getAttribute("type")) === "text");
       const addCode = popup.locator('footer button[aria-label="Add verification code…"]');
       await addCode.click();
       ok("add code: the icon opens the code steps at the scan button", (await addCode.getAttribute("aria-expanded")) === "true" && (await popup.getByRole("button", { name: "Scan the visible page" }).evaluate((el: HTMLElement) => el === document.activeElement)));

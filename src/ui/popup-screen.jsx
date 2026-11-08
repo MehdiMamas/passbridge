@@ -1,4 +1,4 @@
-import { Clock, ClockPlus, ExternalLink, Flag, KeyRound, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
+import { Clock, ClockPlus, Dices, ExternalLink, Eye, EyeOff, Flag, KeyRound, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
@@ -431,8 +431,12 @@ export function PopupScreen({
                 <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
                 <span className="flex gap-1.5">
                   <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                  <button type="button" className="text-xs opacity-80" onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>{t("generate")}</button>
-                  <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? t("hide") : t("show")}</button>
+                  <IconButton label={t("generate")} onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>
+                    <Dices size={16} />
+                  </IconButton>
+                  <IconButton label={newShown ? t("hide") : t("show")} onClick={() => setNewShown(!newShown)}>
+                    {newShown ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </IconButton>
                 </span>
                 {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}
                 <span className="flex justify-end gap-2">
