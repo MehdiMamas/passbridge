@@ -27,7 +27,7 @@ copying `en` and translating the `message` values.
 
    Product and app names stay as-is: **PassBridge**, **Chrome**, **iCloud**,
    **GitHub**, **macOS**, **Windows**, **Touch ID**, **Windows Hello**,
-   **DuckDuckGo**. Apple's Passwords app is "密码" in zh-CN and "密碼" in zh-TW.
+   **DuckDuckGo**. Apple's Passwords app is "密码" in zh-CN, "密碼" in zh-TW and "Parolalar" in tr.
 
 3. **Register the locale** in `src/i18n/runtime.js` so it loads, is listed in
    the options language picker, and is matched by `chrome.i18n.getUILanguage()`:
@@ -83,3 +83,4 @@ copying `en` and translating the `message` values.
 | `en` | English | built-in default |
 | `zh_CN` | 简体中文 | community |
 | `zh_TW` | 繁體中文 | community |
+| `tr` | Türkçe | community |
