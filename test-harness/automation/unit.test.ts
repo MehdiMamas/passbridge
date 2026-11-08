@@ -1293,7 +1293,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 
 {
   ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
-  ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
+  ok("options: passkeys row off Windows says the browser uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
   const sum = passkeyImportSummary(([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }] as any));
   ok("options: passkey import summary counts each outcome", sum.total === 5 && sum.saved === 2 && sum.exists === 1 && sum.skipped === 1 && sum.failed === 1);
   ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));

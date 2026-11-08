@@ -25,6 +25,9 @@ for (const locale of SUPPORTED_LOCALES) {
   ok(`catalog ${locale}: placeholders match en`, phMismatch.length === 0, phMismatch.join(", ") || undefined);
 }
 
+const chromeOnly = Object.keys(en).filter((k) => /\bChrome\b/.test(en[k].message));
+ok("copy en: no message names Chrome, every Chromium browser runs PassBridge", chromeOnly.length === 0, chromeOnly.join(", ") || undefined);
+
 // ellipsis: only on a label that asks for more input before it finishes, and always the single character
 const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
 const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
