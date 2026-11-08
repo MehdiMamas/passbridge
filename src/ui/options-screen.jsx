@@ -38,10 +38,10 @@ const activityCell = "truncate px-2.5 py-1.5";
 const SHORT_TIME = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
 
 
-/** @param {{ children?: any }} props */
-function Icon({ children }) {
+/** @param {{ children?: any, className?: string }} props */
+function Icon({ children, className = "shrink-0" }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       {children}
     </svg>
   );
@@ -105,21 +105,26 @@ function Switch({ ids, checked, disabled, onChange }) {
 /** @param {{ ids: RowIds, value: string, disabled?: boolean, options: string[][], onChange: (value: string) => void }} props */
 function Select({ ids, value, disabled, options, onChange }) {
   return (
-    <select
-      id={ids.control}
-      aria-labelledby={ids.label}
-      aria-describedby={ids.describedBy}
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${field} cursor-pointer px-2.5 py-1.5`}
-    >
-      {options.map(([v, text]) => (
-        <option key={v} value={v}>
-          {text}
-        </option>
-      ))}
-    </select>
+    <span className="relative inline-flex">
+      <select
+        id={ids.control}
+        aria-labelledby={ids.label}
+        aria-describedby={ids.describedBy}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${field} cursor-pointer appearance-none py-1.5 pr-8 pl-2.5`}
+      >
+        {options.map(([v, text]) => (
+          <option key={v} value={v}>
+            {text}
+          </option>
+        ))}
+      </select>
+      <Icon className={`pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 ${muted}`}>
+        <path d="m4.5 6.25 3.5 3.5 3.5-3.5" />
+      </Icon>
+    </span>
   );
 }
 

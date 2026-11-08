@@ -218,6 +218,11 @@ await main(async () => {
   const themeRow = themed.locator('[data-row="Theme"]');
   const appearanceRows = await themed.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
   ok("options: Theme leads the Appearance tab", appearanceRows[0] === "Theme", appearanceRows.join("|"));
+  const arrowGaps = await themed.locator("main select").evaluateAll((els) => els.map((s) => {
+    const arrow = s.parentElement?.querySelector("svg");
+    return arrow && getComputedStyle(s).appearance === "none" ? Math.round(s.getBoundingClientRect().right - arrow.getBoundingClientRect().right) : -1;
+  }));
+  ok("options: each select draws its arrow away from the right edge", arrowGaps.length === 2 && arrowGaps.every((gap) => gap >= 8 && gap <= 12), arrowGaps.join(","));
   ok("options: the theme starts on System", (await themeRow.locator("select").inputValue()) === "system" && (await scheme(themed)) === "light dark");
   await themeRow.locator("select").selectOption("dark");
   await themed.waitForTimeout(900);
