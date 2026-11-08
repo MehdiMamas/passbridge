@@ -1,8 +1,9 @@
 // i18n suite: catalog parity, locale resolution, substitution, manifest wiring and menu output.
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync } from "fs";
 import { resolveLocale, setLocale, normalizeLocale, substitute, t, SUPPORTED_LOCALES } from "../../src/i18n/runtime.js";
 import { menuItems } from "../../src/menu.js";
 import { SETTINGS_DEFAULTS } from "../../src/settings.js";
+import { uiPinReply } from "../../src/session/pin-reply.js";
 
 let failed = 0;
 function ok(name: string, cond: unknown, _detail?: string) {
@@ -79,6 +80,21 @@ for (const locale of SUPPORTED_LOCALES) {
   const cat = JSON.parse(readFileSync(new URL(`../../_locales/${locale}/messages.json`, import.meta.url), "utf8"));
   ok(`catalog ${locale}: inlineNoLogins present`, typeof cat.inlineNoLogins?.message === "string" && cat.inlineNoLogins.message.length > 0);
 }
+
+// text the UI shows comes from the catalog, never from code
+const UI_TEXT = [/>\s*([A-Z][a-z]+ [^<>{}]*?)\s*</g, /(?:aria-label|title|placeholder)="([A-Z][^"]*)"/g];
+const hardcoded = readdirSync(new URL("../../src/ui/", import.meta.url)).filter((f) => f.endsWith(".jsx") && f !== "preview.jsx").flatMap((f) => {
+  const src = readFileSync(new URL(`../../src/ui/${f}`, import.meta.url), "utf8");
+  return UI_TEXT.flatMap((re) => [...src.matchAll(re)].map((m) => `${f}: ${m[1].trim()}`));
+});
+ok("ui: every visible string comes from the catalog", hardcoded.length === 0, hardcoded.join("; ") || undefined);
+const background = readFileSync(new URL("../../src/background.js", import.meta.url), "utf8");
+const rawErrors = ["no tab", "no active tab", "refusing to fill on a non-HTTPS page"].filter((e) => background.includes(`"${e}"`));
+ok("background: errors the popup shows come from the catalog", rawErrors.length === 0, rawErrors.join(", ") || undefined);
+setLocale("en");
+const wrongCode = uiPinReply({ ok: false, error: "Incorrect code", newCode: true });
+ok("pin: a wrong unlock code reads from the catalog and keeps the reply", wrongCode.error === t("incorrectCode") && wrongCode.newCode === true && wrongCode.error !== "incorrectCode");
+ok("pin: other unlock errors pass through", uiPinReply({ ok: false, error: "verification timed out" }).error === "verification timed out");
 
 console.log("" + (failed ? `i18n: ${failed} FAIL` : "i18n ok"));
 process.exit(failed ? 1 : 0);

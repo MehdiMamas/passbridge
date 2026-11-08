@@ -50,7 +50,7 @@ function ReportApp() {
         </span>
       </p>
       {!report.frames.length && (
-        <p className="text-danger">No frame answered. Reload the page and try again.</p>
+        <p className="text-danger">{t("reportNoFrames")}</p>
       )}
       <ul className={`flex flex-col gap-1 border-y ${border} py-2`}>
         {report.frames.map((f, i) => (

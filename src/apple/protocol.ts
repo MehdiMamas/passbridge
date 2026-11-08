@@ -75,6 +75,8 @@ const QueryId: Record<number, string> = {
 
 const Action = { UPDATE: 1, SEARCH: 2, ADD_NEW: 3, MAYBE_ADD: 4, GHOST_SEARCH: 5 };
 
+export const INCORRECT_CODE = "Incorrect code";
+
 export const State = {
   Disconnected: "disconnected",
   NeedsPin: "needs_pin",
@@ -406,7 +408,7 @@ export class ApplePasswords {
         if (pake.TID !== session.username) throw new Error("verification for another session");
         // Windows answers a failed verify with TID and ErrCode only, no MSG: read the error first
         const errCode = asInt(pake.ErrCode);
-        if (errCode === 1 || errCode === 5) throw new Error("Incorrect code");
+        if (errCode === 1 || errCode === 5) throw new Error(INCORRECT_CODE);
         if (errCode !== 0 && errCode !== undefined) throw new Error(`verification error ${pake.ErrCode}`);
         // a missing MSG is fine here, the HAMK check below is what proves the server
         if (pake.MSG !== undefined && String(pake.MSG) !== String(MSGType.ServerVerification)) throw new Error("unexpected server message");

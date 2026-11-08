@@ -39,6 +39,7 @@
   "updating": { "message": "Updating…" },
   "viewRelease": { "message": "View release" },
   "dismiss": { "message": "Dismiss" },
+  "dismissUpdate": { "message": "Dismiss update notice" },
   "refreshPasswords": { "message": "Refresh passwords" },
   "lookupPlaceholder": { "message": "Look up another site" },
   "lookupUserPlaceholder": { "message": "Look up another login" },
@@ -103,6 +104,7 @@
   "upToDate": { "message": "Up to date ($1)", "placeholders": { "version": { "content": "$1", "example": "1.4.16" } } },
   "couldntInstallUpdate": { "message": "Couldn't install the update." },
   "verificationFailed": { "message": "Verification failed." },
+  "incorrectCode": { "message": "Incorrect code." },
   "pinErrorNewCode": { "message": "$1 — enter the new code on $2", "placeholders": { "error": { "content": "$1", "example": "Verification failed." }, "device": { "content": "$2", "example": "your Mac" } } },
   "couldntRequestCode": { "message": "Couldn't request a code." },
 
@@ -234,6 +236,7 @@
 
   "reportTitle": { "message": "Report this page" },
   "reportExpired": { "message": "This report has expired. Open the page again and choose Report this page." },
+  "reportNoFrames": { "message": "No frame answered. Reload the page and try again." },
   "framePage": { "message": "Page" },
   "frameIframe": { "message": "Iframe" },
   "frameError": { "message": "Error: $1", "placeholders": { "error": { "content": "$1", "example": "context invalidated" } } },

@@ -303,8 +303,8 @@ export function PopupScreen({
           </button>
           <button
             type="button"
-            aria-label="Dismiss update notice"
-            title={t("dismiss")}
+            aria-label={t("dismissUpdate")}
+            title={t("dismissUpdate")}
             className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg text-sm opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
             onClick={onDismissUpdate}
           >
@@ -484,7 +484,7 @@ export function PopupScreen({
                             if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
                           }}
                         >
-                          Scan the visible page
+                          {t("scanPage")}
                         </button>
                         <input
                           value={pasted}
@@ -505,7 +505,7 @@ export function PopupScreen({
                             if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
                           }}
                         >
-                          Use this key
+                          {t("useKey")}
                         </button>
                       </>
                     )}

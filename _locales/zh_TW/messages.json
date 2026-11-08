@@ -39,6 +39,7 @@
   "updating": { "message": "更新中…" },
   "viewRelease": { "message": "查看發布說明" },
   "dismiss": { "message": "忽略" },
+  "dismissUpdate": { "message": "關閉更新通知" },
   "refreshPasswords": { "message": "重新整理密碼" },
   "lookupPlaceholder": { "message": "查詢其他網站" },
   "lookupUserPlaceholder": { "message": "查詢其他登入" },
@@ -104,6 +105,7 @@
   "upToDate": { "message": "已是最新版本（$1）", "placeholders": { "version": { "content": "$1", "example": "1.4.16" } } },
   "couldntInstallUpdate": { "message": "無法安裝更新。" },
   "verificationFailed": { "message": "驗證失敗。" },
+  "incorrectCode": { "message": "驗證碼不正確。" },
   "pinErrorNewCode": { "message": "$1 — 請在 $2 上輸入新代碼", "placeholders": { "error": { "content": "$1", "example": "驗證失敗。" }, "device": { "content": "$2", "example": "你的 Mac" } } },
   "couldntRequestCode": { "message": "無法要求代碼。" },
 
@@ -235,6 +237,7 @@
 
   "reportTitle": { "message": "回報此頁面" },
   "reportExpired": { "message": "此報告已過期。請重新開啟頁面並選擇「回報此頁面」。" },
+  "reportNoFrames": { "message": "沒有框架回應。請重新載入頁面後再試。" },
   "framePage": { "message": "頁面" },
   "frameIframe": { "message": "內嵌框架" },
   "frameError": { "message": "錯誤：$1", "placeholders": { "error": { "content": "$1", "example": "上下文已失效" } } },

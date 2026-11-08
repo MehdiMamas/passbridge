@@ -1,4 +1,5 @@
 // ApplePasswords-shaped stand-in. The harness writes MOCK_KIND; it does not patch background.js.
+import { INCORRECT_CODE } from "../apple/protocol.ts";
 
 /** @type {Record<string, { username: string, sites: string[] }[]>} */
 const FIXTURES = {
@@ -145,7 +146,7 @@ export function createMockClient(kind) {
         listeners.forEach((fn) => fn(client.state));
         return;
       }
-      const err = /** @type {Error & { code?: string }} */ (new Error("Incorrect code"));
+      const err = /** @type {Error & { code?: string }} */ (new Error(INCORRECT_CODE));
       err.code = "challenge_reissued";
       client.hasChallenge = true;
       client.state = "needs_pin";
