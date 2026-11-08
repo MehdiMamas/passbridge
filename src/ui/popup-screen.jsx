@@ -1,5 +1,6 @@
 import { Clock, ClockPlus, Dices, ExternalLink, Eye, EyeOff, Flag, KeyRound, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
 import { TOTP_WATCH_EVERY_MS, watchState } from "./totp-watch.js";
@@ -20,18 +21,57 @@ function StatusDot({ state }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={label} />;
 }
 
-/** @param {{ label: string, onClick: () => void, isExpanded?: boolean, children?: any }} props */
-function IconButton({ label, onClick, isExpanded, children }) {
+const POPUP_ROOT = '[data-passbridge="popup"]';
+const TIP_GAP = 6;
+const TIP_INSET = 4;
+
+/** @param {{ anchor: HTMLElement, text: string }} props */
+function Tooltip({ anchor, text }) {
+  const ref = useRef(/** @type {HTMLSpanElement | null} */ (null));
+  const [place, setPlace] = useState(/** @type {{ left: number, top: number } | null} */ (null));
+  const root = anchor.closest(POPUP_ROOT) ?? document.body;
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const box = ref.current.getBoundingClientRect();
+    const spot = anchor.getBoundingClientRect();
+    const bounds = root.getBoundingClientRect();
+    const left = Math.min(Math.max(spot.left + spot.width / 2 - box.width / 2, bounds.left + TIP_INSET), bounds.right - box.width - TIP_INSET);
+    const above = spot.top - TIP_GAP - box.height;
+    setPlace({ left, top: above >= bounds.top + TIP_INSET ? above : spot.bottom + TIP_GAP });
+  }, [anchor, text]);
+  return createPortal(
+    <span
+      ref={ref}
+      data-tooltip
+      aria-hidden="true"
+      style={place ?? { visibility: "hidden" }}
+      className="pointer-events-none fixed top-0 left-0 z-50 rounded-md border border-[color-mix(in_srgb,CanvasText_15%,Canvas)] bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-[CanvasText] shadow-md"
+    >
+      {text}
+    </span>,
+    root,
+  );
+}
+
+/** @param {{ label: string, onClick: () => void, isExpanded?: boolean, className?: string, children?: any }} props */
+function IconButton({ label, onClick, isExpanded, className = "text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]", children }) {
+  const [tipAnchor, setTipAnchor] = useState(/** @type {HTMLElement | null} */ (null));
   return (
     <button
       type="button"
       aria-label={label}
       aria-expanded={isExpanded}
-      title={label}
-      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]"
+      className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${className}`}
+      onPointerEnter={(e) => setTipAnchor(e.currentTarget)}
+      onPointerLeave={() => setTipAnchor(null)}
+      onFocus={(e) => {
+        if (e.currentTarget.matches(":focus-visible")) setTipAnchor(e.currentTarget);
+      }}
+      onBlur={() => setTipAnchor(null)}
       onClick={onClick}
     >
       {children}
+      {tipAnchor && <Tooltip anchor={tipAnchor} text={label} />}
     </button>
   );
 }
@@ -198,7 +238,7 @@ export function PopupScreen({
   const [loginBusy, setLoginBusy] = useState(false);
   const win = os === "win";
   const unlocked = state === "unlocked";
-  const headerButton = "grid h-7 w-7 place-items-center rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
+  const headerButton = "border border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
 
   useEffect(() => {
     try {
@@ -245,28 +285,26 @@ export function PopupScreen({
   }
 
   return (
-    <div className={`flex w-[340px] flex-col overflow-hidden bg-[Canvas] text-[CanvasText] ${unlocked ? "max-h-[480px]" : "min-h-[240px]"}`}>
+    <div data-passbridge="popup" className={`flex w-[340px] flex-col overflow-hidden bg-[Canvas] text-[CanvasText] ${unlocked ? "max-h-[480px]" : "min-h-[240px]"}`}>
       <header className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2.5">
         <img src="../icons/icon48.png" alt="" width="20" height="20" />
         <h1 className="flex-1 text-sm font-semibold tracking-tight">PassBridge</h1>
         {(unlocked || state === "needs_pin") && (
-          <button
-            type="button"
+          <IconButton
+            label={t("refreshPasswords")}
             className={headerButton}
-            aria-label={t("refreshPasswords")}
-            title={t("refreshPasswords")}
             onClick={() => {
               if (state === "needs_pin") setPin("");
               onRefresh();
             }}
           >
             <RefreshCw size={14} />
-          </button>
+          </IconButton>
         )}
         {unlocked && (
-          <button type="button" className={`${headerButton} ml-1.5`} aria-label={t("lock")} title={t("lock")} onClick={onLock}>
+          <IconButton label={t("lock")} className={`${headerButton} ml-1.5`} onClick={onLock}>
             <Lock size={14} />
-          </button>
+          </IconButton>
         )}
         <StatusDot state={state} />
       </header>
