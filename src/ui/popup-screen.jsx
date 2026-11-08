@@ -103,7 +103,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
  *   state: string, os: string, label?: string, site: string,
  *   logins: PopupLogin[], codes: PopupRow[], caps?: any, note?: string, noteTone?: string,
  *   nudge?: any, syncSteps: string[], onSyncAll: () => any, pinError?: string, showFavicons?: boolean,
- *   update?: any, installingUpdate?: boolean, checkingUpdate?: boolean,
+ *   update?: any, installingUpdate?: boolean,
  *   onVerify: (pin: string) => Promise<boolean>, onNewCode: () => any,
  *   onFill: (loginName: string) => any, onFillCode: (row: PopupRow) => any,
  *   onCopy: (field: string, row: PopupRow) => any, onLookup: (value: string) => any,
@@ -113,7 +113,6 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
  *   onTotpAdd: (target: string) => Promise<any>, onTotpCopyKey: () => Promise<any>,
  *   onCheckCodes: () => Promise<PopupRow[]>, onLock: () => any, onRefresh: () => any, onSettings: () => any,
  *   onReport: () => any, onOpenUpdate: () => any, onInstallUpdate: () => any, onDismissUpdate: () => any,
- *   onCheckUpdate?: () => any,
  * }} props
  */
 export function PopupScreen({
@@ -133,7 +132,6 @@ export function PopupScreen({
   showFavicons,
   update,
   installingUpdate,
-  checkingUpdate,
   onVerify,
   onNewCode,
   onFill,
@@ -154,7 +152,6 @@ export function PopupScreen({
   onOpenUpdate,
   onInstallUpdate,
   onDismissUpdate,
-  onCheckUpdate,
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
@@ -575,11 +572,6 @@ export function PopupScreen({
             <button type="button" className="text-xs text-accent" onClick={onReport}>
               {t("reportThisPage")}
             </button>
-            {onCheckUpdate && (
-              <button type="button" disabled={checkingUpdate} className="text-xs text-accent disabled:opacity-60" onClick={onCheckUpdate}>
-                {checkingUpdate ? t("checking") : t("checkForUpdates")}
-              </button>
-            )}
             <button type="button" className="text-xs text-accent" onClick={onSettings}>
               {t("settings")}
             </button>

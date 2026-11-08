@@ -80,7 +80,6 @@ function Frame({ title, scheme, props }) {
         onReport={noop}
         onOpenUpdate={noop}
         onDismissUpdate={noop}
-        onCheckUpdate={noop}
         {...props}
       />
     </section>

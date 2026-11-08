@@ -38,6 +38,7 @@ await main(async () => {
       const headerButtons = await header.locator("button").evaluateAll((els: HTMLElement[]) => els.map((e) => e.getAttribute("aria-label")).join());
       ok("header: lock sits after refresh while unlocked", headerButtons === "Refresh passwords,Lock" && (await header.locator('button[aria-label="Lock"] svg.lucide-lock').count()) === 1, headerButtons);
       ok("header: no lock before unlock", (await page.locator('[data-screen="needs_pin"][data-scheme="light"] header button[aria-label="Lock"]').count()) === 0);
+      ok("footer: the popup leaves the update check to Settings", (await page.locator("[data-screen]").getByText("Check for updates").count()) === 0);
       ok("footer: lock left the footer", (await page.locator('[data-screen="unlocked"][data-scheme="light"] footer').getByRole("button", { name: "Lock", exact: true }).count()) === 0);
       const updatePage = (title: string) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
       const first = (await updatePage("ready_first").innerText()).replace(/\s+/g, " ");
