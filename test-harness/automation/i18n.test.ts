@@ -91,11 +91,13 @@ const hardcoded = readdirSync(new URL("../../src/ui/", import.meta.url)).filter(
 });
 ok("ui: jsx text and labels come from the catalog", hardcoded.length === 0, hardcoded.join("; ") || undefined);
 const background = readFileSync(new URL("../../src/background.js", import.meta.url), "utf8");
-const rawErrors = ["no tab", "no active tab", "refusing to fill on a non-HTTPS page"].filter((e) => background.includes(`"${e}"`));
+const rawErrors = ["no tab", "no active tab", "refusing to fill on a non-HTTPS page", "code list expired, focus the field again", "unknown code", "no code returned"].filter((e) => background.includes(`"${e}"`));
 ok("background: errors the popup shows come from the catalog", rawErrors.length === 0, rawErrors.join(", ") || undefined);
 setLocale("en");
 const wrongCode = uiPinReply({ ok: false, error: "Incorrect code", newCode: true });
 ok("pin: a wrong unlock code reads from the catalog and keeps the reply", wrongCode.error === t("incorrectCode") && wrongCode.newCode === true && wrongCode.error !== "incorrectCode");
+const replacedCode = uiPinReply({ ok: false, error: "Enter the new code your Mac is showing now", newCode: true });
+ok("pin: a replaced unlock code reads from the catalog and keeps the reply", replacedCode.error === t("verificationFailed") && replacedCode.newCode === true && replacedCode.error !== "verificationFailed");
 ok("pin: other unlock errors pass through", uiPinReply({ ok: false, error: "verification timed out" }).error === "verification timed out");
 
 console.log("" + (failed ? `i18n: ${failed} FAIL` : "i18n ok"));

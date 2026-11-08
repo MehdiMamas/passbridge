@@ -368,6 +368,7 @@
   "codeFromMessages": { "message": "来自信息的验证码" },
   "codeFor": { "message": "$1 的验证码", "placeholders": { "domain": { "content": "$1", "example": "accounts.example" } } },
   "couldntFillCode": { "message": "无法填充验证码。" },
+  "codeListExpired": { "message": "验证码列表已过期，请重新点击该字段。" },
 
   "notificationUpdated": { "message": "PassBridge 已更新到 $1", "placeholders": { "version": { "content": "$1", "example": "1.5.0" } } },
   "badgeNew": { "message": "新" },

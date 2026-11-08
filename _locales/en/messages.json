@@ -368,6 +368,7 @@
   "codeFromMessages": { "message": "Code from Messages" },
   "codeFor": { "message": "Verification code for $1", "placeholders": { "domain": { "content": "$1", "example": "accounts.example" } } },
   "couldntFillCode": { "message": "Couldn't fill the code." },
+  "codeListExpired": { "message": "The code list expired. Focus the field again." },
 
   "notificationUpdated": { "message": "PassBridge updated to $1", "placeholders": { "version": { "content": "$1", "example": "1.5.0" } } },
   "badgeNew": { "message": "NEW" },

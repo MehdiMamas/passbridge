@@ -22,7 +22,7 @@ export function setDeviceLabel(label: unknown) {
   if (typeof label === "string" && label) deviceLabel = label;
 }
 
-function freshCodeMessage() {
+export function freshCodeMessage() {
   return `Enter the new code ${deviceLabel} is showing now`;
 }
 

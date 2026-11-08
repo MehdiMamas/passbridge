@@ -368,6 +368,7 @@
   "codeFromMessages": { "message": "來自訊息的代碼" },
   "codeFor": { "message": "$1 的驗證碼", "placeholders": { "domain": { "content": "$1", "example": "accounts.example" } } },
   "couldntFillCode": { "message": "無法填寫代碼。" },
+  "codeListExpired": { "message": "代碼清單已過期，請重新點選欄位。" },
 
   "notificationUpdated": { "message": "PassBridge 已更新至 $1", "placeholders": { "version": { "content": "$1", "example": "1.5.0" } } },
   "badgeNew": { "message": "新" },

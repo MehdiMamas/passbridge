@@ -160,15 +160,15 @@ async function listOneTimeCodes(tabId, frameId, frameUrls, { listOnly = false } 
  */
 async function resolveOneTimeCode(tabId, id) {
   const cached = otpByTab.get(tabId);
-  if (!cached || Date.now() - cached.at > OTP_LIST_TTL_MS) throw new Error("code list expired, focus the field again");
+  if (!cached || Date.now() - cached.at > OTP_LIST_TTL_MS) throw new Error(t("codeListExpired"));
   const entry = cached.entries[id];
-  if (!entry) throw new Error("unknown code");
+  if (!entry) throw new Error(t("somethingWrong"));
   if (entry.source !== "totp") return entry.code;
   const fresh = await client.readOneTimeCode(tabId, cached.frameId, cached.frameUrls, entry.username);
   const match =
     fresh.find((e) => e.source === "totp" && e.username === entry.username && e.domain === entry.domain) ||
     fresh.find((e) => e.source === "totp");
-  if (!match?.code) throw new Error("no code returned");
+  if (!match?.code) throw new Error(t("somethingWrong"));
   return match.code;
 }
 
