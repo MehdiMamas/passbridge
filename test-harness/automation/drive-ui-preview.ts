@@ -71,9 +71,8 @@ await main(async () => {
       ok("grouped: exactly three domain footers", stripCount === 3, `footers=${stripCount}`);
       const copyCount = await frame.locator('button[aria-label="Copy verification code"]').count();
       ok("grouped: every code row keeps its copy button", copyCount === 6, `copy buttons=${copyCount}`);
-      const pwIcon = await frame.locator('button[aria-label="Copy password"] svg').first().innerHTML();
-      const codeIcon = await frame.locator('button[aria-label="Copy verification code"] svg').first().innerHTML();
-      ok("grouped: code copy icon is a lock, not the password icon", pwIcon !== codeIcon && codeIcon.includes("<rect"), "wrong icon on the code rows");
+      const codeIcons = frame.locator('button[aria-label="Copy verification code"] svg');
+      ok("grouped: code copy icon is the clock the page menu shows, not a lock", (await codeIcons.count()) === (await frame.locator("button[aria-label=\"Copy verification code\"] svg.lucide-clock").count()) && (await frame.locator("svg.lucide-lock").count()) === 0, "wrong icon on the code rows");
     } finally {
       await browser.close();
     }

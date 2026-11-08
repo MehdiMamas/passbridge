@@ -1,4 +1,4 @@
-import { KeyRound, Lock, RefreshCw, User, X } from "lucide-react";
+import { Clock, KeyRound, RefreshCw, User, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
@@ -58,7 +58,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
               <span className="font-mono text-sm tracking-widest">{shown}</span>
             ) : (
               <IconButton label={t("copyCode")} onClick={() => onCopy("otp", row)}>
-                <Lock size={16} />
+                <Clock size={16} />
               </IconButton>
             )}
             {!shown && (
