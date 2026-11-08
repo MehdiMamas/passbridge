@@ -1,4 +1,4 @@
-import { Clock, KeyRound, Lock, RefreshCw, User, X } from "lucide-react";
+import { Clock, ClockPlus, ExternalLink, Flag, KeyRound, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
@@ -20,12 +20,13 @@ function StatusDot({ state }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={label} />;
 }
 
-/** @param {{ label: string, onClick: () => void, children?: any }} props */
-function IconButton({ label, onClick, children }) {
+/** @param {{ label: string, onClick: () => void, isExpanded?: boolean, children?: any }} props */
+function IconButton({ label, onClick, isExpanded, children }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-expanded={isExpanded}
       title={label}
       className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]"
       onClick={onClick}
@@ -226,6 +227,16 @@ export function PopupScreen({
     if (!ok) setPin("");
   }
 
+  function toggleLogin() {
+    if (!loginOpen) {
+      setNewSite(site || "");
+      setNewUser("");
+      setNewPass("");
+      setLoginMsg("");
+    }
+    setLoginOpen(!loginOpen);
+  }
+
   /** @param {string} value */
   function onPinChange(value) {
     const next = value.replace(/\D/g, "").slice(0, 6);
@@ -401,136 +412,118 @@ export function PopupScreen({
                 <CodeRow key={row.id} row={row} site={site} grouped={false} onCopy={onCopy} onFillCode={onFillCode} />
               ))}
             </ul>
-            {onAddLogin && (
-              <div data-passbridge="add-login" className="flex flex-col gap-1.5">
-                {!loginOpen ? (
-                  <button
-                    type="button"
-                    className="self-start text-xs font-semibold text-accent"
-                    onClick={() => { setNewSite(site || ""); setNewUser(""); setNewPass(""); setLoginMsg(""); setLoginOpen(true); }}
-                  >
-                    {t("addLogin")}
+            {onAddLogin && loginOpen && (
+              <form
+                data-passbridge="add-login"
+                className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setLoginBusy(true);
+                  setLoginMsg("");
+                  const res = await onAddLogin({ site: newSite.trim(), username: newUser.trim(), password: newPass });
+                  setLoginBusy(false);
+                  if (res?.sheet) setLoginMsg(res.note || "");
+                  else if (res?.ok) { setLoginOpen(false); setNewPass(""); }
+                  else setLoginMsg(res?.error || t("errSaveLogin"));
+                }}
+              >
+                <input autoFocus value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder={t("website")} aria-label={t("website")} data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                <span className="flex gap-1.5">
+                  <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                  <button type="button" className="text-xs opacity-80" onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>{t("generate")}</button>
+                  <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? t("hide") : t("show")}</button>
+                </span>
+                {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}
+                <span className="flex justify-end gap-2">
+                  <button type="button" className="text-xs opacity-80" onClick={() => setLoginOpen(false)}>{t("cancel")}</button>
+                  <button type="submit" data-action="add-login" disabled={loginBusy || !newSite.trim() || !newPass} className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                    {loginBusy ? t("savingLogin") : t("saveLoginBtn")}
                   </button>
-                ) : (
-                  <form
-                    className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      setLoginBusy(true);
-                      setLoginMsg("");
-                      const res = await onAddLogin({ site: newSite.trim(), username: newUser.trim(), password: newPass });
-                      setLoginBusy(false);
-                      if (res?.sheet) setLoginMsg(res.note || "");
-                      else if (res?.ok) { setLoginOpen(false); setNewPass(""); }
-                      else setLoginMsg(res?.error || t("errSaveLogin"));
-                    }}
-                  >
-                    <input value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder={t("website")} aria-label={t("website")} data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                    <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                    <span className="flex gap-1.5">
-                      <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                      <button type="button" className="text-xs opacity-80" onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>{t("generate")}</button>
-                      <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? t("hide") : t("show")}</button>
-                    </span>
-                    {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}
-                    <span className="flex justify-end gap-2">
-                      <button type="button" className="text-xs opacity-80" onClick={() => setLoginOpen(false)}>{t("cancel")}</button>
-                      <button type="submit" data-action="add-login" disabled={loginBusy || !newSite.trim() || !newPass} className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
-                        {loginBusy ? t("savingLogin") : t("saveLoginBtn")}
-                      </button>
-                    </span>
-                  </form>
-                )}
-              </div>
+                </span>
+              </form>
             )}
-            {caps?.setUpTotp && onTotpScan && (
-              <div data-passbridge="add-totp" className="flex flex-col gap-1.5">
-                {!addOpen ? (
-                  <button type="button" className="self-start text-xs font-semibold text-accent" onClick={() => setAddOpen(true)}>
-                    {t("addCode")}
-                  </button>
-                ) : (
-                  <div className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2">
-                    {!held && (
-                      <>
-                        <button
-                          type="button"
-                          className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
-                          onClick={async () => {
-                            setAddMsg(t("scanningPage"));
-                            const res = await onTotpScan();
-                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
-                          }}
-                        >
-                          Scan the visible page
-                        </button>
-                        <input
-                          value={pasted}
-                          onChange={(e) => setPasted(e.target.value)}
-                          placeholder={t("pasteKey")}
-                          aria-label={t("setupKey")}
-                          autoComplete="off"
-                          spellCheck={false}
-                          className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1 text-[13px]"
-                        />
-                        <button
-                          type="button"
-                          disabled={!pasted.trim()}
-                          className="self-start rounded-lg border border-accent px-2 py-1 text-xs font-semibold text-accent disabled:opacity-50"
-                          onClick={async () => {
-                            const res = await onTotpPaste(pasted);
-                            setPasted("");
-                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
-                          }}
-                        >
-                          Use this key
-                        </button>
-                      </>
-                    )}
-                    {held && !added && (
-                      <>
-                        <p className="text-[12px]">{t("codeForLogin")}</p>
-                        {logins.length === 0 && <p className="text-[12px] opacity-70">{t("noLoginHere")}</p>}
-                        {logins.map((login) => (
-                          <label key={login.username} className="flex items-center gap-2 text-[13px]">
-                            <input type="radio" name="totp-login" checked={target === login.username} onChange={() => setTarget(login.username)} />
-                            <span className="truncate">{login.username || t("noUsername")}</span>
-                          </label>
-                        ))}
-                        <button
-                          type="button"
-                          disabled={logins.length > 0 && !target}
-                          className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                          onClick={async () => {
-                            const res = await onTotpAdd(target);
-                            if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || t("couldntOpenPasswords"));
-                          }}
-                        >
-                          {t("addToPasswords")}
-                        </button>
-                      </>
-                    )}
-                    {added && (
-                      <>
-                        <p className="text-[12px]">
-                          {watch === "saved"
-                            ? t("totpSavedCheck")
-                            : watch === "timeout"
-                              ? t("totpNotSavedYet")
-                              : watch === "check"
-                                ? t("totpCheckRefresh")
-                                : target
-                                  ? t("passwordsOpenNoteWith", [target])
-                                  : t("passwordsOpenNote")}
-                        </p>
-                        <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
-                          {t("copySetupKey")}
-                        </button>
-                      </>
-                    )}
-                    {addMsg && <p className="text-xs opacity-80">{addMsg}</p>}
-                  </div>
+            {caps?.setUpTotp && onTotpScan && addOpen && (
+              <div data-passbridge="add-totp" className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2">
+                {!held && (
+                  <>
+                    <button
+                      type="button"
+                      autoFocus
+                      className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
+                      onClick={async () => {
+                        setAddMsg(t("scanningPage"));
+                        const res = await onTotpScan();
+                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
+                      }}
+                    >
+                      Scan the visible page
+                    </button>
+                    <input
+                      value={pasted}
+                      onChange={(e) => setPasted(e.target.value)}
+                      placeholder={t("pasteKey")}
+                      aria-label={t("setupKey")}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1 text-[13px]"
+                    />
+                    <button
+                      type="button"
+                      disabled={!pasted.trim()}
+                      className="self-start rounded-lg border border-accent px-2 py-1 text-xs font-semibold text-accent disabled:opacity-50"
+                      onClick={async () => {
+                        const res = await onTotpPaste(pasted);
+                        setPasted("");
+                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
+                      }}
+                    >
+                      Use this key
+                    </button>
+                  </>
                 )}
+                {held && !added && (
+                  <>
+                    <p className="text-[12px]">{t("codeForLogin")}</p>
+                    {logins.length === 0 && <p className="text-[12px] opacity-70">{t("noLoginHere")}</p>}
+                    {logins.map((login) => (
+                      <label key={login.username} className="flex items-center gap-2 text-[13px]">
+                        <input type="radio" name="totp-login" checked={target === login.username} onChange={() => setTarget(login.username)} />
+                        <span className="truncate">{login.username || t("noUsername")}</span>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={logins.length > 0 && !target}
+                      className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                      onClick={async () => {
+                        const res = await onTotpAdd(target);
+                        if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || t("couldntOpenPasswords"));
+                      }}
+                    >
+                      {t("addToPasswords")}
+                    </button>
+                  </>
+                )}
+                {added && (
+                  <>
+                    <p className="text-[12px]">
+                      {watch === "saved"
+                        ? t("totpSavedCheck")
+                        : watch === "timeout"
+                          ? t("totpNotSavedYet")
+                          : watch === "check"
+                            ? t("totpCheckRefresh")
+                            : target
+                              ? t("passwordsOpenNoteWith", [target])
+                              : t("passwordsOpenNote")}
+                    </p>
+                    <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
+                      {t("copySetupKey")}
+                    </button>
+                  </>
+                )}
+                {addMsg && <p className="text-xs opacity-80">{addMsg}</p>}
               </div>
             )}
             {note && (
@@ -554,29 +547,36 @@ export function PopupScreen({
           </>
         )}
       </main>
-      <footer className="flex shrink-0 flex-col border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2">
+      <footer className="flex shrink-0 items-center gap-1 border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-2 py-1.5">
         {unlocked && (
-          <div className="flex flex-col items-start pb-1">
-            <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search", userQuery.trim() || undefined)}>
-              {t("openInPasswords")}
-            </button>
-            {caps?.newPasswordSheet && (
-              <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("new")}>
-                {t("newLoginInPasswords")}
-              </button>
+          <>
+            {onAddLogin && (
+              <IconButton label={t("addLogin")} isExpanded={loginOpen} onClick={toggleLogin}>
+                <UserPlus size={16} />
+              </IconButton>
             )}
-          </div>
+            {caps?.setUpTotp && onTotpScan && (
+              <IconButton label={t("addCode")} isExpanded={addOpen} onClick={() => setAddOpen(!addOpen)}>
+                <ClockPlus size={16} />
+              </IconButton>
+            )}
+            {caps?.newPasswordSheet && (
+              <IconButton label={t("newLoginInPasswords")} onClick={() => onOpenApp("new")}>
+                <SquarePlus size={16} />
+              </IconButton>
+            )}
+            <IconButton label={t("openInPasswords")} onClick={() => onOpenApp("search", userQuery.trim() || undefined)}>
+              <ExternalLink size={16} />
+            </IconButton>
+          </>
         )}
-        <div className="flex items-center justify-end">
-          <span className="flex items-center gap-3">
-            <button type="button" className="text-xs text-accent" onClick={onReport}>
-              {t("reportThisPage")}
-            </button>
-            <button type="button" className="text-xs text-accent" onClick={onSettings}>
-              {t("settings")}
-            </button>
-          </span>
-        </div>
+        <span className="flex-1" />
+        <IconButton label={t("reportThisPage")} onClick={onReport}>
+          <Flag size={16} />
+        </IconButton>
+        <IconButton label={t("settings")} onClick={onSettings}>
+          <Settings size={16} />
+        </IconButton>
       </footer>
     </div>
   );

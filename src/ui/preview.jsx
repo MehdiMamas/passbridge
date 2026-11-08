@@ -23,7 +23,7 @@ const screens = [
         { username: "katherine@example.com" },
       ],
       codes: [{ id: 0, source: "totp", domain: "accounts.example", username: "ada@example.com" }],
-      caps: { newPasswordSheet: true },
+      caps: { newPasswordSheet: true, setUpTotp: true },
     },
   ],
   [
@@ -73,7 +73,11 @@ function Frame({ title, scheme, props }) {
         onFillCode={noop}
         onCopy={noop}
         onLookup={noop}
-        onOpenApp={noop}
+        onOpenApp={(mode) => {
+          document.body.dataset.openedApp = mode;
+        }}
+        onAddLogin={async () => ({})}
+        onTotpScan={async () => ({})}
         onLock={noop}
         onRefresh={noop}
         onSettings={noop}

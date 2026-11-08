@@ -40,6 +40,24 @@ await main(async () => {
       ok("header: no lock before unlock", (await page.locator('[data-screen="needs_pin"][data-scheme="light"] header button[aria-label="Lock"]').count()) === 0);
       ok("footer: the popup leaves the update check to Settings", (await page.locator("[data-screen]").getByText("Check for updates").count()) === 0);
       ok("footer: lock left the footer", (await page.locator('[data-screen="unlocked"][data-scheme="light"] footer').getByRole("button", { name: "Lock", exact: true }).count()) === 0);
+      const footerRow = async (screen: string) => (await page.locator(`[data-screen="${screen}"][data-scheme="light"] footer button`).evaluateAll((els: HTMLElement[]) => els.map((e) => `${e.getAttribute("aria-label")}=${e.querySelector("svg")?.classList[1]}`))).join();
+      const unlockedFooter = page.locator('[data-screen="unlocked"][data-scheme="light"] footer');
+      const unlockedRow = await footerRow("unlocked");
+      ok("footer: one row of icons, add and open first, settings last", unlockedRow === "Add login…=lucide-user-plus,Add verification code…=lucide-clock-plus,New login in Passwords app…=lucide-square-plus,Open in Passwords app=lucide-external-link,Report this page=lucide-flag,Settings=lucide-settings" &&!(await unlockedFooter.innerText()).trim(), unlockedRow);
+      const reportBox = await unlockedFooter.locator('button[aria-label="Report this page"]').boundingBox();
+      const settingsBox = await unlockedFooter.locator('button[aria-label="Settings"]').boundingBox();
+      const openBox = await unlockedFooter.locator('button[aria-label="Open in Passwords app"]').boundingBox();
+      ok("footer: report sits with settings on the right, apart from the vault icons", !!openBox && !!reportBox && !!settingsBox && reportBox.x - (openBox.x + openBox.width) > 40 && settingsBox.x - (reportBox.x + reportBox.width) < 12, JSON.stringify({ openBox, reportBox, settingsBox }));
+      for (const screen of ["needs_pin", "connecting", "no_helper"]) {
+        const row = await footerRow(screen);
+        const lockedFooter = page.locator(`[data-screen="${screen}"][data-scheme="light"] footer`);
+        const lockedFooterBox = await lockedFooter.boundingBox();
+        const lockedReportBox = await lockedFooter.locator('button[aria-label="Report this page"]').boundingBox();
+        ok(`footer: ${screen} offers only report and settings, on the right`, row === "Report this page=lucide-flag,Settings=lucide-settings" && !!lockedFooterBox && !!lockedReportBox && lockedReportBox.x > lockedFooterBox.x + lockedFooterBox.width / 2, row);
+      }
+      const plainRow = await footerRow("update_available");
+      ok("footer: no Passwords app sheet icon without that capability", plainRow === "Add login…=lucide-user-plus,Open in Passwords app=lucide-external-link,Report this page=lucide-flag,Settings=lucide-settings", plainRow);
+      ok("footer: the add links left the list", (await page.locator('[data-screen="unlocked"][data-scheme="light"] main').getByRole("button", { name: /^Add / }).count()) === 0);
       const updatePage = (title: string) => page.locator(`[data-update-screen="${title}"][data-scheme="light"]`);
       const first = (await updatePage("ready_first").innerText()).replace(/\s+/g, " ");
       ok("update page: shows the installed and the new version with the release link", first.includes("1.4.1") && first.includes("1.4.2") && (await updatePage("ready_first").locator('a[href$="/releases/tag/v1.4.2"]').count()) === 1, first);
@@ -78,6 +96,26 @@ await main(async () => {
       ok("grouped: every code row keeps its copy button", copyCount === 6, `copy buttons=${copyCount}`);
       const codeIcons = frame.locator('button[aria-label="Copy verification code"] svg');
       ok("grouped: code copy icon is the clock the page menu shows, not a lock", (await codeIcons.count()) === (await frame.locator("button[aria-label=\"Copy verification code\"] svg.lucide-clock").count()) && (await frame.locator("li svg.lucide-lock").count()) === 0, "wrong icon on the code rows");
+      const popup = page.locator('[data-screen="unlocked"][data-scheme="light"]');
+      const addLogin = popup.locator('footer button[aria-label="Add login…"]');
+      const siteField = popup.locator('[data-field="new-site"]');
+      ok("add login: the form stays closed until its icon is clicked", (await addLogin.getAttribute("aria-expanded")) === "false" && (await siteField.count()) === 0);
+      await addLogin.click();
+      ok("add login: the icon opens the form and focuses its first field", (await addLogin.getAttribute("aria-expanded")) === "true" && (await siteField.evaluate((el: HTMLElement) => el === document.activeElement)));
+      const openedApp = async (label: string) => {
+        const button = popup.locator(`footer button[aria-label="${label}"]`);
+        if (!(await button.count())) return "missing";
+        await button.click();
+        return page.evaluate(() => document.body.dataset.openedApp);
+      };
+      const sheetMode = await openedApp("New login in Passwords app…");
+      const searchMode = await openedApp("Open in Passwords app");
+      ok("footer: one click opens the Passwords app sheet, the next one the app", sheetMode === "new" && searchMode === "search", `${sheetMode} ${searchMode}`);
+      await addLogin.click();
+      ok("add login: the icon closes the form again", (await addLogin.getAttribute("aria-expanded")) === "false" && (await siteField.count()) === 0);
+      const addCode = popup.locator('footer button[aria-label="Add verification code…"]');
+      await addCode.click();
+      ok("add code: the icon opens the code steps at the scan button", (await addCode.getAttribute("aria-expanded")) === "true" && (await popup.getByRole("button", { name: "Scan the visible page" }).evaluate((el: HTMLElement) => el === document.activeElement)));
     } finally {
       await browser.close();
     }
