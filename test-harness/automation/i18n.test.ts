@@ -15,6 +15,8 @@ const en = JSON.parse(readFileSync(new URL("../../_locales/en/messages.json", im
 // ellipsis: only on a label that asks for more input before it finishes, and always the single character
 const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
 const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
+const SAME_IN_EVERY_LANGUAGE = ["extensionName", "menuRoot", "pinPlaceholder", "codePlaceholder"];
+const ZH_ONE_NAME: Record<string, [RegExp, string][]> = { zh_TW: [[/通行金鑰/, "密碼金鑰"]] };
 
 // every shipped catalog has exactly the en keys and follows the language-neutral copy rules
 for (const locale of SUPPORTED_LOCALES) {
@@ -37,6 +39,12 @@ for (const locale of SUPPORTED_LOCALES) {
   ok(`copy ${locale}: a label that only opens a page has no …`, extraDots.length === 0, extraDots.join(", ") || undefined);
   const exclaimed = keys.filter((k) => /[!！]/.test(cat[k]?.message));
   ok(`copy ${locale}: style, no exclamation marks`, exclaimed.length === 0, exclaimed.join(", ") || undefined);
+  if (locale !== "en") {
+    const untranslated = keys.filter((k) => !SAME_IN_EVERY_LANGUAGE.includes(k) && cat[k]?.message === en[k].message);
+    ok(`copy ${locale}: every message is translated`, untranslated.length === 0, untranslated.join(", ") || undefined);
+  }
+  const mixed = (ZH_ONE_NAME[locale] || []).flatMap(([re, name]) => keys.filter((k) => re.test(cat[k]?.message)).map((k) => `${k} (say ${name})`));
+  ok(`copy ${locale}: one name per thing`, mixed.length === 0, mixed.join(", ") || undefined);
 }
 
 // one name per thing in the en copy

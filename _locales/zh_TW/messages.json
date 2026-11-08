@@ -159,12 +159,12 @@
   "shortcuts": { "message": "鍵盤快捷鍵" },
   "shortcutsHelp": { "message": "設定顯示登入、填寫登入或鎖定 PassBridge 的按鍵。" },
   "shortcutsBtn": { "message": "變更…" },
-  "hidePasskeys": { "message": "隱藏通行金鑰建議" },
-  "hidePasskeysHelp": { "message": "在登入欄位的選單中隱藏通行金鑰選項。通行金鑰登入按鈕仍然可用。" },
-  "passkeys": { "message": "Passkeys" },
-  "passkeysHelpMac": { "message": "你的瀏覽器可以直接使用儲存在 iCloud 密碼中的密碼金鑰。PassBridge 不會更動它們。「隱藏通行金鑰建議」也會隱藏它們。" },
+  "hidePasskeys": { "message": "隱藏密碼金鑰建議" },
+  "hidePasskeysHelp": { "message": "在登入欄位的選單中隱藏密碼金鑰選項。密碼金鑰登入按鈕仍然可用。" },
+  "passkeys": { "message": "密碼金鑰" },
+  "passkeysHelpMac": { "message": "你的瀏覽器可以直接使用儲存在 iCloud 密碼中的密碼金鑰。PassBridge 不會更動它們。「隱藏密碼金鑰建議」也會隱藏它們。" },
   "passkeysHelpWin": { "message": "在瀏覽器的密碼金鑰對話框中，選擇手機或平板電腦選項，然後用你的 iPhone 掃描 QR 代碼。必須開啟藍牙，且每次登入都需要重新掃描。" },
-  "passkeysBtn": { "message": "How it works" },
+  "passkeysBtn": { "message": "運作方式" },
   "passkeyStore": { "message": "使用此電腦上的密碼金鑰" },
   "passkeyStoreHelp": { "message": "讓 PassBridge 使用儲存在 iCloud 密碼中的密碼金鑰登入，僅限已匯入密碼金鑰的網站。需要授予權限，並解鎖 iCloud 密碼。" },
   "passkeysAllSites": { "message": "在所有網站擷取新的密碼金鑰" },
@@ -407,5 +407,5 @@
   "errTypePassword": { "message": "請輸入密碼。" },
   "errOpenSiteFirst": { "message": "請先開啟該網站。" },
   "errUnlockFirst": { "message": "請先解鎖 PassBridge。" },
-  "passkeyUnlockNeeded": { "message": "請解鎖 PassBridge 以使用通行金鑰登入。" }
+  "passkeyUnlockNeeded": { "message": "請解鎖 PassBridge 以使用密碼金鑰登入。" }
 }
