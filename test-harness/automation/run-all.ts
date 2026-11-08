@@ -19,6 +19,7 @@ const DRIVERS = [
   ["Save prompt (edit username/password before saving)", "drive-save-edit.ts"],
   ["Save prompt (a password corrected after autofill is an update) (#224)", "drive-save-update.ts"],
   ["Save prompt: allow agent sign-in for the site", "drive-save-agent-allow.ts"],
+  ["Save bar: no text selection, one-line toggle, drag to move (#234)", "drive-save-bar.ts"],
   ["Multi-account chooser", "drive-multi.ts"],
   ["Generated password reaches the confirm box (#169)", "drive-gen-confirm.ts"],
   ["PIN flow (Enter on a short code, 6 digits submit alone)", "drive-pin.ts"],

@@ -571,6 +571,17 @@ function showSaveBar(/** @type {any} */ msg) {
   saveListener = (e) => {
     if (e.source !== iframe.contentWindow || e.data?.token !== token) return;
     const action = e.data.action;
+    if (action === "move") {
+      const { dx, dy } = e.data;
+      if (typeof dx !== "number" || typeof dy !== "number" || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      const r = host.getBoundingClientRect();
+      const maxL = Math.max(0, document.documentElement.clientWidth - r.width);
+      const maxT = Math.max(0, document.documentElement.clientHeight - r.height);
+      const left = Math.min(maxL, Math.max(0, r.left + dx));
+      const top = Math.min(maxT, Math.max(0, r.top + dy));
+      host.style.inset = `${top}px auto auto ${left}px`;
+      return;
+    }
     hideSaveBar();
     // "save" is sent by the bar itself, so the edited password never crosses the page's message events
     if (action === "save") return;
