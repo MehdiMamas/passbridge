@@ -60,7 +60,7 @@ const screens = [
 /** @param {{ title: string, scheme: string, props: any }} args props are partial demo data merged into the screen */
 function Frame({ title, scheme, props }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)]" style={{ colorScheme: scheme }} data-screen={title} data-scheme={scheme}>
+    <section className="overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)] bg-[Canvas] text-[CanvasText]" style={{ colorScheme: scheme }} data-screen={title} data-scheme={scheme}>
       <p className="px-3 py-1 text-[11px] uppercase tracking-wide opacity-50">
         {title} · {scheme}
       </p>

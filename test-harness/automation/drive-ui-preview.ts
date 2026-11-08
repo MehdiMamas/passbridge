@@ -25,6 +25,12 @@ await main(async () => {
       await page.screenshot({ path: join(SHOTS, "ui-preview.png"), fullPage: true });
       const count = await page.locator("[data-screen]").count();
       ok("preview renders 12 screens (6 states x light/dark)", count === 12, `got ${count}`);
+      const lightness = (css: string) => {
+        const channels = (css.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
+        return (css.startsWith("color(") ? channels.map((v) => v * 255) : channels).reduce((sum, v) => sum + v, 0) / 3;
+      };
+      const darkFrameBg: string = await page.locator('[data-screen="unlocked"][data-scheme="dark"]').evaluate((el: HTMLElement) => getComputedStyle(el).backgroundColor);
+      ok("preview: a dark frame sits on a dark canvas so its title stays readable", darkFrameBg.startsWith("rgb(") && lightness(darkFrameBg) < 60, darkFrameBg);
       const notice = page.locator('[data-screen="update_available"][data-scheme="light"] [data-passbridge="update"]');
       const noticeText = (await notice.innerText()).replace(/\s+/g, " ").trim();
       ok("update: the notice names the new version and links its release", noticeText.startsWith("v1.4.0 is available!") && noticeText.includes("View release"), noticeText);
@@ -87,10 +93,6 @@ await main(async () => {
       ok("tooltip: leaves with the focus", (await tooltip.count()) === 0);
       const darkPopup = page.locator('[data-screen="unlocked"][data-scheme="dark"]');
       const tipColors = () => tooltip.evaluate((el: HTMLElement) => ({ bg: getComputedStyle(el).backgroundColor, fg: getComputedStyle(el).color }));
-      const lightness = (css: string) => {
-        const channels = (css.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
-        return (css.startsWith("color(") ? channels.map((v) => v * 255) : channels).reduce((sum, v) => sum + v, 0) / 3;
-      };
       await reportButton.hover();
       await tipShows("Report this page");
       const lightTip = await tipColors();
