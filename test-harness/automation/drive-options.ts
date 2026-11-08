@@ -223,7 +223,7 @@ await main(async () => {
   await themed.locator("main h1", { hasText: "Appearance" }).waitFor();
   const themeRow = themed.locator('[data-row="Theme"]');
   const appearanceRows = await themed.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
-  ok("options: Theme leads the Appearance tab", appearanceRows[0] === "Theme", appearanceRows.join("|"));
+  ok("options: Language leads the Appearance tab, then Theme", appearanceRows[0] === "Language" && appearanceRows[1] === "Theme", appearanceRows.join("|"));
   const arrowGaps = await themed.locator("main select").evaluateAll((els) => els.map((s) => {
     const arrow = s.parentElement?.querySelector("svg");
     return arrow && getComputedStyle(s).appearance === "none" ? Math.round(s.getBoundingClientRect().right - arrow.getBoundingClientRect().right) : -1;

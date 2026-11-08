@@ -365,14 +365,6 @@ function AppearanceTab({ settings, onChange }) {
   ];
   return (
     <>
-      <Row label={t("theme")} help={t("themeHelp")}>
-        {(ids, isDisabled) => (
-          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={themeOptions} onChange={(v) => onChange({ theme: v })} />
-        )}
-      </Row>
-      <SwitchRow label={t("animations")} help={t("animationsHelp")} {...toggle("showAnimations")} />
-      <SwitchRow label={t("favicons")} help={t("faviconsHelp")} {...toggle("showFavicons")} />
-      <SwitchRow label={t("badge")} help={t("badgeHelp")} {...toggle("enableBadge")} />
       <Row label={t("language")} help={t("languageHelp")}>
         {(ids, isDisabled) => (
           <Select
@@ -384,6 +376,14 @@ function AppearanceTab({ settings, onChange }) {
           />
         )}
       </Row>
+      <Row label={t("theme")} help={t("themeHelp")}>
+        {(ids, isDisabled) => (
+          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={themeOptions} onChange={(v) => onChange({ theme: v })} />
+        )}
+      </Row>
+      <SwitchRow label={t("animations")} help={t("animationsHelp")} {...toggle("showAnimations")} />
+      <SwitchRow label={t("favicons")} help={t("faviconsHelp")} {...toggle("showFavicons")} />
+      <SwitchRow label={t("badge")} help={t("badgeHelp")} {...toggle("enableBadge")} />
     </>
   );
 }
