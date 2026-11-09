@@ -1080,6 +1080,7 @@ function folderEnv(saved: any, { own = true, source = true, pickThrows = false }
   const refused = await installUpdate("1.4.1", { publicKey });
   await new Promise((r) => setTimeout(r, 350));
   ok("helper update: a refused install marks nothing and does not reload", !refused.ok && (env.data as any).updatedTo === undefined && env.reloads === 0);
+  ok("helper update: a refused install shows the catalog text and the helper's detail", refused.error === "Couldn't install the update. disk full");
   delete (globalThis as any).chrome;
 }
 {

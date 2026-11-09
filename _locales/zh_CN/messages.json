@@ -39,6 +39,7 @@
   "updating": { "message": "更新中…" },
   "viewRelease": { "message": "查看发布说明" },
   "dismiss": { "message": "忽略" },
+  "dismissUpdate": { "message": "关闭更新通知" },
   "refreshPasswords": { "message": "刷新密码" },
   "lookupPlaceholder": { "message": "搜索其他网站" },
   "lookupUserPlaceholder": { "message": "搜索用户名" },
@@ -100,6 +101,7 @@
   "couldntReadPage": { "message": "无法读取此页面。" },
   "couldntInstallUpdate": { "message": "无法安装更新。" },
   "verificationFailed": { "message": "验证失败。" },
+  "incorrectCode": { "message": "解锁码不正确。" },
   "pinErrorNewCode": { "message": "$1 — 请输入 $2 上显示的新解锁码", "placeholders": { "error": { "content": "$1", "example": "验证失败。" }, "device": { "content": "$2", "example": "你的 Mac" } } },
   "couldntRequestCode": { "message": "无法获取新解锁码。" },
 
@@ -231,6 +233,7 @@
 
   "reportTitle": { "message": "报告此页面" },
   "reportExpired": { "message": "此报告已过期。请重新打开页面并选择“报告此页面”。" },
+  "reportNoFrames": { "message": "没有框架响应。请重新加载页面后再试。" },
   "framePage": { "message": "页面" },
   "frameIframe": { "message": "内嵌框架" },
   "frameError": { "message": "错误：$1", "placeholders": { "error": { "content": "$1", "example": "上下文已失效" } } },
@@ -361,6 +364,7 @@
   "codeFromMessages": { "message": "来自信息的验证码" },
   "codeFor": { "message": "$1 的验证码", "placeholders": { "domain": { "content": "$1", "example": "accounts.example" } } },
   "couldntFillCode": { "message": "无法填充验证码。" },
+  "codeListExpired": { "message": "验证码列表已过期，请重新点击该字段。" },
 
   "notificationUpdated": { "message": "PassBridge 已更新到 $1", "placeholders": { "version": { "content": "$1", "example": "1.5.0" } } },
   "badgeNew": { "message": "新" },

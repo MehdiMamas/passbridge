@@ -39,6 +39,7 @@
   "updating": { "message": "Updating…" },
   "viewRelease": { "message": "View release" },
   "dismiss": { "message": "Dismiss" },
+  "dismissUpdate": { "message": "Dismiss update notice" },
   "refreshPasswords": { "message": "Refresh passwords" },
   "lookupPlaceholder": { "message": "Search another site" },
   "lookupUserPlaceholder": { "message": "Search usernames" },
@@ -99,6 +100,7 @@
   "couldntReadPage": { "message": "Couldn't read this page." },
   "couldntInstallUpdate": { "message": "Couldn't install the update." },
   "verificationFailed": { "message": "Verification failed." },
+  "incorrectCode": { "message": "Incorrect unlock code." },
   "pinErrorNewCode": { "message": "$1 — enter the new unlock code shown on $2", "placeholders": { "error": { "content": "$1", "example": "Verification failed." }, "device": { "content": "$2", "example": "your Mac" } } },
   "couldntRequestCode": { "message": "Couldn't get a new unlock code." },
 
@@ -230,6 +232,7 @@
 
   "reportTitle": { "message": "Report this page" },
   "reportExpired": { "message": "This report has expired. Open the page again and choose Report this page." },
+  "reportNoFrames": { "message": "No frame answered. Reload the page and try again." },
   "framePage": { "message": "Page" },
   "frameIframe": { "message": "Iframe" },
   "frameError": { "message": "Error: $1", "placeholders": { "error": { "content": "$1", "example": "context invalidated" } } },
@@ -361,6 +364,7 @@
   "codeFromMessages": { "message": "Verification code from Messages" },
   "codeFor": { "message": "Verification code for $1", "placeholders": { "domain": { "content": "$1", "example": "accounts.example" } } },
   "couldntFillCode": { "message": "Couldn't fill the code." },
+  "codeListExpired": { "message": "The code list expired. Focus the field again." },
 
   "notificationUpdated": { "message": "PassBridge updated to $1", "placeholders": { "version": { "content": "$1", "example": "1.5.0" } } },
   "badgeNew": { "message": "NEW" },

@@ -2,6 +2,7 @@
 
 import { State, setDeviceLabel } from "./apple/protocol.ts";
 import { createClient } from "./session/create-client.js";
+import { uiPinReply } from "./session/pin-reply.js";
 import { labelForOs, uiDeviceLabel } from "./apple/os-label.ts";
 import { SETTINGS_AREA, getSettings, hostBlocked, migrateSettingsToSync, settingsStore } from "./settings.js";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
@@ -159,15 +160,15 @@ async function listOneTimeCodes(tabId, frameId, frameUrls, { listOnly = false } 
  */
 async function resolveOneTimeCode(tabId, id) {
   const cached = otpByTab.get(tabId);
-  if (!cached || Date.now() - cached.at > OTP_LIST_TTL_MS) throw new Error("code list expired, focus the field again");
+  if (!cached || Date.now() - cached.at > OTP_LIST_TTL_MS) throw new Error(t("codeListExpired"));
   const entry = cached.entries[id];
-  if (!entry) throw new Error("unknown code");
+  if (!entry) throw new Error(t("somethingWrong"));
   if (entry.source !== "totp") return entry.code;
   const fresh = await client.readOneTimeCode(tabId, cached.frameId, cached.frameUrls, entry.username);
   const match =
     fresh.find((e) => e.source === "totp" && e.username === entry.username && e.domain === entry.domain) ||
     fresh.find((e) => e.source === "totp");
-  if (!match?.code) throw new Error("no code returned");
+  if (!match?.code) throw new Error(t("somethingWrong"));
   return match.code;
 }
 
@@ -1031,7 +1032,7 @@ const REPORT_GATHER_MS = 1500;
  * @param {chrome.tabs.Tab | undefined} tab
  */
 async function reportPage(tab) {
-  if (tab?.id == null) throw new Error("no tab");
+  if (tab?.id == null) throw new Error(t("errOpenSiteFirst"));
   const id = crypto.randomUUID();
   /** @type {{ tabId: number, frames: any[] }} */
   const entry = { tabId: tab.id, frames: [] };
@@ -1625,7 +1626,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!raw) return sendResponse({ ok: false, error: "no site" });
           const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
           const tab = await activeTab();
-          if (!tab?.id) return sendResponse({ ok: false, error: "no tab" });
+          if (!tab?.id) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           if (!client.ready) return sendResponse({ ok: false, error: t("locked") });
           const logins = uniqueByUsername(await orderByUse(hostnameOf(url), await siteLogins(tab.id, url)));
           sendResponse({ ok: true, host: hostnameOf(url), logins: publicLogins(logins) });
@@ -1634,7 +1635,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "copyField": {
           const tab = await activeTab();
-          if (!tab?.url || tab.id == null) return sendResponse({ ok: false, error: "no tab" });
+          if (!tab?.url || tab.id == null) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           const url = httpUrl(msg.url) || tab.url;
           let text = "";
           if (msg.field === "username") text = msg.username || "";
@@ -1685,7 +1686,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "getOneTimeCodes": {
           const tab = await activeTab();
           const url = httpUrl(msg.url) || tab?.url;
-          if (!tab?.id || !url) return sendResponse({ ok: false, error: "no active tab" });
+          if (!tab?.id || !url) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           if (!client.ready) return sendResponse({ ok: true, rows: [] });
           if (!client.canFillOneTimeCodes) return sendResponse({ ok: true, supported: false, rows: [] });
           const { rows, requiresAuth } = await listOneTimeCodes(tab.id, 0, frameUrlsFor({ url }), { listOnly: !!msg.listOnly });
@@ -1696,10 +1697,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "fillOneTimeCode": {
           // every frame gets it, only the one with a code field acts. value returned so the popup can show it if none did
           const tab = await activeTab();
-          if (!tab?.url || tab.id == null) return sendResponse({ ok: false, error: "no active tab" });
+          if (!tab?.url || tab.id == null) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           const host = hostnameOf(tab.url);
           if (!(await isFillUrlAllowed(tab.url))) {
-            return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS page" });
+            return sendResponse({ ok: false, error: t("refuseFillHttp") });
           }
           const tabId = tab.id;
           const code = await resolveOneTimeCode(tabId, Number(msg.id));
@@ -1797,12 +1798,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "verifyPin": {
           if (fromContent && sender.frameId !== 0) return sendResponse({ ok: false, error: "forbidden" });
-          return sendResponse(await submitPin(msg.pin));
+          return sendResponse(uiPinReply(await submitPin(msg.pin)));
         }
 
         case "getLogins": {
           const tab = await activeTab();
-          if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
+          if (!tab?.url) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           const logins = await siteLogins(tab.id, tab.url);
           const ordered = publicLogins(uniqueByUsername(await orderByUse(hostnameOf(tab.url), logins)));
           // the page may already name the account (Gmail's password page), that login goes first
@@ -1817,10 +1818,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "fillOnPage": {
           const tab = await activeTab();
-          if (!tab?.url) return sendResponse({ ok: false, error: "no active tab" });
+          if (!tab?.url) return sendResponse({ ok: false, error: t("errOpenSiteFirst") });
           const pageHost = hostnameOf(tab.url);
           if (!(await isFillUrlAllowed(tab.url))) {
-            return sendResponse({ ok: false, error: "refusing to fill on a non-HTTPS page" });
+            return sendResponse({ ok: false, error: t("refuseFillHttp") });
           }
           const credUrl = httpUrl(msg.url) || tab.url;
           const credHost = hostnameOf(credUrl);
