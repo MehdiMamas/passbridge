@@ -1662,13 +1662,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, os: platformOs, label: uiDeviceLabel(platformOs, t) });
           break;
 
-        case "checkUpdateNow": {
-          const reached = await checkForUpdate(Date.now(), { force: true });
-          const { latestRelease } = await chrome.storage.local.get("latestRelease");
-          sendResponse({ ok: true, reached: !!reached, latest: latestRelease ?? null, available: await availableUpdate(), current: chrome.runtime.getManifest().version });
-          break;
-        }
-
         case "getState":
           await platformReady;
           await ensureConnected();

@@ -3,6 +3,7 @@ import { PopupScreen } from "./popup-screen.jsx";
 import { UpdateScreen } from "./update-screen.jsx";
 
 const noop = () => {};
+const slow = () => new Promise((resolve) => setTimeout(resolve, 800));
 /** @type {[string, any][]} demo props are partial, merged into the screen */
 const screens = [
   ["no_helper", { state: "no_helper", os: "win" }],
@@ -23,7 +24,7 @@ const screens = [
         { username: "katherine@example.com" },
       ],
       codes: [{ id: 0, source: "totp", domain: "accounts.example", username: "ada@example.com" }],
-      caps: { newPasswordSheet: true },
+      caps: { newPasswordSheet: true, setUpTotp: true },
     },
   ],
   [
@@ -59,7 +60,7 @@ const screens = [
 /** @param {{ title: string, scheme: string, props: any }} args props are partial demo data merged into the screen */
 function Frame({ title, scheme, props }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)]" style={{ colorScheme: scheme }} data-screen={title} data-scheme={scheme}>
+    <section className="overflow-hidden rounded-2xl border border-[color-mix(in_srgb,CanvasText_15%,Canvas)] bg-[Canvas] text-[CanvasText]" style={{ colorScheme: scheme }} data-screen={title} data-scheme={scheme}>
       <p className="px-3 py-1 text-[11px] uppercase tracking-wide opacity-50">
         {title} · {scheme}
       </p>
@@ -73,14 +74,17 @@ function Frame({ title, scheme, props }) {
         onFillCode={noop}
         onCopy={noop}
         onLookup={noop}
-        onOpenApp={noop}
+        onOpenApp={(mode) => {
+          document.body.dataset.openedApp = mode;
+        }}
+        onAddLogin={async () => ({})}
+        onTotpScan={async () => ({})}
         onLock={noop}
-        onRefresh={noop}
+        onRefresh={slow}
         onSettings={noop}
-        onReport={noop}
+        onReport={slow}
         onOpenUpdate={noop}
         onDismissUpdate={noop}
-        onCheckUpdate={noop}
         {...props}
       />
     </section>

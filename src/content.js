@@ -1,3 +1,4 @@
+import { Clock, createElement } from "lucide";
 import { AutoFillConstants } from "./autofill/hints.ts";
 import { generateAlphanumericPassword, generateApplePassword } from "./password-generate.js";
 import { isBareCodeOtp } from "./otp-field.js";
@@ -1610,26 +1611,9 @@ function otpTargetField() {
 
 // no innerHTML on a page we dont control
 function codeIcon() {
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("width", "17");
-  svg.setAttribute("height", "17");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.6");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
+  const svg = createElement(Clock, { width: 17, height: 17, "stroke-width": 1.6, "aria-hidden": "true" });
   svg.style.opacity = "0.5";
   svg.style.flex = "none";
-  const ring = document.createElementNS(NS, "circle");
-  ring.setAttribute("cx", "12");
-  ring.setAttribute("cy", "12");
-  ring.setAttribute("r", "9");
-  const hands = document.createElementNS(NS, "path");
-  hands.setAttribute("d", "M12 7v5l3 2");
-  svg.append(ring, hands);
   return svg;
 }
 

@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { t } from "../i18n/runtime.js";
 
 const muted = "text-[color-mix(in_srgb,CanvasText_60%,Canvas)]";
@@ -22,10 +23,10 @@ function Steps({ step }) {
       {STEPS.map(([id, label], i) => (
         <li key={id} data-step={id} data-state={i < at ? "done" : i === at ? "active" : "todo"} className={`flex items-center gap-2 ${i > at ? muted : ""}`}>
           <span
-            className={`grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] text-white ${i < at ? "bg-ok" : i === at ? "bg-accent" : `border ${border}`}`}
+            className={`grid h-4 w-4 shrink-0 place-items-center rounded-full text-white ${i < at ? "bg-ok" : i === at ? "bg-accent" : `border ${border}`}`}
             aria-hidden="true"
           >
-            {i < at ? "✓" : ""}
+            {i < at && <Check size={11} strokeWidth={3} />}
           </span>
           <span className={i === at ? "font-semibold" : ""}>{t(label)}</span>
 

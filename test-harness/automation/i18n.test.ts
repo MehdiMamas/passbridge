@@ -13,7 +13,13 @@ function ok(name: string, cond: unknown, _detail?: string) {
 
 const en = JSON.parse(readFileSync(new URL("../../_locales/en/messages.json", import.meta.url), "utf8"));
 
-// every shipped catalog has exactly the en keys
+// ellipsis: only on a label that asks for more input before it finishes, and always the single character
+const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
+const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
+const SAME_IN_EVERY_LANGUAGE = ["extensionName", "menuRoot", "pinPlaceholder", "codePlaceholder"];
+const ZH_ONE_NAME: Record<string, [RegExp, string][]> = { zh_TW: [[/通行金鑰|密碼金鑰/, "通行密鑰"]] };
+
+// every shipped catalog has exactly the en keys and follows the language-neutral copy rules
 for (const locale of SUPPORTED_LOCALES) {
   const cat = JSON.parse(readFileSync(new URL(`../../_locales/${locale}/messages.json`, import.meta.url), "utf8"));
   const keys = Object.keys(cat);
@@ -24,6 +30,58 @@ for (const locale of SUPPORTED_LOCALES) {
   const phMismatch = keys.filter((k) =>
     JSON.stringify(Object.keys(en[k].placeholders || {})) !== JSON.stringify(Object.keys(cat[k]?.placeholders || {})));
   ok(`catalog ${locale}: placeholders match en`, phMismatch.length === 0, phMismatch.join(", ") || undefined);
+  const chromeOnly = keys.filter((k) => /\bChrome\b/.test(cat[k]?.message));
+  ok(`copy ${locale}: no message names Chrome, every Chromium browser runs PassBridge`, chromeOnly.length === 0, chromeOnly.join(", ") || undefined);
+  const threeDots = keys.filter((k) => /\.\.\./.test(cat[k]?.message));
+  ok(`copy ${locale}: ellipsis is one character, not three dots`, threeDots.length === 0, threeDots.join(", ") || undefined);
+  const missingDots = ASKS_FOR_INPUT.filter((k) => !cat[k]?.message?.endsWith("…"));
+  ok(`copy ${locale}: a label that asks for more input ends with …`, missingDots.length === 0, missingDots.join(", ") || undefined);
+  const extraDots = OPENS_ONLY.filter((k) => cat[k]?.message?.endsWith("…"));
+  ok(`copy ${locale}: a label that only opens a page has no …`, extraDots.length === 0, extraDots.join(", ") || undefined);
+  const exclaimed = keys.filter((k) => /[!！]/.test(cat[k]?.message));
+  ok(`copy ${locale}: style, no exclamation marks`, exclaimed.length === 0, exclaimed.join(", ") || undefined);
+  if (locale !== "en") {
+    const untranslated = keys.filter((k) => !SAME_IN_EVERY_LANGUAGE.includes(k) && cat[k]?.message === en[k].message);
+    ok(`copy ${locale}: every message is translated`, untranslated.length === 0, untranslated.join(", ") || undefined);
+  }
+  const mixed = (ZH_ONE_NAME[locale] || []).flatMap(([re, name]) => keys.filter((k) => re.test(cat[k]?.message)).map((k) => `${k} (say ${name})`));
+  ok(`copy ${locale}: one name per thing`, mixed.length === 0, mixed.join(", ") || undefined);
+}
+
+// one name per thing in the en copy
+const MIXED_NAMES: [RegExp, string][] = [
+  [/System default/, "System"],
+  [/iCloud Keychain|Apple Passwords|Passwords vault/, "iCloud Passwords"],
+  [/(?:\bin|\bto|\bopen) Passwords\b(?! app)|^Passwords\b(?! app)/, "the Passwords app"],
+  [/\bPassword helper\b|Passwords helper|updater helper|PassBridge helper not reachable/, "Apple's password helper or the PassBridge helper"],
+  [/Needs the verification code|verification code was|Enter the code|for a new code|the new code\b|Request a new code/, "unlock code"],
+  [/Look up/, "Search"],
+  [/\bLet agents\b/, "Allow"],
+  [/Create a login|New login in/, "Add login"],
+  [/No saved passwords|No saved login\b/, "No saved logins"],
+  [/fully quit|Restart your browser/i, "Quit and reopen the browser"],
+  [/What's new on GitHub/, "View release"],
+  [/Code from Messages/, "Verification code from Messages"],
+  [/Click Update again/, "Update now"],
+  [/without Touch ID/, "Windows Hello on the Windows-only passkey row"],
+];
+for (const [re, name] of MIXED_NAMES) {
+  const hits = Object.keys(en).filter((k) => re.test(en[k].message));
+  ok(`copy en: one name per thing, say ${name}`, hits.length === 0, hits.join(", ") || undefined);
+}
+
+// writing style in the en copy
+const STYLE: [RegExp, string][] = [
+  [/Strong Password|Special Characters/, "sentence case"],
+  [/^(?:Fill|Copy) password without/, "a password without special characters"],
+  [/This QR\b|\bQR is\b/, "That QR code"],
+  [/otpauth/, "setup key, not the link scheme"],
+  [/^Off by default\./, "no default in the help line, the switch shows it"],
+  [/^When the /, "a help line is a full sentence"],
+];
+for (const [re, rule] of STYLE) {
+  const hits = Object.keys(en).filter((k) => re.test(en[k].message));
+  ok(`copy en: style, ${rule}`, hits.length === 0, hits.join(", ") || undefined);
 }
 
 // locale resolution
