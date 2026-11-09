@@ -122,7 +122,9 @@ await main(async () => {
   const note = page.locator('[role="note"]');
   await note.waitFor();
   ok("options: no policy host shows one notice with the setup link", (await note.count()) === 1 && (await note.innerText()).includes(HELPER_NOTICE) && (await note.locator('a[href*="/SETUP.md#"]').count()) === 1);
-  ok("options: no policy host greys the password manager", await row("Hide the browser's password manager").locator('[role="switch"]').isDisabled());
+  const handDrawn = await page.locator("svg:not(.lucide)").count();
+  ok("options: every tab and notice icon comes from Lucide", handDrawn === 0 && (await page.locator("nav a svg.lucide").count()) === OPTION_TABS.length && (await note.locator("svg.lucide-info").count()) === 1, `hand-drawn=${handDrawn}`);
+  ok("options: no policy host greys the password manager",await row("Hide the browser's password manager").locator('[role="switch"]').isDisabled());
   const browserRows = await page.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
   ok("options: browser rows in order", browserRows.join("|") === BROWSER_ROWS.join("|"), browserRows.join("|"));
   const passkeysText = await row("Passkeys").innerText();
