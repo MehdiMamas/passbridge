@@ -16,7 +16,7 @@ const en = JSON.parse(readFileSync(new URL("../../_locales/en/messages.json", im
 const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
 const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
 const SAME_IN_EVERY_LANGUAGE = ["extensionName", "menuRoot", "pinPlaceholder", "codePlaceholder"];
-const ZH_ONE_NAME: Record<string, [RegExp, string][]> = { zh_TW: [[/通行金鑰/, "密碼金鑰"]] };
+const ZH_ONE_NAME: Record<string, [RegExp, string][]> = { zh_TW: [[/通行金鑰|密碼金鑰/, "通行密鑰"]] };
 
 // every shipped catalog has exactly the en keys and follows the language-neutral copy rules
 for (const locale of SUPPORTED_LOCALES) {
