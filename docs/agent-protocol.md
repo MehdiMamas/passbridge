@@ -15,8 +15,8 @@ WSL: the vault is only reachable from the Windows side, so a client in WSL on th
 1. Run the helper's installer: `install.sh` on macOS (1.4.0 or later), `install.ps1` on Windows (needs Python). It registers the native host `com.passbridge.agent`.
 2. Quit and reopen the browser.
 3. In PassBridge Settings, on the Agents tab, turn on Allow agent sign-in. It is off by default.
-4. Optional: to let a program add new logins, turn on Let agents save new logins on the same tab (needs Allow agent sign-in; off by default). It can only add, never read or overwrite a login.
-5. Optional: after that, the save bar shows "Let agents sign in on <site>" when you save a login for a site that is not on the allowlist. It starts checked only for a password PassBridge generated; ticking it and saving adds the site (the registrable domain, or the full host on shared hosts such as Workday tenants) to the allowlist.
+4. Optional: to let a program add new logins, turn on Allow agents to save new logins on the same tab (needs Allow agent sign-in; off by default). It can only add, never read or overwrite a login.
+5. Optional: after that, the save bar shows "Allow agents to sign in on <site>" when you save a login for a site that is not on the allowlist. It starts checked only for a password PassBridge generated; ticking it and saving adds the site (the registrable domain, or the full host on shared hosts such as Workday tenants) to the allowlist.
 
 While it is off, the extension doesn't start the host, so the socket or pipe below doesn't exist.
 
@@ -69,7 +69,7 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 
 On Windows, iCloud for Windows shows the code in a window that is excluded from screen capture, so remote desktop shows a black box there. `native/windows/read-pair-code.ps1` reads the code from that window's accessibility text and prints just the 6 digits (exit 1 when no code window is open), for sending to the device you pair from. It writes nothing to disk; never run it where its output is logged.
 
-`save` needs Let agents save new logins, not the allowlist. The tab, or the `url`, must be `https:` and not a local host. Send exactly one of `tabId` and `url`; both or neither is `bad_request`, and so is a `url` that does not parse; a `url` that is not `https:` is `not_allowed`. Only `save` takes `url`: `logins` and `sign_in` with a `url` are `bad_request`. The Activity list keeps the origin of a `url`, never its path or query. The password is sent in the request, is never in a reply, and is never written to the Activity list (it keeps the op, tab, site and username). Apple's Passwords may show its own prompt for the new login; if nobody answers it in time, the reply is `needs_user`. The extension shows a notification for each saved login. `save` counts toward the `sign_in` rate limit.
+`save` needs Allow agents to save new logins, not the allowlist. The tab, or the `url`, must be `https:` and not a local host. Send exactly one of `tabId` and `url`; both or neither is `bad_request`, and so is a `url` that does not parse; a `url` that is not `https:` is `not_allowed`. Only `save` takes `url`: `logins` and `sign_in` with a `url` are `bad_request`. The Activity list keeps the origin of a `url`, never its path or query. The password is sent in the request, is never in a reply, and is never written to the Activity list (it keeps the op, tab, site and username). Apple's Passwords may show its own prompt for the new login; if nobody answers it in time, the reply is `needs_user`. The extension shows a notification for each saved login. `save` counts toward the `sign_in` rate limit.
 
 `site` is the site the client believes the tab is on, a host or a URL. If the tab's host is not that site or a subdomain of it, the reply is `not_allowed` with `reason: "site_mismatch"`. A client that leaves `site` out still works. Send it, so a tab that navigated away between your steps is refused.
 
@@ -112,7 +112,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `locked` | `pair_pin`: 5 wrong codes in a row; send `pair_start` for a fresh code |
 | `exists` | `save`: a login with that username already exists for the site |
 | `no_tab` | no tab with that id, or it has no URL |
-| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Let agents save new logins is off (`reason: "save_off"`) |
+| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Allow agents to save new logins is off (`reason: "save_off"`) |
 | `rate_limited` | more than 10 `sign_in` or `save` requests in 10 minutes |
 | `needs_user` | the user has to act: the extension isn't paired, or the Passwords approval (Touch ID) was refused or not given in time |
 | `no_login` | no saved login for the site, or none matching `username` |

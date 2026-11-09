@@ -125,6 +125,6 @@ await main(async () => {
   await clickMenu(lp, "Unlock to autofill");
   await lp.waitForTimeout(500);
   const t2 = await menuText(lp);
-  ok("locked: PIN field after click", /Enter the code/i.test(t2), `got "${t2}"`);
+  ok("locked: PIN field after click", /Enter the unlock code/i.test(t2), `got "${t2}"`);
   await lp.screenshot({ path: join(SHOTS, "v4-locked-pin.png") });
 });

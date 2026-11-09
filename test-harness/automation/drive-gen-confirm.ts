@@ -5,8 +5,8 @@ await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const page = await ctx.newPage();
   for (const [label, row, alnum] of ([
-    ["strong", "Strong Password", false],
-    ["no special characters", "Without Special Characters", true],
+    ["strong", "Strong password", false],
+    ["no special characters", "Without special characters", true],
   ] as [string, string, boolean][])) {
     await page.goto(`${BASE}/signup-noform-clears.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(300);

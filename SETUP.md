@@ -179,7 +179,7 @@ This stores copies of your passkeys in your iCloud Passwords vault and signs sig
 3. Unlock the iCloud Passwords vault, choose "Import passkeys" and pick the file. Wait for the list of saved and skipped passkeys; only ES256 (P-256) passkeys are kept.
 4. Delete the export file now. It holds your passkeys unprotected.
 5. Sign in on a site you imported a passkey for.
-6. Optional: turn on "Sign in without Touch ID". It keeps your passkeys unlocked in this Chrome until you quit it, so sign-ins need no verification. Anyone using this Chrome profile can sign in with them. Turning it off clears them.
+6. Optional: turn on "Sign in without Windows Hello". It keeps your passkeys unlocked in this Chrome until you quit it, so sign-ins need no verification. Anyone using this Chrome profile can sign in with them. Turning it off clears them.
 
 Sync all (comes with the PassBridge Mac app, not released yet): when a site asks for a passkey PassBridge does not have, the popup says so and offers Sync all (also in Options). On your Mac, open Passwords, choose File > Export All Items to App… > PassBridge, then confirm with Touch ID. Passkeys made outside Chrome (iPhone, Safari) come over on your next Sync all.
 
@@ -214,7 +214,7 @@ To take a newer Bitwarden autofill snapshot, see [UPSTREAMS.md](UPSTREAMS.md).
 
 **Couldn't reach Apple's password helper.** On Mac, Passwords has to be on and the id has to match. On Windows, install iCloud for Windows, turn Passwords on, run `install.ps1`, and fully quit the browser.
 
-**The code is incorrect.** A code belongs to one handshake. If two prompts are visible, use the newest. In the popup, choose Request a new code. Codes expire after about 3 minutes.
+**The code is incorrect.** A code belongs to one handshake. If two prompts are visible, use the newest. In the popup, choose Get a new unlock code. Codes expire after about 3 minutes.
 
 **The menu never appears.** Another copy of this id (Apple's extension, or a second unpacked copy) is loaded. Disable the other one. In settings, Inline menu must not be Off, and the site must not be listed under Sites without the inline menu.
 

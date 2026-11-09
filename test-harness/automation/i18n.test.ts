@@ -25,6 +25,56 @@ for (const locale of SUPPORTED_LOCALES) {
   ok(`catalog ${locale}: placeholders match en`, phMismatch.length === 0, phMismatch.join(", ") || undefined);
 }
 
+const chromeOnly = Object.keys(en).filter((k) => /\bChrome\b/.test(en[k].message));
+ok("copy en: no message names Chrome, every Chromium browser runs PassBridge", chromeOnly.length === 0, chromeOnly.join(", ") || undefined);
+
+// one name per thing in the en copy
+const MIXED_NAMES: [RegExp, string][] = [
+  [/System default/, "System"],
+  [/iCloud Keychain|Apple Passwords|Passwords vault/, "iCloud Passwords"],
+  [/(?:\bin|\bto|\bopen) Passwords\b(?! app)|^Passwords\b(?! app)/, "the Passwords app"],
+  [/\bPassword helper\b|Passwords helper|updater helper|PassBridge helper not reachable/, "Apple's password helper or the PassBridge helper"],
+  [/Needs the verification code|verification code was|Enter the code|for a new code|the new code\b|Request a new code/, "unlock code"],
+  [/Look up/, "Search"],
+  [/\bLet agents\b/, "Allow"],
+  [/Create a login|New login in/, "Add login"],
+  [/No saved passwords|No saved login\b/, "No saved logins"],
+  [/fully quit|Restart your browser/i, "Quit and reopen the browser"],
+  [/What's new on GitHub/, "View release"],
+  [/Code from Messages/, "Verification code from Messages"],
+  [/Click Update again/, "Update now"],
+  [/without Touch ID/, "Windows Hello on the Windows-only passkey row"],
+];
+for (const [re, name] of MIXED_NAMES) {
+  const hits = Object.keys(en).filter((k) => re.test(en[k].message));
+  ok(`copy en: one name per thing, say ${name}`, hits.length === 0, hits.join(", ") || undefined);
+}
+
+// ellipsis: only on a label that asks for more input before it finishes, and always the single character
+const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
+const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
+const missingDots = ASKS_FOR_INPUT.filter((k) => !en[k].message.endsWith("…"));
+ok("copy en: a label that asks for more input ends with …", missingDots.length === 0, missingDots.join(", ") || undefined);
+const extraDots = OPENS_ONLY.filter((k) => en[k].message.endsWith("…"));
+ok("copy en: a label that only opens a page has no …", extraDots.length === 0, extraDots.join(", ") || undefined);
+const threeDots = Object.keys(en).filter((k) => en[k].message.includes("..."));
+ok("copy en: ellipsis is one character, not three dots", threeDots.length === 0, threeDots.join(", ") || undefined);
+
+// writing style in the en copy
+const STYLE: [RegExp, string][] = [
+  [/!/, "no exclamation marks"],
+  [/Strong Password|Special Characters/, "sentence case"],
+  [/^(?:Fill|Copy) password without/, "a password without special characters"],
+  [/This QR\b|\bQR is\b/, "That QR code"],
+  [/otpauth/, "setup key, not the link scheme"],
+  [/^Off by default\./, "no default in the help line, the switch shows it"],
+  [/^When the /, "a help line is a full sentence"],
+];
+for (const [re, rule] of STYLE) {
+  const hits = Object.keys(en).filter((k) => re.test(en[k].message));
+  ok(`copy en: style, ${rule}`, hits.length === 0, hits.join(", ") || undefined);
+}
+
 // locale resolution
 ok("normalize: zh-CN and zh map to zh_CN", normalizeLocale("zh-CN") === "zh_CN" && normalizeLocale("zh") === "zh_CN");
 ok("normalize: en-US and en map to en", normalizeLocale("en-US") === "en" && normalizeLocale("en") === "en");

@@ -1293,7 +1293,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
 
 {
   ok("options: passkeys row on Windows points at the phone steps", passkeysView(true).helpKey === "passkeysHelpWin");
-  ok("options: passkeys row off Windows says Chrome uses iCloud Keychain", passkeysView(false).helpKey === "passkeysHelpMac");
+  ok("options: passkeys row off Windows says the browser uses iCloud Passwords passkeys", passkeysView(false).helpKey === "passkeysHelpMac");
   const sum = passkeyImportSummary(([{ status: "saved" }, { status: "saved" }, { status: "exists" }, { status: "skipped" }, { status: "failed" }] as any));
   ok("options: passkey import summary counts each outcome", sum.total === 5 && sum.saved === 2 && sum.exists === 1 && sum.skipped === 1 && sum.failed === 1);
   ok("options: passkeys help opens the SETUP.md Passkeys section", passkeysView(false).url.endsWith("SETUP.md#passkeys"));
@@ -1329,7 +1329,7 @@ ok("a big page around a bare code field is not used as context", !isBareCodeOtp(
     }
   }
   ok("options: no updater notice while checks are off", view("present", "missing", false, false).notices.updates === null);
-  ok("options: a toggle with no helper note still says to restart", policyMessage(({ ok: true, hidden: false, needsApproval: true } as any), true) === "Fully quit and reopen the browser to apply this.");
+  ok("options: a toggle with no helper note still says to restart", policyMessage(({ ok: true, hidden: false, needsApproval: true } as any), true) === "Quit and reopen the browser to apply this.");
   ok("options: a toggle shows the helper's own note", policyMessage(({ ok: true, hidden: true, note: "Approve it in Windows." } as any), true) === "Approve it in Windows.");
   ok("options: a failed toggle shows the error or a fallback", policyMessage({ ok: false, error: "denied" }, true) === "denied" && policyMessage({ ok: false }, true) === "Couldn't change the policy.");
   ok("theme: system is the default", SETTINGS_DEFAULTS.theme === "system");
