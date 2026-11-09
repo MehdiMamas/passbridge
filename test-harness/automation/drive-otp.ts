@@ -1,4 +1,5 @@
-import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok } from "./lib.ts";
+import { Clock } from "lucide";
+import { BASE, build, clickMenu, launchExtension, main, menuShown, menuText, ok, pierced } from "./lib.ts";
 
 await main(async () => {
   const ctx = await launchExtension(build("otp"));
@@ -28,6 +29,11 @@ await main(async () => {
     await page.waitForTimeout(600);
     const t = await menuText(page);
     ok("singlefield: code row offered on focus", /Verification code/.test(t), t);
+    const view = await pierced(page);
+    const icon = view.find((n) => n.nodeName.toLowerCase() === "svg");
+    const drawn = (icon?.children || []).map((c) => ({ tag: c.nodeName.toLowerCase(), attrs: view.attrs(c) }));
+    const isClock = drawn.length === Clock.length && Clock.every(([tag, attrs], i) => drawn[i].tag === tag && Object.entries(attrs).every(([k, v]) => drawn[i].attrs[k] === String(v)));
+    ok("singlefield: the code row icon is Lucide's clock", isClock, JSON.stringify(drawn));
     await clickMenu(page, "Verification code");
     await page.waitForTimeout(600);
     const v = await page.inputValue('input[name="otp"]');
