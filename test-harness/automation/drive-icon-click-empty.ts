@@ -41,7 +41,7 @@ await main(async () => {
     ok("nohelper: focus alone shows nothing", !(await menuShown(page)));
     await clickIcon(page);
     const text = await menuText(page);
-    ok("nohelper: icon click shows the helper-not-reachable row", /helper not reachable/.test(text), text);
+    ok("nohelper: icon click shows the helper-unavailable row", /password helper unavailable/.test(text), text);
     await ctx.close();
   }
 

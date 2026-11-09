@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useState } from "react";
+import { Clock, ClockPlus, Dices, ExternalLink, Eye, EyeOff, Flag, KeyRound, LoaderCircle, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
 import { TOTP_WATCH_EVERY_MS, watchState } from "./totp-watch.js";
@@ -19,45 +21,68 @@ function StatusDot({ state }) {
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={label} />;
 }
 
-/** @param {{ label: string, onClick: () => void, children?: any }} props */
-function IconButton({ label, onClick, children }) {
+const POPUP_ROOT = '[data-passbridge="popup"]';
+const TIP_GAP = 6;
+const TIP_INSET = 4;
+
+/** @param {{ anchor: HTMLElement, text: string }} props */
+function Tooltip({ anchor, text }) {
+  const ref = useRef(/** @type {HTMLSpanElement | null} */ (null));
+  const [place, setPlace] = useState(/** @type {{ left: number, top: number } | null} */ (null));
+  const root = anchor.closest(POPUP_ROOT) ?? document.body;
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const box = ref.current.getBoundingClientRect();
+    const spot = anchor.getBoundingClientRect();
+    const bounds = root.getBoundingClientRect();
+    const left = Math.min(Math.max(spot.left + spot.width / 2 - box.width / 2, bounds.left + TIP_INSET), bounds.right - box.width - TIP_INSET);
+    const above = spot.top - TIP_GAP - box.height;
+    setPlace({ left, top: above >= bounds.top + TIP_INSET ? above : spot.bottom + TIP_GAP });
+  }, [anchor, text]);
+  return createPortal(
+    <span
+      ref={ref}
+      data-tooltip
+      aria-hidden="true"
+      style={place ?? { visibility: "hidden" }}
+      className="pointer-events-none fixed top-0 left-0 z-50 rounded-md border border-[color-mix(in_srgb,CanvasText_15%,Canvas)] bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-[CanvasText] shadow-md"
+    >
+      {text}
+    </span>,
+    root,
+  );
+}
+
+/** @param {{ label: string, onClick: () => any, isExpanded?: boolean, className?: string, children?: any }} props */
+function IconButton({ label, onClick, isExpanded, className = "text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]", children }) {
+  const [tipAnchor, setTipAnchor] = useState(/** @type {HTMLElement | null} */ (null));
+  const [isBusy, setIsBusy] = useState(false);
   return (
     <button
       type="button"
       aria-label={label}
-      title={label}
-      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-accent hover:bg-[color-mix(in_srgb,var(--color-accent)_14%,Canvas)]"
-      onClick={onClick}
+      aria-expanded={isExpanded}
+      aria-busy={isBusy}
+      disabled={isBusy}
+      className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg disabled:cursor-progress ${className}`}
+      onPointerEnter={(e) => setTipAnchor(e.currentTarget)}
+      onPointerLeave={() => setTipAnchor(null)}
+      onFocus={(e) => {
+        if (e.currentTarget.matches(":focus-visible")) setTipAnchor(e.currentTarget);
+      }}
+      onBlur={() => setTipAnchor(null)}
+      onClick={() => {
+        const work = onClick();
+        if (!work?.then) return;
+        setTipAnchor(null);
+        setIsBusy(true);
+        const done = () => setIsBusy(false);
+        work.then(done, done);
+      }}
     >
-      {children}
+      {isBusy ? <LoaderCircle size={children?.props?.size ?? 16} className="animate-spin" /> : children}
+      {tipAnchor && <Tooltip anchor={tipAnchor} text={label} />}
     </button>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="5.5" r="2.25" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M3.5 13.25c.6-2.1 2.3-3.25 4.5-3.25s3.9 1.15 4.5 3.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function KeyIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="5.5" cy="8" r="2.75" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M8 8h5.25M11.5 8v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
   );
 }
 
@@ -84,7 +109,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
               <span className="font-mono text-sm tracking-widest">{shown}</span>
             ) : (
               <IconButton label={t("copyCode")} onClick={() => onCopy("otp", row)}>
-                <LockIcon />
+                <Clock size={16} />
               </IconButton>
             )}
             {!shown && (
@@ -129,7 +154,7 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
  *   state: string, os: string, label?: string, site: string,
  *   logins: PopupLogin[], codes: PopupRow[], caps?: any, note?: string, noteTone?: string,
  *   nudge?: any, syncSteps: string[], onSyncAll: () => any, pinError?: string, showFavicons?: boolean,
- *   update?: any, installingUpdate?: boolean, checkingUpdate?: boolean,
+ *   update?: any, installingUpdate?: boolean,
  *   onVerify: (pin: string) => Promise<boolean>, onNewCode: () => any,
  *   onFill: (loginName: string) => any, onFillCode: (row: PopupRow) => any,
  *   onCopy: (field: string, row: PopupRow) => any, onLookup: (value: string) => any,
@@ -139,7 +164,6 @@ function CodeRow({ row, site, grouped, onCopy, onFillCode }) {
  *   onTotpAdd: (target: string) => Promise<any>, onTotpCopyKey: () => Promise<any>,
  *   onCheckCodes: () => Promise<PopupRow[]>, onLock: () => any, onRefresh: () => any, onSettings: () => any,
  *   onReport: () => any, onOpenUpdate: () => any, onInstallUpdate: () => any, onDismissUpdate: () => any,
- *   onCheckUpdate?: () => any,
  * }} props
  */
 export function PopupScreen({
@@ -159,7 +183,6 @@ export function PopupScreen({
   showFavicons,
   update,
   installingUpdate,
-  checkingUpdate,
   onVerify,
   onNewCode,
   onFill,
@@ -180,7 +203,6 @@ export function PopupScreen({
   onOpenUpdate,
   onInstallUpdate,
   onDismissUpdate,
-  onCheckUpdate,
 }) {
   const [pin, setPin] = useState("");
   const [query, setQuery] = useState("");
@@ -226,6 +248,7 @@ export function PopupScreen({
   const [loginBusy, setLoginBusy] = useState(false);
   const win = os === "win";
   const unlocked = state === "unlocked";
+  const headerButton = "border border-[color-mix(in_srgb,CanvasText_12%,Canvas)]";
 
   useEffect(() => {
     try {
@@ -254,6 +277,16 @@ export function PopupScreen({
     if (!ok) setPin("");
   }
 
+  function toggleLogin() {
+    if (!loginOpen) {
+      setNewSite(site || "");
+      setNewUser("");
+      setNewPass("");
+      setLoginMsg("");
+    }
+    setLoginOpen(!loginOpen);
+  }
+
   /** @param {string} value */
   function onPinChange(value) {
     const next = value.replace(/\D/g, "").slice(0, 6);
@@ -262,22 +295,26 @@ export function PopupScreen({
   }
 
   return (
-    <div className={`flex w-[340px] flex-col overflow-hidden bg-[Canvas] text-[CanvasText] ${unlocked ? "max-h-[480px]" : "min-h-[240px]"}`}>
+    <div data-passbridge="popup" className={`flex w-[340px] flex-col overflow-hidden bg-[Canvas] text-[CanvasText] ${unlocked ? "max-h-[480px]" : "min-h-[240px]"}`}>
       <header className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2.5">
         <img src="../icons/icon48.png" alt="" width="20" height="20" />
         <h1 className="flex-1 text-sm font-semibold tracking-tight">PassBridge</h1>
         {(unlocked || state === "needs_pin") && (
-          <button
-            type="button"
-            className="rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-2 py-0.5 text-base"
-            aria-label={t("refreshPasswords")}
+          <IconButton
+            label={t("refreshPasswords")}
+            className={headerButton}
             onClick={() => {
               if (state === "needs_pin") setPin("");
-              onRefresh();
+              return onRefresh();
             }}
           >
-            ↻
-          </button>
+            <RefreshCw size={14} />
+          </IconButton>
+        )}
+        {unlocked && (
+          <IconButton label={t("lock")} className={`${headerButton} ml-1.5`} onClick={onLock}>
+            <Lock size={14} />
+          </IconButton>
         )}
         <StatusDot state={state} />
       </header>
@@ -303,12 +340,12 @@ export function PopupScreen({
           </button>
           <button
             type="button"
-            aria-label="Dismiss update notice"
-            title={t("dismiss")}
-            className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg text-sm opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
+            aria-label={t("dismissUpdate")}
+            title={t("dismissUpdate")}
+            className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-lg opacity-60 hover:bg-[color-mix(in_srgb,CanvasText_8%,Canvas)] hover:opacity-100"
             onClick={onDismissUpdate}
           >
-            ×
+            <X size={14} />
           </button>
         </div>
       )}
@@ -401,10 +438,10 @@ export function PopupScreen({
                       <span className="truncate text-[13px] font-medium">{login.username || t("noUsername")}</span>
                     </span>
                     <IconButton label={t("copyUsername")} onClick={() => onCopy("username", login)}>
-                      <UserIcon />
+                      <User size={16} />
                     </IconButton>
                     <IconButton label={t("copyPassword")} onClick={() => onCopy("password", login)}>
-                      <KeyIcon />
+                      <KeyRound size={16} />
                     </IconButton>
                     <button
                       type="button"
@@ -423,136 +460,122 @@ export function PopupScreen({
                 <CodeRow key={row.id} row={row} site={site} grouped={false} onCopy={onCopy} onFillCode={onFillCode} />
               ))}
             </ul>
-            {onAddLogin && (
-              <div data-passbridge="add-login" className="flex flex-col gap-1.5">
-                {!loginOpen ? (
-                  <button
-                    type="button"
-                    className="self-start text-xs font-semibold text-accent"
-                    onClick={() => { setNewSite(site || ""); setNewUser(""); setNewPass(""); setLoginMsg(""); setLoginOpen(true); }}
-                  >
-                    {t("addLogin")}
+            {onAddLogin && loginOpen && (
+              <form
+                data-passbridge="add-login"
+                className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setLoginBusy(true);
+                  setLoginMsg("");
+                  const res = await onAddLogin({ site: newSite.trim(), username: newUser.trim(), password: newPass });
+                  setLoginBusy(false);
+                  if (res?.sheet) setLoginMsg(res.note || "");
+                  else if (res?.ok) { setLoginOpen(false); setNewPass(""); }
+                  else setLoginMsg(res?.error || t("errSaveLogin"));
+                }}
+              >
+                <input autoFocus value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder={t("website")} aria-label={t("website")} data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                <span className="flex gap-1.5">
+                  <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
+                  <IconButton label={t("generate")} onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>
+                    <Dices size={16} />
+                  </IconButton>
+                  <IconButton label={newShown ? t("hide") : t("show")} onClick={() => setNewShown(!newShown)}>
+                    {newShown ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </IconButton>
+                </span>
+                {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}
+                <span className="flex justify-end gap-2">
+                  <button type="button" className="text-xs opacity-80" onClick={() => setLoginOpen(false)}>{t("cancel")}</button>
+                  <button type="submit" data-action="add-login" disabled={loginBusy || !newSite.trim() || !newPass} className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                    {loginBusy ? t("savingLogin") : t("saveLoginBtn")}
                   </button>
-                ) : (
-                  <form
-                    className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      setLoginBusy(true);
-                      setLoginMsg("");
-                      const res = await onAddLogin({ site: newSite.trim(), username: newUser.trim(), password: newPass });
-                      setLoginBusy(false);
-                      if (res?.sheet) setLoginMsg(res.note || "");
-                      else if (res?.ok) { setLoginOpen(false); setNewPass(""); }
-                      else setLoginMsg(res?.error || t("errSaveLogin"));
-                    }}
-                  >
-                    <input value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder={t("website")} aria-label={t("website")} data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                    <input value={newUser} onChange={(e) => setNewUser(e.target.value)} placeholder={t("usernameOrEmail")} aria-label={t("usernameOrEmail")} data-field="new-username" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                    <span className="flex gap-1.5">
-                      <input type={newShown ? "text" : "password"} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder={t("password")} aria-label={t("password")} data-field="new-password" autoComplete="new-password" className="min-w-0 flex-1 rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
-                      <button type="button" className="text-xs opacity-80" onClick={() => { setNewPass(generateApplePassword()); setNewShown(true); }}>{t("generate")}</button>
-                      <button type="button" className="text-xs opacity-80" onClick={() => setNewShown(!newShown)}>{newShown ? t("hide") : t("show")}</button>
-                    </span>
-                    {loginMsg && <p className="text-xs text-danger">{loginMsg}</p>}
-                    <span className="flex justify-end gap-2">
-                      <button type="button" className="text-xs opacity-80" onClick={() => setLoginOpen(false)}>{t("cancel")}</button>
-                      <button type="submit" data-action="add-login" disabled={loginBusy || !newSite.trim() || !newPass} className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
-                        {loginBusy ? t("savingLogin") : t("saveLoginBtn")}
-                      </button>
-                    </span>
-                  </form>
-                )}
-              </div>
+                </span>
+              </form>
             )}
-            {caps?.setUpTotp && onTotpScan && (
-              <div data-passbridge="add-totp" className="flex flex-col gap-1.5">
-                {!addOpen ? (
-                  <button type="button" className="self-start text-xs font-semibold text-accent" onClick={() => setAddOpen(true)}>
-                    {t("addCode")}
-                  </button>
-                ) : (
-                  <div className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2">
-                    {!held && (
-                      <>
-                        <button
-                          type="button"
-                          className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
-                          onClick={async () => {
-                            setAddMsg(t("scanningPage"));
-                            const res = await onTotpScan();
-                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
-                          }}
-                        >
-                          Scan the visible page
-                        </button>
-                        <input
-                          value={pasted}
-                          onChange={(e) => setPasted(e.target.value)}
-                          placeholder={t("pasteKey")}
-                          aria-label={t("setupKey")}
-                          autoComplete="off"
-                          spellCheck={false}
-                          className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1 text-[13px]"
-                        />
-                        <button
-                          type="button"
-                          disabled={!pasted.trim()}
-                          className="self-start rounded-lg border border-accent px-2 py-1 text-xs font-semibold text-accent disabled:opacity-50"
-                          onClick={async () => {
-                            const res = await onTotpPaste(pasted);
-                            setPasted("");
-                            if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
-                          }}
-                        >
-                          Use this key
-                        </button>
-                      </>
-                    )}
-                    {held && !added && (
-                      <>
-                        <p className="text-[12px]">{t("codeForLogin")}</p>
-                        {logins.length === 0 && <p className="text-[12px] opacity-70">{t("noLoginHere")}</p>}
-                        {logins.map((login) => (
-                          <label key={login.username} className="flex items-center gap-2 text-[13px]">
-                            <input type="radio" name="totp-login" checked={target === login.username} onChange={() => setTarget(login.username)} />
-                            <span className="truncate">{login.username || t("noUsername")}</span>
-                          </label>
-                        ))}
-                        <button
-                          type="button"
-                          disabled={logins.length > 0 && !target}
-                          className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                          onClick={async () => {
-                            const res = await onTotpAdd(target);
-                            if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || t("couldntOpenPasswords"));
-                          }}
-                        >
-                          {t("addToPasswords")}
-                        </button>
-                      </>
-                    )}
-                    {added && (
-                      <>
-                        <p className="text-[12px]">
-                          {watch === "saved"
-                            ? t("totpSavedCheck")
-                            : watch === "timeout"
-                              ? t("totpNotSavedYet")
-                              : watch === "check"
-                                ? t("totpCheckRefresh")
-                                : target
-                                  ? t("passwordsOpenNoteWith", [target])
-                                  : t("passwordsOpenNote")}
-                        </p>
-                        <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
-                          {t("copySetupKey")}
-                        </button>
-                      </>
-                    )}
-                    {addMsg && <p className="text-xs opacity-80">{addMsg}</p>}
-                  </div>
+            {caps?.setUpTotp && onTotpScan && addOpen && (
+              <div data-passbridge="add-totp" className="flex flex-col gap-1.5 rounded-xl border border-[color-mix(in_srgb,CanvasText_10%,Canvas)] p-2">
+                {!held && (
+                  <>
+                    <button
+                      type="button"
+                      autoFocus
+                      className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white"
+                      onClick={async () => {
+                        setAddMsg(t("scanningPage"));
+                        const res = await onTotpScan();
+                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
+                      }}
+                    >
+                      {t("scanPage")}
+                    </button>
+                    <input
+                      value={pasted}
+                      onChange={(e) => setPasted(e.target.value)}
+                      placeholder={t("pasteKey")}
+                      aria-label={t("setupKey")}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full rounded-lg border border-[color-mix(in_srgb,CanvasText_12%,Canvas)] bg-[color-mix(in_srgb,CanvasText_4%,Canvas)] px-2 py-1 text-[13px]"
+                    />
+                    <button
+                      type="button"
+                      disabled={!pasted.trim()}
+                      className="self-start rounded-lg border border-accent px-2 py-1 text-xs font-semibold text-accent disabled:opacity-50"
+                      onClick={async () => {
+                        const res = await onTotpPaste(pasted);
+                        setPasted("");
+                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
+                      }}
+                    >
+                      {t("useKey")}
+                    </button>
+                  </>
                 )}
+                {held && !added && (
+                  <>
+                    <p className="text-[12px]">{t("codeForLogin")}</p>
+                    {logins.length === 0 && <p className="text-[12px] opacity-70">{t("noLoginHere")}</p>}
+                    {logins.map((login) => (
+                      <label key={login.username} className="flex items-center gap-2 text-[13px]">
+                        <input type="radio" name="totp-login" checked={target === login.username} onChange={() => setTarget(login.username)} />
+                        <span className="truncate">{login.username || t("noUsername")}</span>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={logins.length > 0 && !target}
+                      className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                      onClick={async () => {
+                        const res = await onTotpAdd(target);
+                        if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || t("couldntOpenPasswords"));
+                      }}
+                    >
+                      {t("addToPasswords")}
+                    </button>
+                  </>
+                )}
+                {added && (
+                  <>
+                    <p className="text-[12px]">
+                      {watch === "saved"
+                        ? t("totpSavedCheck")
+                        : watch === "timeout"
+                          ? t("totpNotSavedYet")
+                          : watch === "check"
+                            ? t("totpCheckRefresh")
+                            : target
+                              ? t("passwordsOpenNoteWith", [target])
+                              : t("passwordsOpenNote")}
+                    </p>
+                    <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
+                      {t("copySetupKey")}
+                    </button>
+                  </>
+                )}
+                {addMsg && <p className="text-xs opacity-80">{addMsg}</p>}
               </div>
             )}
             {note && (
@@ -576,41 +599,36 @@ export function PopupScreen({
           </>
         )}
       </main>
-      <footer className="flex shrink-0 flex-col border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-3 py-2">
+      <footer className="flex shrink-0 items-center gap-1 border-t border-[color-mix(in_srgb,CanvasText_12%,Canvas)] px-2 py-1.5">
         {unlocked && (
-          <div className="flex flex-col items-start pb-1">
-            <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("search", userQuery.trim() || undefined)}>
-              {t("openInPasswords")}
-            </button>
+          <>
+            {onAddLogin && (
+              <IconButton label={t("addLogin")} isExpanded={loginOpen} onClick={toggleLogin}>
+                <UserPlus size={16} />
+              </IconButton>
+            )}
+            {caps?.setUpTotp && onTotpScan && (
+              <IconButton label={t("addCode")} isExpanded={addOpen} onClick={() => setAddOpen(!addOpen)}>
+                <ClockPlus size={16} />
+              </IconButton>
+            )}
             {caps?.newPasswordSheet && (
-              <button type="button" className="py-1 text-xs text-accent" onClick={() => onOpenApp("new")}>
-                {t("newLoginInPasswords")}
-              </button>
+              <IconButton label={t("newLoginInPasswords")} onClick={() => onOpenApp("new")}>
+                <SquarePlus size={16} />
+              </IconButton>
             )}
-          </div>
+            <IconButton label={t("openInPasswords")} onClick={() => onOpenApp("search", userQuery.trim() || undefined)}>
+              <ExternalLink size={16} />
+            </IconButton>
+          </>
         )}
-        <div className="flex items-center justify-between">
-          {unlocked ? (
-            <button type="button" className="text-xs text-accent" onClick={onLock}>
-              {t("lock")}
-            </button>
-          ) : (
-            <span />
-          )}
-          <span className="flex items-center gap-3">
-            <button type="button" className="text-xs text-accent" onClick={onReport}>
-              {t("reportThisPage")}
-            </button>
-            {onCheckUpdate && (
-              <button type="button" disabled={checkingUpdate} className="text-xs text-accent disabled:opacity-60" onClick={onCheckUpdate}>
-                {checkingUpdate ? t("checking") : t("checkForUpdates")}
-              </button>
-            )}
-            <button type="button" className="text-xs text-accent" onClick={onSettings}>
-              {t("settings")}
-            </button>
-          </span>
-        </div>
+        <span className="flex-1" />
+        <IconButton label={t("reportThisPage")} onClick={onReport}>
+          <Flag size={16} />
+        </IconButton>
+        <IconButton label={t("settings")} onClick={onSettings}>
+          <Settings size={16} />
+        </IconButton>
       </footer>
     </div>
   );

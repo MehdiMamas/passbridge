@@ -117,7 +117,7 @@ await main(async () => {
   );
   ok(
     "generator stays under the capped list",
-    /Strong Password/.test(signup) && /Without Special Characters/.test(signup) && signupMetrics.scrollHeight > signupMetrics.clientHeight,
+    /Strong password/.test(signup) && /Without special characters/.test(signup) && signupMetrics.scrollHeight > signupMetrics.clientHeight,
     signup.slice(0, 240) + " " + JSON.stringify(signupMetrics),
   );
   await manyCtx.close();

@@ -1,6 +1,6 @@
 import { BASE, build, clickMenu, launchExtension, main, ok } from "./lib.ts";
 
-// the save bar offers "Let agents sign in on <site>"; only a click in the bar's own frame adds it to the allowlist
+// the save bar offers "Allow agents to sign in on <site>"; only a click in the bar's own frame adds it to the allowlist
 await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
   const sw = ctx.serviceWorkers()[0];
@@ -18,7 +18,7 @@ await main(async () => {
     }
     return null;
   };
-  // a create-account page; generated = pick the menu's Strong Password, else type the same one twice
+  // a create-account page; generated = pick the menu's Strong password, else type the same one twice
   const signup = async (page: import("playwright-core").Page, generated: boolean) => {
     await page.goto(`${BASE}/signup.html`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(400);
@@ -27,7 +27,7 @@ await main(async () => {
     if (generated) {
       await page.focus("#new-password");
       await page.waitForTimeout(600);
-      await clickMenu(page, "Strong Password");
+      await clickMenu(page, "Strong password");
       await page.waitForTimeout(400);
     } else {
       await page.fill("#new-password", "typed-by-hand-1");

@@ -104,7 +104,7 @@ async function runInstall(currentVersion, publicKey, auto = false) {
   } catch {
     return fail("host");
   }
-  if (!reply?.ok) return fail("host", reply?.error ? `Update failed: ${String(reply.error).slice(0, 120)}` : t(MESSAGES.host));
+  if (!reply?.ok) return fail("host", reply?.error ? `${t("couldntInstallUpdate")} ${String(reply.error).slice(0, 120)}` : t(MESSAGES.host));
   await markUpdatedTo(release.version);
   if (auto) await chrome.storage.local.set({ autoUpdatedTo: release.version });
   // give the reply time to reach the popup before the extension restarts

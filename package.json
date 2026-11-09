@@ -21,6 +21,8 @@
     "@tailwindcss/cli": "^4.3.3",
     "@types/chrome": "^0.3.4",
     "jsqr": "^1.4.0",
+    "lucide": "^1.70.0",
+    "lucide-react": "^1.70.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",

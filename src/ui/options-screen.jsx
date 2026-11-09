@@ -1,3 +1,4 @@
+import { AppWindow, Contrast, Download, Info, RectangleEllipsis, SquareTerminal } from "lucide-react";
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
 import { RECEIVER_READY } from "../passkeys/receiver.ts";
@@ -38,48 +39,13 @@ const activityCell = "truncate px-2.5 py-1.5";
 const SHORT_TIME = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
 
 
-/** @param {{ children?: any }} props */
-function Icon({ children }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-      {children}
-    </svg>
-  );
-}
-
-/** @type {Record<string, any>} */
+/** @type {Record<string, import("lucide-react").LucideIcon>} */
 const TAB_ICONS = {
-  autofill: (
-    <Icon>
-      <rect x="1.75" y="4.25" width="12.5" height="7.5" rx="2" />
-      <circle cx="5" cy="8" r=".6" fill="currentColor" />
-      <circle cx="8" cy="8" r=".6" fill="currentColor" />
-      <circle cx="11" cy="8" r=".6" fill="currentColor" />
-    </Icon>
-  ),
-  appearance: (
-    <Icon>
-      <circle cx="8" cy="8" r="5.75" />
-      <path d="M8 2.25a5.75 5.75 0 0 1 0 11.5z" fill="currentColor" stroke="none" />
-    </Icon>
-  ),
-  browser: (
-    <Icon>
-      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
-      <path d="M1.75 6h12.5" />
-    </Icon>
-  ),
-  agents: (
-    <Icon>
-      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
-      <path d="m4.75 6.25 2 1.75-2 1.75M8.5 10h2.75" />
-    </Icon>
-  ),
-  updates: (
-    <Icon>
-      <path d="M8 2.25v7.5M5 6.75l3 3 3-3M2.75 10.75v1.5c0 .55.45 1 1 1h8.5c.55 0 1-.45 1-1v-1.5" />
-    </Icon>
-  ),
+  autofill: RectangleEllipsis,
+  appearance: Contrast,
+  browser: AppWindow,
+  agents: SquareTerminal,
+  updates: Download,
 };
 
 /** @param {{ ids: RowIds, checked?: boolean, disabled?: boolean, onChange: (on: boolean) => void }} props */
@@ -225,11 +191,7 @@ function ListRow({ label, help, state, value, onChange, onBlur }) {
 function Notice({ notice }) {
   return (
     <div role="note" className="mt-5 flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_28%,Canvas)] bg-[color-mix(in_srgb,var(--color-accent)_8%,Canvas)] px-4 py-3 text-[13px] leading-snug">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="mt-px shrink-0 text-accent">
-        <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M8 7.25v3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="8" cy="5" r=".85" fill="currentColor" />
-      </svg>
+      <Info size={16} className="mt-px shrink-0 text-accent" />
       <p>
         {notice.text}
         {notice.href && (
@@ -611,6 +573,7 @@ export function OptionsScreen(props) {
               <ul className="flex flex-wrap gap-1 px-3 pb-3 @2xl:flex-col">
                 {OPTION_TABS.map((tab) => {
                   const isCurrent = tab.id === current.id;
+                  const TabIcon = TAB_ICONS[tab.id];
                   return (
                     <li key={tab.id} className="shrink-0">
                       <a
@@ -622,7 +585,7 @@ export function OptionsScreen(props) {
                             : `border-transparent ${muted} hover:bg-[color-mix(in_srgb,CanvasText_5%,Canvas)] hover:text-[CanvasText]`
                         }`}
                       >
-                        {TAB_ICONS[tab.id]}
+                        <TabIcon size={16} className="shrink-0" />
                         {t(tab.labelKey)}
                       </a>
 
