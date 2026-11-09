@@ -1,6 +1,6 @@
 // i18n suite: catalog parity, locale resolution, substitution, manifest wiring and menu output.
 import { readdirSync, readFileSync } from "fs";
-import { resolveLocale, setLocale, normalizeLocale, substitute, t, SUPPORTED_LOCALES } from "../../src/i18n/runtime.js";
+import { resolveLocale, setLocale, normalizeLocale, substitute, t, SUPPORTED_LOCALES, LOCALE_NAMES } from "../../src/i18n/runtime.js";
 import { menuItems } from "../../src/menu.js";
 import { SETTINGS_DEFAULTS } from "../../src/settings.js";
 import { uiPinReply } from "../../src/session/pin-reply.js";
@@ -16,7 +16,9 @@ const en = JSON.parse(readFileSync(new URL("../../_locales/en/messages.json", im
 // ellipsis: only on a label that asks for more input before it finishes, and always the single character
 const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLogin", "menuUnlock", "menuReport", "reportThisPage", "unlockAutofill", "unlockCodes", "passkeyImportBtn", "changeFolder", "shortcutsBtn"];
 const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
-const SAME_IN_EVERY_LANGUAGE = ["extensionName", "menuRoot", "pinPlaceholder", "codePlaceholder"];
+const SAME_IN_EVERY_LANGUAGE = ["extensionName", "menuRoot", "pinPlaceholder", "codePlaceholder", "fieldsSummary"];
+// words that are spelled the same as in English
+const SAME_AS_EN: Record<string, string[]> = { tr: ["colSite"] };
 const ZH_ONE_NAME: Record<string, [RegExp, string][]> = { zh_TW: [[/通行金鑰|密碼金鑰/, "通行密鑰"]] };
 
 // every shipped catalog has exactly the en keys and follows the language-neutral copy rules
@@ -41,7 +43,7 @@ for (const locale of SUPPORTED_LOCALES) {
   const exclaimed = keys.filter((k) => /[!！]/.test(cat[k]?.message));
   ok(`copy ${locale}: style, no exclamation marks`, exclaimed.length === 0, exclaimed.join(", ") || undefined);
   if (locale !== "en") {
-    const untranslated = keys.filter((k) => !SAME_IN_EVERY_LANGUAGE.includes(k) && cat[k]?.message === en[k].message);
+    const untranslated = keys.filter((k) => !SAME_IN_EVERY_LANGUAGE.includes(k) && !(SAME_AS_EN[locale] || []).includes(k) && cat[k]?.message === en[k].message);
     ok(`copy ${locale}: every message is translated`, untranslated.length === 0, untranslated.join(", ") || undefined);
   }
   const mixed = (ZH_ONE_NAME[locale] || []).flatMap(([re, name]) => keys.filter((k) => re.test(cat[k]?.message)).map((k) => `${k} (say ${name})`));
@@ -87,6 +89,7 @@ for (const [re, rule] of STYLE) {
 // locale resolution
 ok("normalize: zh-CN and zh map to zh_CN", normalizeLocale("zh-CN") === "zh_CN" && normalizeLocale("zh") === "zh_CN");
 ok("normalize: en-US and en map to en", normalizeLocale("en-US") === "en" && normalizeLocale("en") === "en");
+ok("normalize: tr and tr-TR map to tr", normalizeLocale("tr") === "tr" && normalizeLocale("tr-TR") === "tr");
 ok("normalize: an unsupported language is null", normalizeLocale("fr") === null && normalizeLocale("pt-BR") === null);
 ok("normalize: empty or garbage is null", normalizeLocale("") === null && normalizeLocale(undefined) === null);
 ok("resolveLocale falls back to en without chrome", await resolveLocale() === "en");
@@ -107,6 +110,31 @@ ok("t: zh_CN placeholder filled", !t("menuFillName", ["ada@example.com"]).includ
 const zhCat = JSON.parse(readFileSync(new URL("../../_locales/zh_CN/messages.json", import.meta.url), "utf8"));
 const translated = Object.keys(zhCat).filter((k) => zhCat[k].message !== en[k].message).length;
 ok("zh_CN: most messages are actually translated", translated >= Object.keys(en).length * 0.9, `${translated}/${Object.keys(en).length}`);
+ok("tr: picker shows its own name", LOCALE_NAMES.tr === "Türkçe");
+const tr = JSON.parse(readFileSync(new URL("../../_locales/tr/messages.json", import.meta.url), "utf8"));
+const trEntries = Object.entries<{ message: string }>(tr);
+const trKeysWhere = (test: (message: string) => boolean) => trEntries.filter(([, v]) => test(v.message)).map(([k]) => k);
+const slots = (message: string) => (message.match(/\$\d/g) || []).sort().join();
+setLocale("tr");
+ok("t: tr value", t("unlock") === "Kilidi aç");
+ok("t: tr placeholder filled", t("menuFillName", ["ada@example.com"]) === "ada@example.com hesabını doldur");
+ok("tr: most messages are actually translated", trEntries.filter(([k, v]) => v.message !== en[k].message).length >= Object.keys(en).length * 0.9);
+const lostSlots = Object.keys(en).filter((k) => slots(en[k].message) !== slots(tr[k].message));
+ok("tr: every $N slot kept", lostSlots.length === 0, lostSlots.join(", ") || undefined);
+ok("tr: no exclamation marks", trKeysWhere((m) => m.includes("!")).length === 0);
+ok("tr: ellipsis is the single glyph", trKeysWhere((m) => m.includes("...")).length === 0);
+ok("tr: says the browser, not Chrome", trKeysWhere((m) => /chrome/i.test(m.replaceAll("chrome://", ""))).length === 0);
+const unlockCodeKeys = ["statusNeedsPin", "pinSentWin", "pinSentMac", "requestNewCode", "getNewCode", "askingNewCode", "enterCodeOn", "enterNewCode", "pinErrorNewCode", "couldntRequestCode"];
+const trLower = (k: string) => tr[k].message.toLocaleLowerCase("tr");
+ok("tr: the pairing code is the unlock code", unlockCodeKeys.every((k) => trLower(k).includes("kilit açma kod")));
+ok("tr: the pairing code is never the verification code", unlockCodeKeys.every((k) => !trLower(k).includes("doğrulama kod")));
+ok("tr: check is kontrol, as in Bitwarden", trKeysWhere((m) => /denetle|denetim/i.test(m)).length === 0);
+ok("tr: the autofill tab is one word", tr.tabAutofill.message === "Doldurma");
+ok("tr: verification code keeps Apple's name", tr.codeTotp.message === "Doğrulama kodu");
+ok("tr: passkeys keep Apple's name", tr.passkeys.message === "Geçiş anahtarları");
+ok("tr: iCloud Passwords keeps Apple's name", tr.connectingApple.message.includes("iCloud Parolaları"));
+ok("tr: the Passwords app keeps Apple's name", tr.noHelperMac.message.includes("Parolalar uygulaması"));
+ok("tr: iCloud for Windows keeps Apple's name", tr.noHelperWin.message.includes("Windows için iCloud"));
 setLocale((null as any));
 ok("t: unresolved locale falls back to en", t("unlock") === "Unlock");
 
