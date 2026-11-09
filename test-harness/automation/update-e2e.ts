@@ -118,24 +118,30 @@ await main(async () => {
       `  ${EXT}`,
       `Open ${UPDATE_PAGE}`,
       "Press Update now, pick the same folder (Cmd+Shift+G pastes a path) and press Allow",
-      `Wait for "PassBridge is now ${v(1)}"`,
+      `Wait for "PassBridge is now ${v(1)}" and press nothing else on that page`,
     ]);
     await folderIs("round 1: the folder holds the new release", builds[1]);
     await asked("round 1: the page said the new version is running", `Did the page say "PassBridge is now ${v(1)}"?`);
 
     await publish(2, builds[2]);
-    await step(`Round 2: permission again, files dropped and added, ${v(1)} → ${v(2)}`, [
-      "Reload the update page (Cmd+R) and press Update now",
+    await step(`Round 2: a closed tab loses the grant, files dropped and added, ${v(1)} → ${v(2)}`, [
+      "Close the PassBridge update tab",
+      `Open ${UPDATE_PAGE} and press Update now`,
       "The folder picker opens at the PassBridge folder: press Select",
-      "Chrome offers Allow on every visit: choose it",
+      "Chrome asks for access: press Allow",
+      `Wait for "PassBridge is now ${v(2)}"`,
     ]);
     await folderIs("round 2: the dropped file and folder are gone and the new file is there", builds[2]);
     await asked("round 2: the picker opened at the kept folder", "Did the picker open at the PassBridge folder?");
-    await asked("round 2: Chrome offered Allow on every visit", "Did Chrome offer Allow on every visit?");
+    await asked("round 2: after a closed tab Chrome offers only Allow", "Did Chrome offer only Allow, with no Allow on every visit?");
+
+    await step("Round 2, keep the folder", ['Press "Keep folder access" on that page', "Chrome offers Allow on every visit: choose it"]);
+    await asked("round 2: the button brought Chrome's Allow on every visit", "Did Chrome offer Allow on every visit?");
 
     await publish(3, builds[3], "bad");
-    await step(`Round 3: a broken signature, ${v(2)} → ${v(3)}`, ["Reload the update page and press Update now"]);
+    await step(`Round 3: a broken signature, ${v(2)} → ${v(3)}`, ["Close the PassBridge update tab", `Open ${UPDATE_PAGE} and press Update now`]);
     await folderIs("round 3: nothing changed", builds[2]);
+    await asked("round 3: a closed tab no longer brings the picker back", "Did it go on with no picker and no prompt?");
     await asked("round 3: the page reported the failed signature check", 'Did the page say the signature check failed and "Nothing was changed"?');
 
     await publish(4, builds[4], "none");
@@ -146,7 +152,7 @@ await main(async () => {
     await publish(5, builds[5]);
     await step(`Round 5: one click after a restart, ${v(2)} → ${v(5)}`, ["Quit this Chrome completely (Cmd+Q)"]);
     startChrome(UPDATE_PAGE);
-    await step("Round 5, continued", ["Chrome opened the update page again: press Update now and nothing else"]);
+    await step("Round 5, continued", ["Chrome opened the update page again: press Update now and nothing else", `Wait for "PassBridge is now ${v(5)}"`]);
     await folderIs("round 5: the folder holds the new release", builds[5]);
     await asked("round 5: no picker and no prompt", "Did it update without any window or prompt?");
 

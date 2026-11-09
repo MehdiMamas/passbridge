@@ -8,7 +8,7 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, looksLikeSource, recove
 import { withUpdateLock } from "../update/lock.js";
 import { HELPER_ZIP_URL, isWindows, updateRoute } from "../update/platform.js";
 import { updaterAvailable } from "../update/install.js";
-import { folderForUpdate, folderStore, pickFolder } from "../update/folder.js";
+import { canKeepFolder, folderForUpdate, folderStore, keepFolder, pickFolder } from "../update/folder.js";
 import { followTheme } from "./page-theme.js";
 import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
@@ -56,6 +56,7 @@ function UpdateApp() {
   const [error, setError] = useState(/** @type {{ message: string, restored: boolean } | null} */ (null));
   const [expected, setExpected] = useState("");
   const [native, setNative] = useState(false);
+  const [canKeep, setCanKeep] = useState(false);
 
   // once the user picks the update without the helper, Retry keeps that choice for this visit
   const noHelper = useRef(false);
@@ -70,6 +71,7 @@ function UpdateApp() {
     if (target !== null) {
       history.replaceState(null, "", location.pathname);
       setExpected(target);
+      setCanKeep(target === installed && (await canKeepFolder().catch(() => false)));
       return setPhase(target === installed ? "done" : "stale");
     }
     const found = await latestRelease(installed);
@@ -183,6 +185,11 @@ function UpdateApp() {
     else if (picked.error !== "cancelled") fail(picked.error);
   }
 
+  async function keepFolderAccess() {
+    await keepFolder().catch(() => {});
+    setCanKeep(false);
+  }
+
   return (
     <UpdateScreen
       phase={phase}
@@ -200,6 +207,8 @@ function UpdateApp() {
       onNoHelper={() => check(true)}
       helperUrl={HELPER_ZIP_URL}
       onRestore={restore}
+      canKeepFolder={canKeep}
+      onKeepFolder={keepFolderAccess}
     />
   );
 }

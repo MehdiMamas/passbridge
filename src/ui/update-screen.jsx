@@ -50,10 +50,10 @@ function Progress({ value }) {
  * @param {{
  *   phase: string, installed: string, expected: string, release?: { version?: string, pageUrl?: string, zipUrl?: string, sigUrl?: string, digest?: string, size?: number } | null, folderName?: string, step?: string,
  *   progress: number, error?: { message: string, restored: boolean } | null, onUpdate: () => any, onChangeFolder: () => any, onRetry: () => any,
- *   onRestore: () => any, helperUrl?: string, native?: boolean, onNoHelper: () => any,
+ *   onRestore: () => any, helperUrl?: string, native?: boolean, onNoHelper: () => any, canKeepFolder?: boolean, onKeepFolder?: () => any,
  * }} props
  */
-export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, helperUrl, native, onNoHelper }) {
+export function UpdateScreen({ phase, installed, expected, release, folderName, step, progress, error, onUpdate, onChangeFolder, onRetry, onRestore, helperUrl, native, onNoHelper, canKeepFolder, onKeepFolder }) {
   const working = phase === "working";
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8 text-[13px]">
@@ -97,6 +97,16 @@ export function UpdateScreen({ phase, installed, expected, release, folderName, 
         {phase === "checking" && <p className={muted}>{t("checkingGithub")}</p>}
         {phase === "current" && <p>{t("upToDateMsg")}</p>}
         {phase === "done" && <p className="font-semibold text-ok">{t("updatedMsg", [installed])}</p>}
+        {phase === "done" && canKeepFolder && (
+          <>
+            <button type="button" data-passbridge="keep-folder" className={`${primary} self-start`} onClick={onKeepFolder}>
+              {t("keepFolder")}
+            </button>
+            <p className={muted}>
+              {t("keepFolderBefore")} <strong>{t("allowEveryVisit")}</strong> {t("keepFolderAfter")}
+            </p>
+          </>
+        )}
         {phase === "stale" && (
           <>
             <p data-passbridge="update-error" className="text-danger">

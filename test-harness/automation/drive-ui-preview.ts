@@ -133,6 +133,9 @@ await main(async () => {
       const staleText = (await updatePage("stale").innerText()).replace(/\s+/g, " ");
       ok("update page: a restart that did not land on the new version says so", staleText.includes("Something went wrong") && staleText.includes("still 1.4.1, not 1.4.2") && staleText.includes("Try again"), staleText);
       ok("update page: an unfinished update offers the restore", (await updatePage("interrupted").locator("button", { hasText: "Restore previous version" }).count()) === 1);
+      const keepText = (await updatePage("done_keep").innerText()).replace(/\s+/g, " ");
+      ok("update page: after an update the folder can be kept, naming the browser's choice", (await updatePage("done_keep").locator('[data-passbridge="keep-folder"]').count()) === 1 && keepText.includes("Allow on every visit"), keepText);
+      ok("update page: a folder with nothing to keep offers no button", (await updatePage("done").locator('[data-passbridge="keep-folder"]').count()) === 0);
       const quiet = await page.locator('[data-screen="unlocked"] [data-passbridge="update"]').count();
       ok("update: no notice without an update", quiet === 0, `notices=${quiet}`);
       const frame = page.locator('[data-screen="grouped_codes"][data-scheme="light"]');
