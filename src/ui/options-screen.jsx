@@ -1,4 +1,4 @@
-import { AppWindow, Contrast, Download, Info, RectangleEllipsis, SquareTerminal } from "lucide-react";
+import { AppWindow, ChevronDown, Contrast, Download, Info, RectangleEllipsis, SquareTerminal } from "lucide-react";
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
 import { RECEIVER_READY } from "../passkeys/receiver.ts";
@@ -17,7 +17,7 @@ import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
 
 function buildVersion() {
   const m = globalThis.chrome?.runtime?.getManifest?.();
-  return m ? m.version_name || m.version : "";
+  return m ? `v${m.version_name || m.version}` : "";
 }
 
 const muted = "text-[color-mix(in_srgb,CanvasText_62%,Canvas)]";
@@ -71,21 +71,24 @@ function Switch({ ids, checked, disabled, onChange }) {
 /** @param {{ ids: RowIds, value: string, disabled?: boolean, options: string[][], onChange: (value: string) => void }} props */
 function Select({ ids, value, disabled, options, onChange }) {
   return (
-    <select
-      id={ids.control}
-      aria-labelledby={ids.label}
-      aria-describedby={ids.describedBy}
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${field} cursor-pointer px-2.5 py-1.5`}
-    >
-      {options.map(([v, text]) => (
-        <option key={v} value={v}>
-          {text}
-        </option>
-      ))}
-    </select>
+    <span className="relative inline-flex">
+      <select
+        id={ids.control}
+        aria-labelledby={ids.label}
+        aria-describedby={ids.describedBy}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${field} cursor-pointer appearance-none py-1.5 pr-8 pl-2.5`}
+      >
+        {options.map(([v, text]) => (
+          <option key={v} value={v}>
+            {text}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={16} aria-hidden="true" className={`pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 ${muted}`} />
+    </span>
   );
 }
 
@@ -322,14 +325,6 @@ function AppearanceTab({ settings, onChange }) {
   ];
   return (
     <>
-      <Row label={t("theme")} help={t("themeHelp")}>
-        {(ids, isDisabled) => (
-          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={themeOptions} onChange={(v) => onChange({ theme: v })} />
-        )}
-      </Row>
-      <SwitchRow label={t("animations")} help={t("animationsHelp")} {...toggle("showAnimations")} />
-      <SwitchRow label={t("favicons")} help={t("faviconsHelp")} {...toggle("showFavicons")} />
-      <SwitchRow label={t("badge")} help={t("badgeHelp")} {...toggle("enableBadge")} />
       <Row label={t("language")} help={t("languageHelp")}>
         {(ids, isDisabled) => (
           <Select
@@ -341,6 +336,14 @@ function AppearanceTab({ settings, onChange }) {
           />
         )}
       </Row>
+      <Row label={t("theme")} help={t("themeHelp")}>
+        {(ids, isDisabled) => (
+          <Select ids={ids} value={settings.theme} disabled={isDisabled} options={themeOptions} onChange={(v) => onChange({ theme: v })} />
+        )}
+      </Row>
+      <SwitchRow label={t("animations")} help={t("animationsHelp")} {...toggle("showAnimations")} />
+      <SwitchRow label={t("favicons")} help={t("faviconsHelp")} {...toggle("showFavicons")} />
+      <SwitchRow label={t("badge")} help={t("badgeHelp")} {...toggle("enableBadge")} />
     </>
   );
 }
@@ -594,7 +597,7 @@ export function OptionsScreen(props) {
                 })}
               </ul>
             </nav>
-            <p className={`px-5 pt-1 pb-4 text-xs ${muted}`}>{buildVersion()}</p>
+            <p className={`px-6 pt-1 pb-4 text-xs ${muted}`}>{buildVersion()}</p>
           </div>
         </aside>
         <main className="min-w-0 flex-1 px-5 py-6 @2xl:px-10 @2xl:py-8">

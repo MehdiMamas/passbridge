@@ -90,6 +90,12 @@ await main(async () => {
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
   const navTop = await page.locator("nav").evaluate((n) => n.getBoundingClientRect().top);
   ok("options: the tabs stay in view at the bottom of a long tab", navTop >= 0 && navTop < 200, `nav top ${navTop}`);
+  const version = await page.evaluate(() => {
+    const p = document.querySelector("aside nav + p") as HTMLElement;
+    const icon = document.querySelector("nav a svg") as Element;
+    return { text: p.innerText.trim(), textLeft: p.getBoundingClientRect().left + parseFloat(getComputedStyle(p).paddingLeft), iconLeft: icon.getBoundingClientRect().left };
+  });
+  ok("options: the sidebar version reads v<version> and lines up with the tab icons", /^v\d+\.\d+\.\d+/.test(version.text) && Math.abs(version.textLeft - version.iconLeft) <= 1, JSON.stringify(version));
   await page.evaluate(() => scrollTo(0, 0));
 
   const offSwitch = row("Autofill on page load").locator('[role="switch"]');
@@ -219,7 +225,12 @@ await main(async () => {
   await themed.locator("main h1", { hasText: "Appearance" }).waitFor();
   const themeRow = themed.locator('[data-row="Theme"]');
   const appearanceRows = await themed.locator("[data-row]").evaluateAll((els) => els.map((e) => e.dataset.row));
-  ok("options: Theme leads the Appearance tab", appearanceRows[0] === "Theme", appearanceRows.join("|"));
+  ok("options: Language leads the Appearance tab, then Theme", appearanceRows[0] === "Language" && appearanceRows[1] === "Theme", appearanceRows.join("|"));
+  const arrowGaps = await themed.locator("main select").evaluateAll((els) => els.map((s) => {
+    const arrow = s.parentElement?.querySelector("svg");
+    return arrow && getComputedStyle(s).appearance === "none" ? Math.round(s.getBoundingClientRect().right - arrow.getBoundingClientRect().right) : -1;
+  }));
+  ok("options: each select draws its arrow away from the right edge", arrowGaps.length === 2 && arrowGaps.every((gap) => gap >= 8 && gap <= 12), arrowGaps.join(","));
   ok("options: the theme starts on System", (await themeRow.locator("select").inputValue()) === "system" && (await scheme(themed)) === "light dark");
   await themeRow.locator("select").selectOption("dark");
   await themed.waitForTimeout(900);
