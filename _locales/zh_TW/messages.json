@@ -197,7 +197,7 @@
   "hideBubble": { "message": "隱藏瀏覽器的儲存密碼提示" },
   "hideBubbleHelp": { "message": "只有 PassBridge 會提示儲存登入。" },
   "hidePm": { "message": "隱藏瀏覽器的密碼管理員" },
-  "hidePmHelp": { "message": "透過政策關閉瀏覽器儲存密碼的建議，使其無法重新開啟。瀏覽器已儲存的密碼仍然可以填寫。結束並重新開啟瀏覽器以套用。" },
+  "hidePmHelp": { "message": "透過政策關閉瀏覽器儲存密碼的建議，並停止它填入已儲存的密碼，兩者都無法重新開啟。密碼仍留在瀏覽器的密碼管理員中。結束並重新開啟瀏覽器以套用。" },
   "pmSettings": { "message": "瀏覽器已儲存的密碼" },
   "pmSettingsHelp": { "message": "瀏覽器仍然會建議它之前儲存的密碼。關閉「自動登入」，然後將這些密碼移到 iCloud 密碼並從瀏覽器中刪除。" },
   "pmOpen": { "message": "開啟密碼設定" },

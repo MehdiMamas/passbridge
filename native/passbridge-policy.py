@@ -23,7 +23,12 @@ BUNDLES = [
     "company.thebrowser.Browser",
     "com.vivaldi.Vivaldi",
 ]
+# PasswordManagerEnabled only reaches the offer to save. Chromium fills a saved password through a
+# separate gate that reads PasswordManagerBlocklist alone, and that list is the one that takes a URL
+# out of both workflows. "*" is the wildcard filter, so the profile covers every site.
 KEY = "PasswordManagerEnabled"
+BLOCK = "PasswordManagerBlocklist"
+BLOCK_ALL = ["*"]
 APPDIR = os.path.expanduser("~/Library/Application Support/PassBridge")
 PROFILE = os.path.join(APPDIR, "PassBridge-HidePasswordManager.mobileconfig")
 
@@ -38,10 +43,21 @@ def _cfstr(x):
     return _CF.CFStringCreateWithCString(None, x.encode(), 0x08000100)
 
 
-def is_forced():
-    # true only when a managed profile actually forces the key
-    k = _cfstr(KEY)
-    return any(_CF.CFPreferencesAppValueIsForced(k, _cfstr(b)) for b in BUNDLES)
+def forced(keys):
+    """true when a managed profile forces every key in keys for at least one browser"""
+    wanted = [_cfstr(k) for k in keys]
+    return any(all(_CF.CFPreferencesAppValueIsForced(k, _cfstr(b)) for k in wanted) for b in BUNDLES)
+
+
+def is_hidden():
+    # the switch promises both halves: no save prompt and no filling. One key alone is a profile an
+    # older build installed, and reporting that as on is what hid this bug.
+    return forced((KEY, BLOCK))
+
+
+def is_engaged():
+    # uninstall.sh asks this: anything still forced means the browser is not fully restored yet
+    return forced((KEY,)) or forced((BLOCK,))
 
 
 def write_profile():
@@ -57,12 +73,13 @@ def write_profile():
                 "PayloadEnabled": True,
                 "PayloadVersion": 1,
                 KEY: False,
+                BLOCK: BLOCK_ALL,
             }
         )
     profile = {
         "PayloadType": "Configuration",
         "PayloadDisplayName": "PassBridge - Hide Browser Password Manager",
-        "PayloadDescription": "Disables the built-in password manager in Chromium browsers.",
+        "PayloadDescription": "Stops Chromium browsers saving or filling passwords themselves.",
         "PayloadIdentifier": "com.passbridge.hidepm",
         "PayloadUUID": "1D8B2E90-0000-4000-A000-4F70656E5057",
         "PayloadVersion": 1,
@@ -90,13 +107,13 @@ def main():
     if action == "set":
         write_profile()
         subprocess.run(["open", PROFILE])
-        send({"ok": True, "hidden": is_forced(), "needsApproval": not is_forced()})
+        send({"ok": True, "hidden": is_hidden(), "needsApproval": not is_hidden()})
     elif action == "clear":
         # profiles can only be removed by the user in System Settings
         subprocess.run(["open", "x-apple.systempreferences:com.apple.preferences.configurationprofiles"])
-        send({"ok": True, "hidden": is_forced()})
+        send({"ok": True, "hidden": is_hidden()})
     elif action == "get":
-        send({"ok": True, "hidden": is_forced()})
+        send({"ok": True, "hidden": is_hidden()})
     else:
         send({"ok": False, "error": "unknown action"})
 
@@ -104,5 +121,5 @@ def main():
 if __name__ == "__main__":
     # uninstall.sh asks this before it says the password manager is back
     if sys.argv[1:] == ["--forced"]:
-        sys.exit(0 if is_forced() else 3)
+        sys.exit(0 if is_engaged() else 3)
     main()
