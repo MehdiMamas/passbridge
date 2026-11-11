@@ -2,7 +2,7 @@ import { AppWindow, ChevronDown, Contrast, Download, Info, RectangleEllipsis, Sq
 import { useId } from "react";
 import { OPTION_TABS } from "./options-model.js";
 import { RECEIVER_READY } from "../passkeys/receiver.ts";
-import { LOCALE_NAMES, SUPPORTED_LOCALES, t } from "../i18n/runtime.js";
+import { LOCALE_NAMES, SUPPORTED_LOCALES, errorText, t } from "../i18n/runtime.js";
 
 
 /**
@@ -402,7 +402,7 @@ function PasskeyStoreRows({ isOn, onToggle, onPick, progress, results, note, all
                   <ul className="mt-1.5 space-y-1 text-[13px]">
                     {results.map((r, i) => (
                       <li key={i} data-status={r.status} className={r.status === "saved" ? "" : muted}>
-                        {r.label}: {t(`passkeyResult_${r.status}`)}{r.reason ? ` (${r.reason})` : ""}
+                        {r.label}: {t(`passkeyResult_${r.status}`)}{r.reason ? ` (${errorText(r.reason)})` : ""}
                       </li>
                     ))}
                   </ul>

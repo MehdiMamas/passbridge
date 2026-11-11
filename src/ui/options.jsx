@@ -185,7 +185,7 @@ function OptionsApp() {
         res = await chrome.runtime.sendMessage({ type: "passkeySave", record: rec });
       } catch {}
       if (res?.ok && (res.result === "saved" || res.result === "exists")) results.push({ label, status: res.result });
-      else results.push({ label, status: "failed", reason: res?.error || res?.result || "" });
+      else results.push({ label, status: "failed", reason: res?.error || res?.result });
     }
     setPasskeyProgress(null);
     setPasskeyResults(results);
