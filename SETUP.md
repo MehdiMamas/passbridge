@@ -35,7 +35,7 @@ Check it: open a site that has a saved login, click the username field, pick the
 
 ### Optional macOS helper
 
-This adds the "Hide the browser's password manager" setting. Turning it on installs a configuration profile that you approve once in System Settings.
+This adds the "Hide the browser's password manager" setting. Turning it on installs a configuration profile that you approve once in System Settings. The profile stops the browser offering to save passwords and filling the ones it already saved, so PassBridge is the only thing filling a login.
 
 The helper runs on `/usr/bin/python3`, which is only a stub until the Xcode Command Line Tools are installed. Install them first if you haven't:
 

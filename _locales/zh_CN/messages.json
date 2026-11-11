@@ -197,7 +197,7 @@
   "hideBubble": { "message": "隐藏浏览器的保存密码提示" },
   "hideBubbleHelp": { "message": "只有 PassBridge 会提示保存登录。" },
   "hidePm": { "message": "隐藏浏览器的密码管理器" },
-  "hidePmHelp": { "message": "通过策略关闭浏览器保存密码的提议，使其无法重新开启。浏览器已保存的密码仍然可以填充。退出并重新打开浏览器以应用。" },
+  "hidePmHelp": { "message": "通过策略关闭浏览器保存密码的提议，并停止它填充已保存的密码，两者都无法重新开启。密码仍留在浏览器的密码管理器中。退出并重新打开浏览器以应用。" },
   "pmSettings": { "message": "浏览器已保存的密码" },
   "pmSettingsHelp": { "message": "浏览器仍然会建议它之前保存的密码。关闭“自动登录”，然后将这些密码移到 iCloud 密码并从浏览器中删除。" },
   "pmOpen": { "message": "打开密码设置" },

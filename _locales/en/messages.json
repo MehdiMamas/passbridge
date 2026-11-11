@@ -196,7 +196,7 @@
   "hideBubble": { "message": "Hide the browser's save-password prompt" },
   "hideBubbleHelp": { "message": "Only PassBridge offers to save logins." },
   "hidePm": { "message": "Hide the browser's password manager" },
-  "hidePmHelp": { "message": "Locks the browser's offer to save passwords off with a policy, so it can't be turned back on. Passwords the browser already saved still fill. Quit and reopen the browser to apply." },
+  "hidePmHelp": { "message": "Locks the browser's offer to save passwords off with a policy, and stops it filling the passwords it already saved, so neither can be turned back on. Passwords stay in the browser's manager. Quit and reopen the browser to apply." },
   "pmSettings": { "message": "The browser's saved passwords" },
   "pmSettingsHelp": { "message": "The browser still suggests passwords it saved before. Turn off \"Sign in automatically\", then move those passwords to iCloud Passwords and delete them in the browser." },
   "pmOpen": { "message": "Open password settings" },
