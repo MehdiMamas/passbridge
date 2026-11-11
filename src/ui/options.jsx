@@ -32,10 +32,10 @@ function OptionsApp() {
   const [syncSteps, setSyncSteps] = useState([]);
   const [passkeyProgress, setPasskeyProgress] = useState(/** @type {{ done: number, total: number } | null} */ (null));
   const [passkeyResults, setPasskeyResults] = useState(/** @type {{ label: string, status: string, reason?: string }[]} */ ([]));
-  // the hash tab waits for the marker answer, so a managed install never shows the Updates tab first
+  // Updates stays out of the nav and the hash tab waits until managed.json answers, so a managed install never shows it
   const [managed, setManaged] = useState(/** @type {boolean | null} */ (null));
   const [tab, setTab] = useState(() => visibleTabs(false)[0].id);
-  const tabs = visibleTabs(managed === true);
+  const tabs = visibleTabs(managed !== false);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const [helpers, setHelpers] = useState(/** @type {{ policy: import("./options-model.js").HelperState, updater: import("./options-model.js").HelperState }} */ ({ policy: "checking", updater: "checking" }));
