@@ -102,6 +102,7 @@ const updateScreens = [
   ["unsigned", { phase: "unsigned", release }, ["light"]],
   ["interrupted", { phase: "interrupted" }, ["light"]],
   ["done", { phase: "done", installed: "1.4.2" }, ["light"]],
+  ["done_keep", { phase: "done", installed: "1.4.2", canKeepFolder: true }, ["light"]],
   ["stale", { phase: "stale", expected: "1.4.2" }, ["light"]],
 ];
 

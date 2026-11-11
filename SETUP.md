@@ -106,7 +106,7 @@ Install the helper once and every later update installs by itself, with no folde
 
 ### Update without the helper
 
-Without the updater host, Update now opens an update page. The first time, choose the PassBridge folder (the one loaded in `chrome://extensions`) and allow PassBridge to edit it. Chrome drops that permission whenever the extension restarts, so the next update opens the folder picker at the same folder: press Select and choose Allow on every visit, and later updates take one click. The page checks the same signature and SHA-256, writes the new files next to the old ones, swaps them in and restarts the extension. If a step fails, the previous files are put back. A browser that blocks the File System Access API gets the release link instead.
+Without the updater host, Update now opens an update page. The first time, choose the PassBridge folder (the one loaded in `chrome://extensions`) and allow PassBridge to edit it. Chrome drops that permission whenever the extension restarts. When an update finishes, press Keep folder access and choose Allow on every visit, and later updates take one click. Otherwise the next update opens the folder picker at the same folder. The page checks the same signature and SHA-256, writes the new files next to the old ones, swaps them in and restarts the extension. If a step fails, the previous files are put back. A browser that blocks the File System Access API gets the release link instead.
 
 ## Windows
 

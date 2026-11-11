@@ -22,7 +22,7 @@ import { reloadIfStale } from "../../src/update/stale.js";
 import { isWindows, updateRoute } from "../../src/update/platform.js";
 import { manifestProblem, readZip } from "../../src/update/zip.js";
 import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdating } from "../../src/update/files.js";
-import { folderForUpdate, pickFolder } from "../../src/update/folder.js";
+import { canKeepFolder, folderForUpdate, keepFolder, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
 import { OPTION_TABS, helperView, passkeyImportSummary, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
@@ -920,8 +920,9 @@ async function crashedHalfway() {
 function savedFolder(query: any, request = "granted") {
   const h = ({ asked: 0 } as any);
   h.queryPermission = async () => query;
-  h.requestPermission = async () => {
+  h.requestPermission = async (opts: any) => {
     h.asked++;
+    h.askedMode = opts?.mode;
     return request;
   };
   return h;
@@ -951,7 +952,6 @@ function folderEnv(saved: any, { own = true, source = true, pickThrows = false }
   const saved = savedFolder("prompt", "granted");
   const env = (folderEnv(saved) as any);
   const r = await folderForUpdate(env.deps);
-  // only a folder that comes through the picker gets chrome's "allow on every visit"; requestPermission offers two buttons
   ok("folder: after a restart the picker opens at the kept folder instead of the bare permission prompt", r.ok && env.picked === 1 && env.startIn[0] === saved && saved.asked === 0 && env.store.value === env.picked_handle);
 }
 {
@@ -965,6 +965,19 @@ function folderEnv(saved: any, { own = true, source = true, pickThrows = false }
   const env = (folderEnv(saved) as any);
   const r = await folderForUpdate(env.deps);
   ok("folder: a refused permission opens the picker at the kept folder again", r.ok && env.picked === 1 && env.startIn[0] === saved);
+}
+ok("folder: a kept folder that lost its permission can be kept", await canKeepFolder((folderEnv(savedFolder("prompt")) as any).store));
+ok("folder: a folder allowed on every visit has nothing left to keep", !(await canKeepFolder((folderEnv(savedFolder("granted")) as any).store)));
+ok("folder: with no kept folder there is nothing to keep", !(await canKeepFolder((folderEnv(null) as any).store)));
+{
+  const saved = savedFolder("prompt");
+  const env = (folderEnv(saved) as any);
+  await keepFolder(env.store);
+  ok("folder: keeping asks chrome for write access to the kept folder, with no picker", saved.asked === 1 && saved.askedMode === "readwrite" && env.picked === 0);
+}
+{
+  await keepFolder((folderEnv(null) as any).store);
+  ok("folder: keeping with no kept folder does nothing", true);
 }
 {
   const env = (folderEnv(null, { own: false }) as any);

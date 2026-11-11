@@ -1,7 +1,10 @@
 // the extension folder handle for the folder update. chrome drops the permission whenever the extension
-// reloads, and asking again with requestPermission only offers Allow / Don't allow. a folder that comes
-// through the picker also gets "Allow on every visit", so a lost permission reopens the picker at the kept
-// folder: update, select, allow on every visit once, then every later update is one click.
+// reloads, so a lost permission reopens the picker at the kept folder. "Allow on every visit" is offered only
+// while chrome still holds the last grant, and closing the last extension tab clears it. the page that opens
+// after an update still has it, so keepFolder asks there, and every later update is one click.
+
+/** @param {any} folder */
+const hasWriteAccess = async (folder) => (await folder.queryPermission({ mode: "readwrite" })) === "granted";
 
 /**
  * @param {{ store: { get: () => Promise<any>, set: (h: any) => Promise<void> }, pick: (startIn?: any) => Promise<any>, isOwn: (h: any) => Promise<boolean>, isSource: (h: any) => Promise<boolean> }} deps
@@ -28,10 +31,20 @@ export async function pickFolder({ store, pick, isOwn, isSource }, startIn) {
  */
 export async function folderForUpdate(deps) {
   const saved = await deps.store.get();
-  if (!saved || (await saved.queryPermission({ mode: "readwrite" })) !== "granted") return pickFolder(deps, saved || undefined);
+  if (!saved || !(await hasWriteAccess(saved))) return pickFolder(deps, saved || undefined);
   if (!(await deps.isSource(saved))) return { ok: false, error: "notsource" };
   if (!(await deps.isOwn(saved))) return { ok: false, error: "notown" };
   return { ok: true, folder: saved };
+}
+
+export async function canKeepFolder(store = folderStore) {
+  const saved = await store.get();
+  return !!saved && !(await hasWriteAccess(saved));
+}
+
+export async function keepFolder(store = folderStore) {
+  const saved = await store.get();
+  if (saved) await saved.requestPermission({ mode: "readwrite" });
 }
 
 const DB = "passbridge-update";
