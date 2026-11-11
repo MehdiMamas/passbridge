@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "./chrome.js";
-import { applyDocumentLanguage, resolveLocale, t } from "../i18n/runtime.js";
+import { applyDocumentLanguage, errorText, resolveLocale, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 
 async function helperReady(tries = 3) {
@@ -70,7 +70,7 @@ function PopupApp() {
     const res = await send({ type: "lookupLogins", url: raw });
     if (gen !== lookupGen.current) return;
     if (!res?.ok) {
-      showNote(res?.error || t("couldntLookup"), "danger");
+      showNote(errorText(res?.error) || t("couldntLookup"), "danger");
       return;
     }
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
@@ -179,24 +179,24 @@ function PopupApp() {
           await applyState(res.state);
           return true;
         }
-        setPinError(res?.newCode ? `${res.error || t("verificationFailed")} — ${t("enterNewCode", [labelText])}` : res?.error || t("verificationFailed"));
+        setPinError(res?.newCode ? `${errorText(res.error) || t("verificationFailed")} — ${t("enterNewCode", [labelText])}` : errorText(res?.error) || t("verificationFailed"));
         return false;
       }}
       onNewCode={async () => {
         setPinError("");
         const res = await send({ type: "requestChallenge" });
-        if (!res?.ok) setPinError(res?.error || t("couldntRequestCode"));
+        if (!res?.ok) setPinError(errorText(res?.error) || t("couldntRequestCode"));
         else await applyState(res.state);
       }}
       onFill={async (login) => {
         const res = await send({ type: "fillOnPage", url: lookupUrl || undefined, loginName: login });
         if (res?.ok && res.filled) window.close();
-        else showNote(res?.error || t("couldntFillForm"), "danger");
+        else showNote(errorText(res?.error) || t("couldntFillForm"), "danger");
       }}
       onFillCode={async (row) => {
         const res = await send({ type: "fillOneTimeCode", id: row.id });
         if (res?.ok && res.filled) window.close();
-        else if (!(res?.ok && res.code)) showNote(res?.error ? t("couldntReadCodeDetail", [res.error]) : t("couldntReadCode"), "danger");
+        else if (!(res?.ok && res.code)) showNote(res?.error ? t("couldntReadCodeDetail", [errorText(res.error)]) : t("couldntReadCode"), "danger");
         return res;
       }}
       onCopy={async (field, login) => {
@@ -207,7 +207,7 @@ function PopupApp() {
           id: login.id,
           url: field === "password" ? lookupUrl || undefined : undefined,
         });
-        if (!res?.ok) showNote(res?.error || t("nothingToCopy"), "danger");
+        if (!res?.ok) showNote(errorText(res?.error) || t("nothingToCopy"), "danger");
         else showNote(t("copied"), "ok");
       }}
       onLookup={(raw) => {
@@ -248,7 +248,7 @@ function PopupApp() {
         if (state === "needs_pin") {
           const res = await send({ type: "requestChallenge" });
           if (res?.ok) await applyState(res.state);
-          else setPinError(res?.error || t("couldntRequestCode"));
+          else setPinError(errorText(res?.error) || t("couldntRequestCode"));
           return;
         }
         const res = await send({ type: "refreshAndRefill" });
@@ -257,14 +257,14 @@ function PopupApp() {
         else if (res?.reason === "none") {
           showNote(count ? t("codesForSite", [String(count)]) : t("nothingToRefill"), "muted");
         }
-        else showNote(res?.error || t("couldntRefill"), "danger");
+        else showNote(errorText(res?.error) || t("couldntRefill"), "danger");
       }}
       onSettings={() => chrome.runtime.openOptionsPage()}
       onReport={async () => {
         showNote(t("collectingPage"), "muted");
         const res = await send({ type: "reportPage" });
         if (res?.ok) window.close();
-        else showNote(res?.error || t("couldntReadPage"), "danger");
+        else showNote(errorText(res?.error) || t("couldntReadPage"), "danger");
       }}
       onOpenUpdate={async () => {
         await chrome.tabs.create({ url: /** @type {{ url?: string }} */ (update).url });
@@ -282,7 +282,7 @@ function PopupApp() {
         const res = await send({ type: "installUpdate" });
         if (!res?.ok) {
           setInstalling(false);
-          showNote(res?.error || t("couldntInstallUpdate"), "danger");
+          showNote(errorText(res?.error) || t("couldntInstallUpdate"), "danger");
         }
       }}
       onDismissUpdate={() => {

@@ -1,6 +1,7 @@
 // i18n suite: catalog parity, locale resolution, substitution, manifest wiring and menu output.
 import { readdirSync, readFileSync } from "fs";
-import { resolveLocale, setLocale, normalizeLocale, substitute, t, SUPPORTED_LOCALES, LOCALE_NAMES } from "../../src/i18n/runtime.js";
+import { resolveLocale, setLocale, normalizeLocale, substitute, t, errorText, ERROR_KEYS, CATALOGS, SUPPORTED_LOCALES, LOCALE_NAMES } from "../../src/i18n/runtime.js";
+import { INCORRECT_CODE } from "../../src/apple/protocol.ts";
 import { menuItems } from "../../src/menu.js";
 import { SETTINGS_DEFAULTS } from "../../src/settings.js";
 import { uiPinReply } from "../../src/session/pin-reply.js";
@@ -185,6 +186,21 @@ ok("pin: a wrong unlock code reads from the catalog and keeps the reply", wrongC
 const replacedCode = uiPinReply({ ok: false, error: "Enter the new code your Mac is showing now", newCode: true });
 ok("pin: a replaced unlock code reads from the catalog and keeps the reply", replacedCode.error === t("verificationFailed") && replacedCode.newCode === true && replacedCode.error !== "verificationFailed");
 ok("pin: other unlock errors pass through", uiPinReply({ ok: false, error: "verification timed out" }).error === "verification timed out");
+
+// errorText: display-side lookup of known English error messages
+setLocale("zh_CN");
+ok("errorText: a known message reads in zh_CN", errorText("This file is not JSON.") === t("err_notJson") && errorText("This file is not JSON.") !== "This file is not JSON.");
+setLocale("tr");
+ok("errorText: a known message reads in tr", errorText("not unlocked") === t("err_notUnlocked") && errorText("not unlocked") !== "not unlocked");
+setLocale("en");
+ok("errorText: a known message reads as the plain en text", errorText("This file is not JSON.") === "This file is not JSON." && errorText("no frame") === en.err_noFrame.message);
+setLocale("zh_CN");
+ok("errorText: an unknown message is returned unchanged", errorText("Query error: status 99") === "Query error: status 99");
+ok("errorText: undefined, null and empty give an empty string", errorText(undefined) === "" && errorText(null) === "" && errorText("") === "" && errorText(42) === "");
+ok("errorText: an empty error falls through to the fallback text", (errorText("") || t("couldntFillForm")) === t("couldntFillForm"));
+ok("errorText: every table key exists in every catalog", Object.values(ERROR_KEYS).every((k) => SUPPORTED_LOCALES.every((l) => typeof (CATALOGS as any)[l][k]?.message === "string")));
+ok("errorText: INCORRECT_CODE is still the raw string and is in the table", INCORRECT_CODE === "Incorrect code" && INCORRECT_CODE in ERROR_KEYS && errorText(INCORRECT_CODE) === t("err_incorrectCode"));
+setLocale("en");
 
 console.log("" + (failed ? `i18n: ${failed} FAIL` : "i18n ok"));
 process.exit(failed ? 1 : 0);

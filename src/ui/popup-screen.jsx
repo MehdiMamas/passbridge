@@ -1,7 +1,7 @@
 import { Clock, ClockPlus, Dices, ExternalLink, Eye, EyeOff, Flag, KeyRound, LoaderCircle, Lock, RefreshCw, Settings, SquarePlus, User, UserPlus, X } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { t } from "../i18n/runtime.js";
+import { errorText, t } from "../i18n/runtime.js";
 import { generateApplePassword } from "../password-generate.js";
 import { TOTP_WATCH_EVERY_MS, watchState } from "./totp-watch.js";
 import { codesForLogins, filterByUsername } from "./username-filter.js";
@@ -472,7 +472,7 @@ export function PopupScreen({
                   setLoginBusy(false);
                   if (res?.sheet) setLoginMsg(res.note || "");
                   else if (res?.ok) { setLoginOpen(false); setNewPass(""); }
-                  else setLoginMsg(res?.error || t("errSaveLogin"));
+                  else setLoginMsg(errorText(res?.error) || t("errSaveLogin"));
                 }}
               >
                 <input autoFocus value={newSite} onChange={(e) => setNewSite(e.target.value)} placeholder={t("website")} aria-label={t("website")} data-field="new-site" autoComplete="off" spellCheck={false} className="rounded-lg border border-[color-mix(in_srgb,CanvasText_20%,Canvas)] bg-[Canvas] px-2 py-1 text-xs" />
@@ -506,7 +506,7 @@ export function PopupScreen({
                       onClick={async () => {
                         setAddMsg(t("scanningPage"));
                         const res = await onTotpScan();
-                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("qrUnreadable"));
+                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(errorText(res?.error) || t("qrUnreadable"));
                       }}
                     >
                       {t("scanPage")}
@@ -527,7 +527,7 @@ export function PopupScreen({
                       onClick={async () => {
                         const res = await onTotpPaste(pasted);
                         setPasted("");
-                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(res?.error || t("badSetupKey"));
+                        if (res?.ok) { setHeld(res); setAddMsg(""); } else setAddMsg(errorText(res?.error) || t("badSetupKey"));
                       }}
                     >
                       {t("useKey")}
@@ -550,7 +550,7 @@ export function PopupScreen({
                       className="self-start rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
                       onClick={async () => {
                         const res = await onTotpAdd(target);
-                        if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(res?.error || res?.detail || t("couldntOpenPasswords"));
+                        if (res?.ok && res.launched) { setAdded(true); setAddMsg(""); } else setAddMsg(errorText(res?.error || res?.detail) || t("couldntOpenPasswords"));
                       }}
                     >
                       {t("addToPasswords")}
@@ -570,7 +570,7 @@ export function PopupScreen({
                               ? t("passwordsOpenNoteWith", [target])
                               : t("passwordsOpenNote")}
                     </p>
-                    <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : r?.error || ""); }}>
+                    <button type="button" className="self-start text-xs text-accent" onClick={async () => { const r = await onTotpCopyKey(); setAddMsg(r?.copied ? t("setupKeyCopied") : errorText(r?.error) || ""); }}>
                       {t("copySetupKey")}
                     </button>
                   </>
