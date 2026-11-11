@@ -135,3 +135,46 @@ export async function applyDocumentLanguage(doc, titleKey) {
   if (doc?.documentElement) doc.documentElement.lang = l.replace("_", "-");
   if (titleKey) doc.title = t(titleKey);
 }
+
+// exact English error message (as thrown in src/apple/ and src/passkeys/import.ts) -> catalog key
+export const ERROR_KEYS = {
+  "This file is not JSON.": "err_notJson",
+  "This is not a Credential Exchange export.": "err_notCxf",
+  "missing site (rpId)": "err_skipRpId",
+  "missing or invalid credential id": "err_skipCredId",
+  "missing key": "err_skipKey",
+  "not a P-256 (ES256) key": "err_skipNotEs256",
+  "not a P-256 key": "err_skipNotP256",
+  "encrypted export; export as unencrypted .json": "err_skipEncrypted",
+  "Generic query error": "err_query1",
+  "Invalid query param": "err_query2",
+  "No query results": "err_query3",
+  "Failed to delete": "err_query4",
+  "Failed to update": "err_query5",
+  "Invalid message format": "err_query6",
+  "Duplicate item": "err_query7",
+  "Unknown action": "err_query8",
+  "Invalid session": "err_query9",
+  "no frame": "err_noFrame",
+  "connection closed": "err_connClosed",
+  "not connected": "err_notConnected",
+  "not unlocked": "err_notUnlocked",
+  "timeout waiting for response": "err_timeout",
+  "another request is already in flight": "err_inFlight",
+  "Incorrect code": "err_incorrectCode",
+  "no password to save": "err_noPassword",
+  "this helper cant set up verification codes": "err_noTotpSetup",
+  "this helper cant open the new-password sheet": "err_noNewPasswordSheet",
+};
+
+/**
+ * Display text for an error message: the translation when the exact message is known, else the message itself.
+ * Display only; callers keep comparing the raw string.
+ * @param {unknown} message
+ * @returns {string}
+ */
+export function errorText(message) {
+  if (typeof message !== "string" || !message) return "";
+  const key = /** @type {Record<string, string>} */ (ERROR_KEYS)[message];
+  return key ? t(key) : message;
+}
