@@ -1,4 +1,5 @@
-// an empty file `managed-install` next to manifest.json marks an install whose updates a package manager or MDM owns.
+// managed.json next to manifest.json ships as {"managed": false}; a package manager or MDM that owns updates sets it to true.
+// the file always exists, so reading it never logs a failed request
 // kept out of settings.js so it is not bundled into content.js
 import { getSettings } from "./settings.js";
 
@@ -24,7 +25,8 @@ export async function isManagedInstall({ fetchFn = (...a) => fetch(...a), getUrl
   if (t - checkedAt < RECHECK_MS) return false;
   checkedAt = t;
   try {
-    found = (await fetchFn(getUrl("managed-install"))).ok;
+    const res = await fetchFn(getUrl("managed.json"));
+    found = res.ok && (await res.json())?.managed === true;
   } catch {
     found = false;
   }

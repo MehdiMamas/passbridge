@@ -142,7 +142,7 @@ export async function buildExtension({ out = at("dist"), mockKind = "", preview 
   // fonts/ includes OFL.txt, which has to ship beside the woff2 files.
   // LICENSE, NOTICE and licenses/ (Apache-2.0 for the upstream code) ship with every build.
   // _locales/ carries the __MSG_ catalogs the manifest and Chrome's own i18n use.
-  for (const item of ["manifest.json", "icons", "fonts", "overlay", "LICENSE", "NOTICE", "licenses", "_locales"]) {
+  for (const item of ["manifest.json", "icons", "fonts", "overlay", "LICENSE", "NOTICE", "licenses", "_locales", "managed.json"]) {
     await cp(at(item), dst(item), { recursive: true });
   }
   if (version) {

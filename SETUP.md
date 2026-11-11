@@ -110,7 +110,7 @@ Without the updater host, Update now opens an update page. The first time, choos
 
 ### Managed installs
 
-If a package manager or an MDM owns updates, add an empty file named `managed-install` next to `manifest.json`. PassBridge then turns update checks and automatic installs off, hides the Updates tab in Options, and shows no update in the popup or on the toolbar badge. A self-update would replace the folder and remove the file, which is why updates stay off. The update page opened by its URL still works as a manual action. Without the file nothing changes.
+If a package manager or an MDM owns updates, set `{ "managed": true }` in the `managed.json` file next to `manifest.json` (it ships as `{ "managed": false }`). PassBridge then turns update checks and automatic installs off, hides the Updates tab in Options, and shows no update in the popup or on the toolbar badge. A self-update would put the shipped file back, which is why updates stay off. The update page opened by its URL still works as a manual action. With the shipped value nothing changes.
 
 ## Windows
 
