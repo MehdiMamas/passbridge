@@ -21,7 +21,6 @@ function hitsUpstreamName(/** @type {HTMLInputElement} */ el) {
 }
 
 // OTP inputs are never fillable login fields, that misclassification is apple's balloon-on-every-OTP bug
-console.log("[PassBridge] content script v1.0.0 loaded");
 
 // inline menus and codes follow the UI language; t() falls back to en until this lands
 void resolveLocale();
