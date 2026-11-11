@@ -28,6 +28,18 @@ const screens = [
     },
   ],
   [
+    // the README screenshots (docs/images/popup-*.png, test-harness/automation/shoot-readme.ts)
+    "readme",
+    {
+      state: "unlocked",
+      site: "northwind.dev",
+      showFavicons: false,
+      logins: [{ username: "ada@northwind.dev" }, { username: "grace@northwind.dev" }, { username: "ada.lovelace@northwind.dev" }],
+      codes: [{ id: 0, source: "totp", domain: "northwind.dev", username: "ada@northwind.dev" }],
+      caps: { newPasswordSheet: true },
+    },
+  ],
+  [
     "grouped_codes",
     {
       state: "unlocked",

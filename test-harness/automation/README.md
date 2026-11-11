@@ -69,6 +69,8 @@ Env vars, all optional:
 
 | `drive-e2e-*.ts` | `real-mac`, `real-win` | The real extension (no mock client) against the simulated Apple helper in `test-harness/fake-apple-helper`, on both platforms: pairing, fill and save, codes, passkeys (win), denied or unanswered approval and relogin, and the agent relay. No Apple account and no person. |
 
+`shoot-readme.ts` is not a test: it retakes the README screenshots in `docs/images` (popup from the preview build, inline menu and save bar from the real extension against the simulated helper). Run it under `xvfb-run -a`; `OUT=<folder>` writes elsewhere.
+
 ## End to end against the simulated helper
 
 `build-test-extensions.ts` also builds `.builds/real-mac` and `.builds/real-win`: the production code with an empty mock

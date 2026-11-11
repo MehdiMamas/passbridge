@@ -24,7 +24,7 @@ await main(async () => {
       await page.goto(pageUrl, { waitUntil: "networkidle" });
       await page.screenshot({ path: join(SHOTS, "ui-preview.png"), fullPage: true });
       const count = await page.locator("[data-screen]").count();
-      ok("preview renders 12 screens (6 states x light/dark)", count === 12, `got ${count}`);
+      ok("preview renders 14 screens (7 states x light/dark)", count === 14, `got ${count}`);
       const lightness = (css: string) => {
         const channels = (css.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
         return (css.startsWith("color(") ? channels.map((v) => v * 255) : channels).reduce((sum, v) => sum + v, 0) / 3;
