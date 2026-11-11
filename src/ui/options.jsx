@@ -6,7 +6,8 @@ import { UPDATE_PAGE } from "../update/check.js";
 import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
 import { parseExport } from "../passkeys/import.ts";
-import { helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
+import { helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash, visibleTabs } from "./options-model.js";
+import { applyManaged, isManagedInstall } from "../managed.js";
 import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
@@ -31,7 +32,12 @@ function OptionsApp() {
   const [syncSteps, setSyncSteps] = useState([]);
   const [passkeyProgress, setPasskeyProgress] = useState(/** @type {{ done: number, total: number } | null} */ (null));
   const [passkeyResults, setPasskeyResults] = useState(/** @type {{ label: string, status: string, reason?: string }[]} */ ([]));
-  const [tab, setTab] = useState(() => tabFromHash(location.hash));
+  // Updates stays out of the nav and the hash tab waits until managed.json answers, so a managed install never shows it
+  const [managed, setManaged] = useState(/** @type {boolean | null} */ (null));
+  const [tab, setTab] = useState(() => visibleTabs(false)[0].id);
+  const tabs = visibleTabs(managed !== false);
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
   const [helpers, setHelpers] = useState(/** @type {{ policy: import("./options-model.js").HelperState, updater: import("./options-model.js").HelperState }} */ ({ policy: "checking", updater: "checking" }));
   const [policy, setPolicy] = useState({ hidden: false, message: "" });
   const [bubble, setBubble] = useState({ shown: false, checked: false, disabled: true });
@@ -58,6 +64,10 @@ function OptionsApp() {
       if (area === "session" && changes.agentLog) setAgentLog(changes.agentLog.newValue || []);
     };
     chrome.storage.onChanged.addListener(onLog);
+    isManagedInstall().then((isManaged) => {
+      setManaged(isManaged);
+      setTab(tabFromHash(location.hash, visibleTabs(isManaged)));
+    });
     // the save bar can add a site while this page is open; take it in so a later save never writes the old list back
     /** @param {Record<string, { newValue?: any }>} changes @param {string} area */
     const onAllowlist = (changes, area) => {
@@ -82,7 +92,7 @@ function OptionsApp() {
     readPrivacy("autofillAddressEnabled", setAddress);
     const onHash = () => {
       saveBlurList();
-      setTab(tabFromHash(location.hash));
+      setTab(tabFromHash(location.hash, tabsRef.current));
     };
     const onPageHide = () => {
       saveBlurList();
@@ -245,19 +255,23 @@ function OptionsApp() {
     else setPrivacy("autofillAddressEnabled", isOn, setAddress, "suppressAddressAutofill");
   }
 
+  // derived for display only, never written back to storage
+  const shown = applyManaged(settings, managed === true);
+
   return (
     <div className="min-h-screen bg-[color-mix(in_srgb,CanvasText_3%,Canvas)]">
       <OptionsScreen
         tab={tab}
-        isSettled={isLoaded && helpers.policy !== "checking" && helpers.updater !== "checking"}
-        settings={settings}
+        tabs={tabs}
+        isSettled={isLoaded && managed !== null && helpers.policy !== "checking" && helpers.updater !== "checking"}
+        settings={shown}
         onChange={onChange}
         lists={lists}
         onListChange={onListChange}
         onListBlur={onListBlur}
         isMruCleared={isMruCleared}
         onClearMru={onClearMru}
-        view={helperView({ helpers, isWindows: IS_WINDOWS, canCheckForUpdates: settings.canCheckForUpdates, relay })}
+        view={helperView({ helpers, isWindows: IS_WINDOWS, canCheckForUpdates: shown.canCheckForUpdates, relay })}
         policy={policy}
         onPolicy={onPolicy}
         privacy={{ bubble, address }}

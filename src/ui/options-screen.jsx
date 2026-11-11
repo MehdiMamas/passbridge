@@ -554,10 +554,10 @@ function UpdatesTab({ settings, onChange, view, onCheckNow }) {
 /** @type {Record<string, (props: any) => any>} */
 const TAB_BODIES = { autofill: AutofillTab, appearance: AppearanceTab, browser: BrowserTab, agents: AgentsTab, updates: UpdatesTab };
 
-/** @param {{ tab: string, view: OptionsView, isSettled: boolean, [key: string]: any }} props the rest is passed on to the tab body */
+/** @param {{ tab: string, tabs?: typeof OPTION_TABS, view: OptionsView, isSettled: boolean, [key: string]: any }} props the rest is passed on to the tab body */
 export function OptionsScreen(props) {
-  const { tab, view, isSettled } = props;
-  const current = OPTION_TABS.find((t) => t.id === tab) || OPTION_TABS[0];
+  const { tab, view, isSettled, tabs = OPTION_TABS } = props;
+  const current = tabs.find((t) => t.id === tab) || tabs[0];
   const Body = TAB_BODIES[current.id];
   const notice = view.notices[current.id];
   return (
@@ -574,7 +574,7 @@ export function OptionsScreen(props) {
             <nav aria-label={t("settingsNav")}>
 
               <ul className="flex flex-wrap gap-1 px-3 pb-3 @2xl:flex-col">
-                {OPTION_TABS.map((tab) => {
+                {tabs.map((tab) => {
                   const isCurrent = tab.id === current.id;
                   const TabIcon = TAB_ICONS[tab.id];
                   return (

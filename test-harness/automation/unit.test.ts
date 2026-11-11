@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { ApplePasswords, Command, normalizeOtpEntries } from "../../src/apple/protocol.ts";
 import { isBareCodeOtp } from "../../src/otp-field.js";
 import { otpAuthSecret, parseOtpAuth } from "../../src/otpauth.js";
@@ -25,7 +26,8 @@ import { applyUpdate, hasInterruptedUpdate, isOwnFolder, recoverUpdate, setUpdat
 import { canKeepFolder, folderForUpdate, keepFolder, pickFolder } from "../../src/update/folder.js";
 import { withUpdateLock } from "../../src/update/lock.js";
 import { SETTINGS_DEFAULTS, colorSchemeFor, migrateSettingsToSync } from "../../src/settings.js";
-import { OPTION_TABS, helperView, passkeyImportSummary, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "../../src/ui/options-model.js";
+import { OPTION_TABS, helperView, passkeyImportSummary, passkeysView, policyMessage, shouldRecheck, tabFromHash, visibleTabs } from "../../src/ui/options-model.js";
+import { applyManaged, getEffectiveSettings, isManagedInstall, resetManagedCache } from "../../src/managed.js";
 import { PASSKEY_HOST, decodeRecord, encodeRecord, isPasskeyHost, isPasskeyName, makeRecord, parseUsername, recordUsername, b64u as pkB64u, unb64u as pkUnb64u } from "../../src/passkeys/record.ts";
 import { createPasskey, signAssertion } from "../../src/passkeys/webauthn.ts";
 import { createPasskeyProxy } from "../../src/passkeys/proxy.ts";
@@ -520,6 +522,66 @@ const NOW = Date.UTC(2026, 9, 25);
   await checkForUpdate(NOW);
   ok("update: turned off, nothing is requested", env.fetched.length === 0);
   ok("update: turned off, nothing is offered", (await availableUpdate("1.3.1")) === null);
+}
+{
+  // managed install: the marker file turns the update flags off whatever is saved
+  const managedSettings = async () => applyManaged({ canCheckForUpdates: true, autoInstallUpdates: true }, true);
+  const env = fakeUpdateEnv({ canCheckForUpdates: true, autoInstallUpdates: true, latestRelease: "v1.9.0" });
+  await checkForUpdate(NOW, { force: true, getSettingsFn: managedSettings });
+  ok("managed: no request to the release URL", env.fetched.length === 0);
+  ok("managed: a stored release is not offered", (await availableUpdate("1.3.1", { getSettingsFn: managedSettings })) === null);
+  ok("managed: without the marker the stored release is offered", (await availableUpdate("1.3.1"))?.version === "1.9.0");
+  const installs: any[] = [];
+  const r = await autoInstallUpdate({ getSettingsFn: managedSettings, available: async () => true, install: async (v: any, o: any) => (installs.push(o), { ok: true }), helper: (async () => ({ ok: true })) as any });
+  ok("managed: nothing is installed automatically", !r.ran && installs.length === 0);
+  delete (globalThis as any).chrome;
+}
+{
+  const flags = { canCheckForUpdates: true, autoInstallUpdates: true, theme: "dark" };
+  const forced = applyManaged(flags, true);
+  ok("managed: applyManaged forces both flags off and keeps the rest", forced.canCheckForUpdates === false && forced.autoInstallUpdates === false && forced.theme === "dark" && flags.canCheckForUpdates === true);
+  ok("managed: applyManaged returns the same object when not managed", applyManaged(flags, false) === flags);
+  ok("managed: visibleTabs(true) has no updates tab", !visibleTabs(true).some((t) => t.id === "updates") && visibleTabs(true).length === OPTION_TABS.length - 1);
+  ok("managed: visibleTabs(false) is OPTION_TABS", visibleTabs(false) === OPTION_TABS);
+  ok("managed: #updates opens autofill when managed", tabFromHash("#updates", visibleTabs(true)) === "autofill");
+  let t = 1000;
+  let calls = 0;
+  let reply: any = { ok: false };
+  const env = { fetchFn: (async (u: any) => (calls++, u === "chrome://x/managed.json" ? (reply instanceof Error ? Promise.reject(reply) : reply) : { ok: false })) as any, getUrl: (p: string) => `chrome://x/${p}`, now: () => t };
+  resetManagedCache();
+  ok("managed: a non-ok answer is not managed", (await isManagedInstall(env)) === false);
+  reply = { ok: true, json: async () => ({ managed: false }) };
+  t += 60_000;
+  ok("managed: the shipped managed:false is not managed", (await isManagedInstall(env)) === false);
+  reply = { ok: true, json: async () => ({ managed: true }) };
+  ok("managed: a false answer is not looked up again within 60 s", (await isManagedInstall(env)) === false && calls === 2);
+  t += 60_000;
+  ok("managed: managed.json set to true later is picked up after 60 s", (await isManagedInstall(env)) === true && calls === 3);
+  ok("managed: a true answer is cached", (await isManagedInstall(env)) === true && calls === 3);
+  resetManagedCache();
+  reply = new Error("missing");
+  ok("managed: a rejected fetch is not managed", (await isManagedInstall(env)) === false);
+  resetManagedCache();
+  calls = 0;
+  reply = { ok: true, json: async () => (await new Promise((r) => setTimeout(r, 20)), { managed: true }) };
+  const both = await Promise.all([isManagedInstall(env), isManagedInstall(env)]);
+  ok("managed: two calls at once both see managed, one fetch", both[0] === true && both[1] === true && calls === 1);
+  resetManagedCache();
+  (globalThis as any).chrome = { storage: { sync: { get: (k: any, cb: any) => cb({ canCheckForUpdates: true, autoInstallUpdates: true }) } }, runtime: { getURL: (p: string) => `chrome://x/${p}` } };
+  const realFetchHere = globalThis.fetch;
+  globalThis.fetch = (async () => ({ ok: true, json: async () => ({ managed: true }) })) as any;
+  const eff = await getEffectiveSettings();
+  ok("managed: effective settings are off with the marker and a saved true", eff.canCheckForUpdates === false && eff.autoInstallUpdates === false);
+  globalThis.fetch = realFetchHere;
+  delete (globalThis as any).chrome;
+  resetManagedCache();
+  const bg = readFileSync(new URL("../../src/background.js", import.meta.url), "utf8");
+  const stateReply = bg.slice(bg.indexOf('case "getState"'), bg.indexOf('case "getOneTimeCodes"'));
+  ok("managed: the getState reply uses effective settings and update", /settings: await getEffectiveSettings\(\)/.test(stateReply) && /availableUpdate\(undefined, \{ getSettingsFn: getEffectiveSettings \}\)/.test(stateReply) && (stateReply.match(/availableUpdate\(/g) || []).length === 1 && !/getSettings\(\)/.test(stateReply));
+  const content = readFileSync(new URL("../../src/content.js", import.meta.url), "utf8");
+  ok("managed: content.js does not import managed.js", !/managed\.js/.test(content));
+  const opts = readFileSync(new URL("../../src/ui/options.jsx", import.meta.url), "utf8");
+  ok("managed: the options page saves only the changed key and never writes the clamped copy", /function persist\(partial\) \{\n    setSettings\(\(s\) => \(\{ \.\.\.s, \.\.\.partial \}\)\);\n    queueSettings\(partial\);/.test(opts) && !/settingsStore\(\)\.set\(shown/.test(opts));
 }
 {
   const env = fakeUpdateEnv({}, (new Error("offline") as any));

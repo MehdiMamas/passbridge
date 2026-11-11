@@ -19,6 +19,7 @@ import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
 import { initAgent, loginSavedFor, pickAllowedFrames } from "./agent.js";
 import { UPDATE_PAGE, availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
+import { getEffectiveSettings } from "./managed.js";
 import { reloadIfStale } from "./update/stale.js";
 import { autoInstallUpdate, installUpdate, takeAutoUpdatedTo, updaterAvailable } from "./update/install.js";
 import { hasInterruptedUpdate } from "./update/files.js";
@@ -424,8 +425,8 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (a.name !== UPDATE_ALARM) return;
   (async () => {
     if (await reloadIfStale()) return;
-    await checkForUpdate();
-    await autoInstallUpdate();
+    await checkForUpdate(undefined, { getSettingsFn: getEffectiveSettings });
+    await autoInstallUpdate({ getSettingsFn: getEffectiveSettings });
   })().catch(() => {});
 });
 // another profile on the same unpacked folder may have updated it while this one slept
@@ -995,7 +996,7 @@ function setCountBadge(tabId, n) {
 async function syncUpdateBadge() {
   let update;
   try {
-    update = await availableUpdate();
+    update = await availableUpdate(undefined, { getSettingsFn: getEffectiveSettings });
   } catch {
     // the worker is shutting down for a reload, the next start syncs the badge
     return;
@@ -1170,9 +1171,9 @@ chrome.storage?.onChanged.addListener((changes, area) => {
   // switched in another Chrome of this profile: apply it to this one too
   if (area === SETTINGS_AREA) applySyncedPrivacy(changes);
   if (changes.latestRelease || changes.dismissedRelease || changes.canCheckForUpdates) syncUpdateBadge();
-  if (changes.canCheckForUpdates?.newValue) checkForUpdate(Date.now(), { force: true });
+  if (changes.canCheckForUpdates?.newValue) checkForUpdate(Date.now(), { force: true, getSettingsFn: getEffectiveSettings });
 });
-(async () => { await checkForUpdate(); await autoInstallUpdate(); })().catch(() => {});
+(async () => { await checkForUpdate(undefined, { getSettingsFn: getEffectiveSettings }); await autoInstallUpdate({ getSettingsFn: getEffectiveSettings }); })().catch(() => {});
 syncUpdateBadge();
 // main_frame in the filter, not the callback: every image and XHR would otherwise wake the worker
 try {
@@ -1653,7 +1654,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
 
         case "getSettings": {
-          sendResponse({ ok: true, settings: await getSettings() });
+          sendResponse({ ok: true, settings: await getEffectiveSettings() });
           break;
         }
 
@@ -1665,16 +1666,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "getState":
           await platformReady;
           await ensureConnected();
+          const offeredUpdate = await availableUpdate(undefined, { getSettingsFn: getEffectiveSettings });
           sendResponse({
             ok: true,
             state: client.state,
             os: platformOs,
             label: uiDeviceLabel(platformOs, t),
             hasChallenge: client.hasChallenge,
-            settings: await getSettings(),
-            update: await availableUpdate(),
+            settings: await getEffectiveSettings(),
+            update: offeredUpdate,
             helperNote: await takeHelperNote(),
-            canInstallUpdate: (await availableUpdate()) ? await updaterAvailable() : false,
+            canInstallUpdate: offeredUpdate ? await updaterAvailable() : false,
             caps: {
               oneTimeCodes: client.canFillOneTimeCodes,
               newPasswordSheet: client.canOpenPasswordsAppToNewPasswordSheet,
