@@ -7,7 +7,7 @@ import { updaterAvailable } from "../update/install.js";
 import { isWindows } from "../update/platform.js";
 import { parseExport } from "../passkeys/import.ts";
 import { helperView, passkeysView, policyMessage, shouldRecheck, tabFromHash } from "./options-model.js";
-import { applyDocumentLanguage, errorText, t } from "../i18n/runtime.js";
+import { applyDocumentLanguage, t } from "../i18n/runtime.js";
 import { useLocale } from "../i18n/use.jsx";
 import { OptionsScreen } from "./options-screen.jsx";
 import { followTheme } from "./page-theme.js";
@@ -171,7 +171,7 @@ function OptionsApp() {
     try {
       parsed = await parseExport(await file.text());
     } catch (e) {
-      return setPasskeyResults([{ label: file.name, status: "failed", reason: errorText(e?.message) }]);
+      return setPasskeyResults([{ label: file.name, status: "failed", reason: e?.message || "" }]);
     }
     const results = parsed.skipped.map((/** @type {{ label: string, reason: string }} */ s) => ({ label: s.label, status: "skipped", reason: s.reason }));
     const total = parsed.records.length;
@@ -185,7 +185,7 @@ function OptionsApp() {
         res = await chrome.runtime.sendMessage({ type: "passkeySave", record: rec });
       } catch {}
       if (res?.ok && (res.result === "saved" || res.result === "exists")) results.push({ label, status: res.result });
-      else results.push({ label, status: "failed", reason: errorText(res?.error || res?.result) });
+      else results.push({ label, status: "failed", reason: res?.error || res?.result });
     }
     setPasskeyProgress(null);
     setPasskeyResults(results);
