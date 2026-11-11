@@ -108,6 +108,10 @@ Install the helper once and every later update installs by itself, with no folde
 
 Without the updater host, Update now opens an update page. The first time, choose the PassBridge folder (the one loaded in `chrome://extensions`) and allow PassBridge to edit it. Chrome drops that permission whenever the extension restarts. When an update finishes, press Keep folder access and choose Allow on every visit, and later updates take one click. Otherwise the next update opens the folder picker at the same folder. The page checks the same signature and SHA-256, writes the new files next to the old ones, swaps them in and restarts the extension. If a step fails, the previous files are put back. A browser that blocks the File System Access API gets the release link instead.
 
+### Managed installs
+
+If a package manager or an MDM owns updates, add an empty file named `managed-install` next to `manifest.json`. PassBridge then turns update checks and automatic installs off, hides the Updates tab in Options, and shows no update in the popup or on the toolbar badge. A self-update would replace the folder and remove the file, which is why updates stay off. The update page opened by its URL still works as a manual action. Without the file nothing changes.
+
 ## Windows
 
 You need:
