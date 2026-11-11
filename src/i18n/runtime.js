@@ -175,6 +175,7 @@ export const ERROR_KEYS = {
  */
 export function errorText(message) {
   if (typeof message !== "string" || !message) return "";
-  const key = /** @type {Record<string, string>} */ (ERROR_KEYS)[message];
+  // own keys only, so "constructor" or "toString" stay plain text
+  const key = Object.hasOwn(ERROR_KEYS, message) ? /** @type {Record<string, string>} */ (ERROR_KEYS)[message] : undefined;
   return key ? t(key) : message;
 }
