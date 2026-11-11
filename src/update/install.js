@@ -114,10 +114,10 @@ async function runInstall(currentVersion, publicKey, auto = false) {
 
 // called after each release check: installs a newer signed release with no click.
 // needs the setting on and the helper there; a version that failed once is not tried again, so it can't loop
-export async function autoInstallUpdate({ install = installUpdate, available = updaterAvailable, helper = updateHelper } = {}) {
-  const settings = await getSettings();
+export async function autoInstallUpdate({ install = installUpdate, available = updaterAvailable, helper = updateHelper, getSettingsFn = getSettings } = {}) {
+  const settings = await getSettingsFn();
   if (!settings.canCheckForUpdates || !settings.autoInstallUpdates) return { ran: false, why: "off" };
-  const update = await availableUpdate();
+  const update = await availableUpdate(undefined, { getSettingsFn });
   const { autoInstallFailed } = await chrome.storage.local.get("autoInstallFailed");
   if (!(await available())) return { ran: false, why: "no-host" };
   if (!update) {

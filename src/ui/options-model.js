@@ -52,12 +52,21 @@ export function policyMessage(reply, isToggle) {
 }
 
 /**
+ * @param {boolean} managed
+ * @returns {typeof OPTION_TABS}
+ */
+export function visibleTabs(managed) {
+  return managed ? OPTION_TABS.filter((t) => t.id !== "updates") : OPTION_TABS;
+}
+
+/**
  * @param {string} hash
+ * @param {typeof OPTION_TABS} [tabs]
  * @returns {string}
  */
-export function tabFromHash(hash) {
+export function tabFromHash(hash, tabs = OPTION_TABS) {
   const id = String(hash || "").replace(/^#/, "");
-  return OPTION_TABS.some((t) => t.id === id) ? id : OPTION_TABS[0].id;
+  return tabs.some((t) => t.id === id) ? id : tabs[0].id;
 }
 
 /**

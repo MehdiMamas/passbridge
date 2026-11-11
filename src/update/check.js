@@ -41,9 +41,10 @@ export function isNewerVersion(latest, current) {
 /**
  * @param {number} now
  * @param {boolean} force
+ * @param {typeof getSettings} getSettingsFn
  */
-async function runCheck(now, force) {
-  if (!(await getSettings()).canCheckForUpdates) return false;
+async function runCheck(now, force, getSettingsFn) {
+  if (!(await getSettingsFn()).canCheckForUpdates) return false;
   const { updateCheckedAt } = await chrome.storage.local.get("updateCheckedAt");
   const age = now - (Number(updateCheckedAt) || 0);
   if (!force && age >= 0 && age < UPDATE_CHECK_MS) return false;
@@ -65,8 +66,8 @@ async function runCheck(now, force) {
 let running = null;
 // force skips the wait (a button press); resolves true when GitHub answered.
 // storage calls fail with "No SW" while the worker shuts down for a reload, the next alarm checks again
-export function checkForUpdate(now = Date.now(), { force = false } = {}) {
-  running ||= runCheck(now, force)
+export function checkForUpdate(now = Date.now(), { force = false, getSettingsFn = getSettings } = {}) {
+  running ||= runCheck(now, force, getSettingsFn)
     .catch(() => false)
     .finally(() => {
       running = null;
@@ -75,8 +76,8 @@ export function checkForUpdate(now = Date.now(), { force = false } = {}) {
 }
 
 /** @returns {Promise<{ version: string, url: string } | null>} */
-export async function availableUpdate(currentVersion = chrome.runtime.getManifest().version) {
-  if (!(await getSettings()).canCheckForUpdates) return null;
+export async function availableUpdate(currentVersion = chrome.runtime.getManifest().version, { getSettingsFn = getSettings } = {}) {
+  if (!(await getSettingsFn()).canCheckForUpdates) return null;
   const { latestRelease, dismissedRelease, latestUnsigned } = await chrome.storage.local.get(["latestRelease", "dismissedRelease", "latestUnsigned"]);
   if (latestRelease === dismissedRelease || latestRelease === latestUnsigned || !isNewerVersion(latestRelease, currentVersion)) return null;
   return {
