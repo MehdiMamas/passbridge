@@ -1666,6 +1666,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "getState":
           await platformReady;
           await ensureConnected();
+          const offeredUpdate = await availableUpdate(undefined, { getSettingsFn: getEffectiveSettings });
           sendResponse({
             ok: true,
             state: client.state,
@@ -1673,9 +1674,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             label: uiDeviceLabel(platformOs, t),
             hasChallenge: client.hasChallenge,
             settings: await getEffectiveSettings(),
-            update: await availableUpdate(undefined, { getSettingsFn: getEffectiveSettings }),
+            update: offeredUpdate,
             helperNote: await takeHelperNote(),
-            canInstallUpdate: (await availableUpdate(undefined, { getSettingsFn: getEffectiveSettings })) ? await updaterAvailable() : false,
+            canInstallUpdate: offeredUpdate ? await updaterAvailable() : false,
             caps: {
               oneTimeCodes: client.canFillOneTimeCodes,
               newPasswordSheet: client.canOpenPasswordsAppToNewPasswordSheet,

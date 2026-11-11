@@ -569,7 +569,7 @@ const NOW = Date.UTC(2026, 9, 25);
   resetManagedCache();
   const bg = readFileSync(new URL("../../src/background.js", import.meta.url), "utf8");
   const stateReply = bg.slice(bg.indexOf('case "getState"'), bg.indexOf('case "getOneTimeCodes"'));
-  ok("managed: the getState reply uses effective settings and update", /settings: await getEffectiveSettings\(\)/.test(stateReply) && /availableUpdate\(undefined, \{ getSettingsFn: getEffectiveSettings \}\)/.test(stateReply) && !/getSettings\(\)/.test(stateReply));
+  ok("managed: the getState reply uses effective settings and update", /settings: await getEffectiveSettings\(\)/.test(stateReply) && /availableUpdate\(undefined, \{ getSettingsFn: getEffectiveSettings \}\)/.test(stateReply) && (stateReply.match(/availableUpdate\(/g) || []).length === 1 && !/getSettings\(\)/.test(stateReply));
   const content = readFileSync(new URL("../../src/content.js", import.meta.url), "utf8");
   ok("managed: content.js does not import managed.js", !/managed\.js/.test(content));
   const opts = readFileSync(new URL("../../src/ui/options.jsx", import.meta.url), "utf8");
