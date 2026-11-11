@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icons/icon128.png" width="96" height="96" alt="PassBridge logo">
+  <img src="icons/icon128.png" width="96" height="96" alt="PassBridge 标志">
 </p>
 
 <h1 align="center">PassBridge</h1>
@@ -9,11 +9,29 @@
   支持 macOS 和 Windows。与 Apple 或 Bitwarden 无关。
 </p>
 
+<p align="center">
+  <a href="https://github.com/MehdiMamas/passbridge/actions/workflows/ci.yml"><img src="https://github.com/MehdiMamas/passbridge/actions/workflows/ci.yml/badge.svg" alt="持续集成"></a>
+  <a href="https://github.com/MehdiMamas/passbridge/releases/latest"><img src="https://img.shields.io/github/v/release/MehdiMamas/passbridge" alt="最新版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/MehdiMamas/passbridge" alt="许可证：GPL-3.0"></a>
+</p>
+
 <p align="center">🇺🇸 <a href="README.md">English</a></p>
+
+<p align="center">
+  <img src="docs/demo.gif" width="620" alt="在登录页点击用户名字段并选择已保存的登录信息后，两个字段都会自动填充">
+</p>
 
 PassBridge 最初是 [Open Passwords](https://github.com/ManiForoughi2/open-passwords) 的分支。它通过 Apple 原生消息协议（`com.apple.passwordmanager`）与 iCloud 通信，密码库始终保持在 iCloud 中。字段识别规则来自 [Bitwarden 浏览器扩展](https://github.com/bitwarden/clients)。如何同步最新的 Bitwarden、au2001 或 open-passwords 提交，请见 [UPSTREAMS.md](UPSTREAMS.md)。
 
 从这里开始：macOS 和 Windows 用户请看 **[SETUP.md](SETUP.md)**。每个 [release](https://github.com/MehdiMamas/passbridge/releases) 都附带了构建好的扩展，解压后加载即可。
+
+快速安装（详细步骤和检查方法见 [SETUP.md](SETUP.md)）：
+
+1. 在 Chrome 中停用 Apple 自带的 iCloud 密码扩展。两个扩展使用同一个扩展程序 ID。
+2. 从[最新版本](https://github.com/MehdiMamas/passbridge/releases/latest)下载 `passbridge.zip` 并解压。
+3. 打开 `chrome://extensions`，启用开发者模式，点击「加载已解压的扩展程序」，选择解压后的文件夹。
+4. 点击工具栏图标，输入 macOS 或 Windows 版 iCloud 显示的 6 位验证码。
+5. 可选 helper：在 macOS 上解压 `passbridge-macos-helper.zip` 后运行 `sh native/install.sh`。在 Windows 上解压 `passbridge-windows-helper.zip`，然后双击 `install.cmd`。
 
 <p align="center">
   <img src="docs/images/popup-light.png" width="300" alt="PassBridge 弹窗，显示当前网站的已保存登录">
