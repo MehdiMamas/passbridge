@@ -136,10 +136,12 @@ def skip(name):
 
 
 class CodeRelay:
-    def __init__(self, with_reader=True):
+    def __init__(self, with_reader=True, total_s=None):
         self.dir = tempfile.mkdtemp(prefix="pb-code-")
         env = {**os.environ, "PASSBRIDGE_APPDIR": self.dir, "PASSBRIDGE_NO_WSL_REEXEC": "1"}
         env.pop("PASSBRIDGE_CODE_READER", None)
+        if total_s is not None:
+            env["PASSBRIDGE_READER_TOTAL_S"] = str(total_s)
         if with_reader:
             env["PASSBRIDGE_CODE_READER"] = json.dumps([sys.executable, "-I", str(FAKE)])
         self.err = open(os.path.join(tempfile.mkdtemp(prefix="pb-err-"), "stderr"), "w+b")
@@ -316,6 +318,16 @@ if not WINDOWS:
     ok("cancel_code during launch -> reader_failed in under 1 s", err(r) == "reader_failed" and time.time() - t0 < 1, (r, time.time() - t0))
     cr.wait_file("fake-reader-exited", 6)
     ok("cancelled launch: the reader could not connect", not os.path.exists(cr.path("fake-reader-connected")) and cr.reader_files() == [])
+
+    # a reader that connects and then hangs: the relay gives up at its total deadline (shortened here) and the reader is stopped
+    cd = CodeRelay(total_s=1.5)
+    t0 = time.time()
+    cd.start("dl", "hang")
+    r = cd.code("dl", 6)
+    took = time.time() - t0
+    ok("hanging reader -> reader_failed at the total deadline", err(r) == "reader_failed" and 1.2 < took < 4, (r, took))
+    ok("hanging reader: the fake reader was stopped and its socket files are gone", cd.wait_file("fake-reader-exited", 3) and cd.reader_files() == [], cd.reader_files())
+    cd.stop()
 
     # stdin closed mid-read
     cr2 = CodeRelay()

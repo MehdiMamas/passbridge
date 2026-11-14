@@ -31,7 +31,7 @@ TIMEOUT = 90
 READER_APP = os.path.join(APPDIR, "PassBridge Code Reader.app")
 READER_CMD = os.environ.get("PASSBRIDGE_CODE_READER")  # a JSON argv list, tests only
 READER_CONNECT_S = 10
-READER_TOTAL_S = 70
+READER_TOTAL_S = float(os.environ.get("PASSBRIDGE_READER_TOTAL_S") or 70)  # the env var is for tests
 CODE_RE = re.compile(r"^\d{6}$")
 READER_ERRORS = ("no_prompt", "several_prompts", "reader_permission", "not_configured", "reader_failed")
 
