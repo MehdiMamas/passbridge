@@ -508,7 +508,7 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
         label={t("agentCodeReader")}
         help={t("agentCodeReaderHelp")}
         note={codeReader.supported ? undefined : t("agentCodeReaderMacOnly")}
-        state={settings.agentSignIn === true && codeReader.supported ? state : "locked"}
+        state={codeReader.supported ? state : "locked"}
         checked={codeReader.isOn}
         onChange={codeReader.onToggle}
       />

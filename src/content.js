@@ -1839,6 +1839,23 @@ function frameIsSafe() {
   }
 }
 
+// your own Apple sign-in: ask the background to read Apple's prompt and fill this field. It decides by host, switch and limits; nothing comes back
+let userCodeBusy = false;
+let userCodeAt = 0;
+function requestUserCode(/** @type {HTMLInputElement} */ field) {
+  // our own fill moves focus through the boxes, and a half-filled group is not asking for a code
+  if (userCodeBusy || otpFilling || field.value || Date.now() - userCodeAt < 10000) return;
+  if ((otpBoxGroup(field) || []).some((b) => b.value)) return;
+  userCodeBusy = true;
+  userCodeAt = Date.now();
+  chrome.runtime
+    .sendMessage({ type: "userCodeRequest" })
+    .catch(gone)
+    .finally(() => {
+      userCodeBusy = false;
+    });
+}
+
 async function onFocusIn(/** @type {{ target: EventTarget | null, composedPath?: () => EventTarget[] }} */ e) {
   if (!life.alive()) return life.teardown();
   if (credFilling) return;
@@ -1849,6 +1866,7 @@ async function onFocusIn(/** @type {{ target: EventTarget | null, composedPath?:
   const field = path[0] || e.target;
   if (field instanceof HTMLInputElement && field.type === "password") everPassword.add(field);
   if (field instanceof HTMLInputElement && isOtpField(field) && isVisible(field)) {
+    requestUserCode(field);
     if (!frameIsSafe() || pbSettings.inlineMenuVisibility === "off") return;
     placeFieldIcon(field);
     if (pbSettings.inlineMenuVisibility === "on-click") return;

@@ -80,6 +80,8 @@ On Windows, run `native/windows/install.ps1` again instead (it copies `code-read
 3. In PassBridge settings, on the Agents tab, turn on Allow agent sign-in, then Allow agents to read verification codes and verify for you. The setting belongs to this browser profile only; turn it on in each profile that needs it, and turn it off there to stop it.
 4. Test with `"$P/passbridge-agent-cli.py" verify-code <tabId>` on an allowlisted Apple sign-in tab.
 
+The same switch, now called Auto-fill verification codes (you and agents), also fills the code on your own Apple sign-ins: focus the code field on the Apple sign-in page and PassBridge presses Allow and enters it. It works with Allow agent sign-in off. Codes sent by SMS or email are not covered; Keytray fills those.
+
 You get a notification each time a code is entered, and at most 3 are allowed in 10 minutes. A build from source is signed ad-hoc, so macOS asks for the Accessibility grant again after each rebuild. Uninstalling removes the grant (macOS) or the two reader files (Windows).
 
 ### Agent sign-in (Windows)

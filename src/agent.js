@@ -350,6 +350,42 @@ async function verifyCode(msg, deps, limiter, now, settings, base, done) {
   }
 }
 
+// your own sign-in: a code field got focus on an Apple sign-in page. No agent, no allowlist, no log row; every failure is silent
+/**
+ * @param {{ tab?: { id?: number }, frameId?: number, url?: string, id?: string } | undefined} sender
+ * @param {AgentDeps} deps
+ * @param {ReturnType<typeof createLimiter>} limiter
+ * @param {number} now
+ * @returns {Promise<boolean>} true when a code was entered
+ */
+export async function handleUserCode(sender, deps, limiter, now = Date.now()) {
+  if (!sender || sender.tab?.id == null || sender.frameId == null || !sender.url) return false;
+  if (!(await deps.codeReaderOn?.())) return false;
+  const platform = await deps.platform?.();
+  if (platform !== "mac" && platform !== "win") return false;
+  let host = "";
+  try {
+    host = String(deps.hostnameOf(sender.url) || "").toLowerCase();
+  } catch {}
+  if (!host || !isCodeHost(host) || !/^https:\/\//i.test(sender.url)) return false;
+  const settings = await deps.getSettings();
+  if (hostBlocked(host, settings.blockedDomains) || !(await deps.isFillUrlAllowed(sender.url))) return false;
+  if (!limiter.peek(now, "user_code", CODE_RATE_MAX)) return false;
+  const frame = await deps.probeCodeField?.(sender.tab.id, [{ frameId: sender.frameId, host }]);
+  if (!frame) return false;
+  if (!limiter.take(now, "user_code", CODE_RATE_MAX)) return false;
+  try {
+    const r = await deps.readCode?.();
+    if (!r?.ok || typeof r.code !== "string" || !/^\d{6}$/.test(r.code)) return false;
+    if (!(await deps.codeReaderOn?.())) return false;
+    const filled = await deps.fillCode?.(sender.tab.id, frame, r.code);
+    deps.notifyCode?.(host, !!filled);
+    return !!filled;
+  } catch {
+    return false;
+  }
+}
+
 // the whole request flow, deps injected so it runs without chrome
 /**
  * @param {any} msg request from the native host, any JSON
@@ -501,6 +537,7 @@ const setRelay = (state) => {
 
 /**
  * @param {AgentDeps} deps
+ * @returns {{ userCode: (sender: chrome.runtime.MessageSender) => Promise<void> }}
  */
 export function initAgent(deps) {
   // the log used to live in local storage; it is session-only now, so drop any old copy
@@ -563,6 +600,17 @@ export function initAgent(deps) {
       chrome.storage.session.set({ agentHits: limiter.dump() });
     } catch {}
   };
+
+  /**
+   * @param {chrome.runtime.MessageSender} sender
+   */
+  async function userCode(sender) {
+    await loadLimiter();
+    try {
+      await handleUserCode(sender, { ...deps, readCode }, limiter);
+    } catch {}
+    saveLimiter();
+  }
 
   /**
    * @param {chrome.runtime.Port} p
@@ -632,7 +680,7 @@ export function initAgent(deps) {
   }
 
   async function sync() {
-    const on = !!(await getSettings()).agentSignIn;
+    const on = !!(await getSettings()).agentSignIn || !!(await deps.codeReaderOn?.().catch(() => false));
     if (!on) {
       clearTimeout(timer);
       delay = 1000;
@@ -655,10 +703,11 @@ export function initAgent(deps) {
       } catch {}
       finishRead({ ok: false, error: "code_reader_off" });
     }
-    if (area === SETTINGS_AREA && changes.agentSignIn) {
+    if ((area === SETTINGS_AREA && changes.agentSignIn) || (area === "local" && changes.agentCodeReader)) {
       delay = 1000;
       sync();
     }
   });
   sync();
+  return { userCode };
 }
