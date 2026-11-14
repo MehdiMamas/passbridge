@@ -443,5 +443,10 @@
   "err_incorrectCode": { "message": "Kod yanlış." },
   "err_noPassword": { "message": "Kaydedilecek parola yok." },
   "err_noTotpSetup": { "message": "Bu yardımcı doğrulama kodlarını kuramıyor." },
-  "err_noNewPasswordSheet": { "message": "Bu yardımcı yeni parola sayfasını açamıyor." }
+  "err_noNewPasswordSheet": { "message": "Bu yardımcı yeni parola sayfasını açamıyor." },
+  "agentCodeReader": {"message": "Ajanların doğrulama kodlarını okumasına ve senin yerine doğrulamasına izin ver"},
+  "agentCodeReaderHelp": {"message": "Yalnızca bu Mac'teki bu tarayıcı profili için. Bir ajan izin verilen bir Apple oturum açma sayfasında Apple Hesabı ile giriş yaptığında, PassBridge senin yerine Apple'ın istemindeki İzin Ver düğmesine basar, sen dokunmazsın, ve kodu o sekmeye girer. Ajan kodu asla görmez. PassBridge Code Reader için Erişilebilirlik izni gerekir (Kurulum'a bakın). 10 dakikada en fazla 3 kez, her seferinde bir bildirimle."},
+  "agentCodeReaderMacOnly": {"message": "Şimdilik yalnızca macOS."},
+  "agentCodeFilled": {"message": "$1 sitesinde bir Apple doğrulama kodu girildi", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}},
+  "agentCodeNotFilled": {"message": "$1 için bir Apple doğrulama kodu okundu ancak girilecek alan bulunamadı", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}}
 }
