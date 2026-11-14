@@ -8,7 +8,7 @@ import subprocess
 import sys
 import uuid
 
-USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | verify-code <tabId> [site] | save --url <https-url> <username>  (save reads the password from stdin)"
+USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | verify-code <tabId> [site] | unlock | save --url <https-url> <username>  (save reads the password from stdin)"
 
 WINDOWS = os.name == "nt"
 if WINDOWS:
@@ -79,7 +79,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(USAGE)
         return 0
-    if not argv or argv[0] not in ("status", "pair-start", "pair-pin", "logins", "sign_in", "save", "verify-code"):
+    if not argv or argv[0] not in ("status", "pair-start", "pair-pin", "logins", "sign_in", "save", "verify-code", "unlock"):
         print(USAGE, file=sys.stderr)
         return 2
     if under_wsl():
@@ -87,7 +87,7 @@ def main(argv):
         if code is not None:
             return code
     req = {"id": uuid.uuid4().hex, "op": argv[0].replace("-", "_")}
-    pairing = argv[0] in ("pair-start", "pair-pin")
+    pairing = argv[0] in ("pair-start", "pair-pin", "unlock")
     if argv[0] == "pair-pin":
         req["pin"] = sys.stdin.readline().strip()
     by_url = argv[0] == "save" and len(argv) > 1 and argv[1] == "--url"

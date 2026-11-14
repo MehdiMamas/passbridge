@@ -36,6 +36,10 @@ READER_PS1 = os.path.join(APPDIR, "code-reader.ps1")
 READER_JSON = os.path.join(APPDIR, "code-reader.json")
 READER_CONNECT_S = 10
 READER_TOTAL_S = float(os.environ.get("PASSBRIDGE_READER_TOTAL_S") or 70)  # the env var is for tests
+# unlock: the pairing code iCloud for Windows shows, read from its window by a script that prints 6 digits and exits 0 (exit 1: no window yet)
+PIN_PS1 = os.path.join(APPDIR, "read-pair-code.ps1")
+PIN_CMD = os.environ.get("PASSBRIDGE_PIN_READER")  # a JSON argv list, tests only
+PIN_TOTAL_S = float(os.environ.get("PASSBRIDGE_PIN_TOTAL_S") or 20)  # the env var is for tests
 CODE_RE = re.compile(r"^\d{6}$")
 READER_ERRORS = ("no_prompt", "several_prompts", "reader_permission", "not_configured", "reader_failed")
 
@@ -246,10 +250,58 @@ def read_stdout(st):
     return obj if isinstance(obj, dict) else None
 
 
-def read_code(rid, st):
+def read_pin(st):
+    # the pairing code for an unlock: run the script until it prints 6 digits or the time is up. the digits stay in this process
+    if PIN_CMD:
+        cmd = list(json.loads(PIN_CMD))
+    elif WINDOWS:
+        if not os.path.isfile(PIN_PS1):
+            return {"ok": False, "error": "reader_missing"}
+        cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", PIN_PS1]
+    else:
+        return {"ok": False, "error": "mac_only"}
+    started = time.monotonic()
+    while True:
+        if st["cancel"].is_set() or time.monotonic() - started > PIN_TOTAL_S:
+            return {"ok": False, "error": "no_prompt" if not st["cancel"].is_set() else "reader_failed"}
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        )
+        st["proc"] = proc
+        try:
+            out, _ = proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            kill_quietly(proc)
+            return {"ok": False, "error": "reader_failed"}
+        if st["cancel"].is_set():
+            return {"ok": False, "error": "reader_failed"}
+        if proc.returncode == 0:
+            code = out.decode("ascii", "ignore").strip().replace(" ", "")
+            if CODE_RE.match(code):
+                return {"ok": True, "code": code}
+            return {"ok": False, "error": "reader_failed"}
+        if proc.returncode != 1:
+            return {"ok": False, "error": "reader_failed"}
+        time.sleep(1)
+
+
+def read_code(rid, st, kind=None):
     # one read: launch the reader, take one answer over a one-shot socket, send it to the extension. the code lives only here
     def reply(**kw):
         send_ext({"event": "code", "rid": rid, **kw})
+
+    if kind == "pin":
+        if not reader_lock.acquire(timeout=2):
+            return reply(ok=False, error="busy")
+        try:
+            r = read_pin(st)
+        except Exception:
+            r = {"ok": False, "error": "reader_failed"}
+        finally:
+            reader_lock.release()
+            with reads_lock:
+                reads.pop(rid, None)
+        return reply(**r)
 
     path = None
     proc = None
@@ -367,11 +419,11 @@ def read_code(rid, st):
             reads.pop(rid, None)
 
 
-def start_read(rid):
+def start_read(rid, kind=None):
     st = {"cancel": threading.Event(), "srv": None, "conn": None, "proc": None}
     with reads_lock:
         reads[rid] = st
-    threading.Thread(target=read_code, args=(rid, st), daemon=True).start()
+    threading.Thread(target=read_code, args=(rid, st, kind), daemon=True).start()
 
 
 def cancel_code(rid=None):
@@ -440,7 +492,7 @@ def main():
         if isinstance(msg, dict) and "cmd" in msg and "id" not in msg:
             rid = str(msg.get("rid", ""))
             if msg["cmd"] == "read_code":
-                start_read(rid)
+                start_read(rid, "pin" if msg.get("kind") == "pin" else None)
             elif msg["cmd"] == "cancel_code":
                 cancel_code(rid)
             continue

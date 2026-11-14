@@ -24,7 +24,7 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(tab: any) => Promise<{ frameId: number, host: string }[]>} [codeFrames]
  * @property {(tabId: number, frames: { frameId: number, host: string }[]) => Promise<{ frameId: number, host: string } | null>} [probeCodeField]
  * @property {(tabId: number, frame: { frameId: number, host: string }, code: string) => Promise<boolean>} [fillCode]
- * @property {() => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode]
+ * @property {(kind?: "pin") => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode] kind "pin" reads the pairing code shown for an unlock
  * @property {(host: string, filled: boolean) => void} [notifyCode]
  */
 
@@ -36,6 +36,7 @@ export const PIN_FAILS_MAX = 5;
 export const RATE_MAX = 10;
 export const RATE_WINDOW_MS = 10 * 60 * 1000;
 export const CODE_RATE_MAX = 3;
+export const UNLOCK_RATE_MAX = 3;
 // Apple sign-in hosts that may receive a verification code, matched exactly (no subdomains)
 export const CODE_HOSTS = ["appleid.apple.com", "account.apple.com", "idmsa.apple.com", "www.icloud.com", "icloud.com"];
 
@@ -254,6 +255,45 @@ async function pair(op, msg, deps) {
   }
 }
 
+// unlock: pair a locked store without a person. the pairing code goes from the relay's reader into pairPin and nowhere else:
+// not into a reply, the Activity list, storage or a log
+/**
+ * @param {AgentDeps} deps
+ * @param {ReturnType<typeof createLimiter>} limiter
+ * @param {number} now
+ * @param {(reply: any, extra?: Record<string, unknown>) => any} done
+ */
+async function unlock(deps, limiter, now, done) {
+  if (!(await deps.codeReaderOn?.())) return done(fail("not_allowed", { reason: "code_reader_off" }));
+  if ((await deps.platform?.()) !== "win") return done(fail("not_allowed", { reason: "win_only" }));
+  if (!deps.pairStart || !deps.pairPin) return done(fail("fill_failed"));
+  if (deps.client.ready) return done({ ok: true, state: "paired" });
+  if ((await pinFails()) >= PIN_FAILS_MAX) return done(fail("locked"));
+  if (!limiter.take(now, "unlock", UNLOCK_RATE_MAX)) return done(fail("rate_limited"));
+  try {
+    await deps.pairStart({ ifNeeded: true });
+    const r = await deps.readCode?.("pin");
+    if (!r?.ok) {
+      const e = r?.error || "reader_failed";
+      if (e === "code_reader_off") return done(fail("not_allowed", { reason: e }));
+      if (e === "mac_only") return done(fail("not_allowed", { reason: "win_only" }));
+      if (["busy", "no_prompt", "reader_missing"].includes(e)) return done(fail(e));
+      return done(fail("reader_failed"));
+    }
+    if (typeof r.code !== "string" || !/^\d{6}$/.test(r.code)) return done(fail("reader_failed"));
+    if (!(await deps.codeReaderOn?.())) return done(fail("not_allowed", { reason: "code_reader_off" }));
+    const p = await deps.pairPin(r.code);
+    if (p?.ok) {
+      await setPinFails(0);
+      return done({ ok: true, state: "paired" });
+    }
+    await setPinFails((await pinFails()) + 1);
+    return done(fail("wrong_pin"));
+  } catch {
+    return done(fail("reader_failed"));
+  }
+}
+
 // the code never leaves this function: it goes from the reader to the probed field and nowhere else
 /**
  * @param {any} msg
@@ -335,6 +375,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
     if (!limiter.take(now)) return done(fail("rate_limited"));
     return done(await pair(op, msg, deps));
   }
+  if (op === "unlock") return unlock(deps, limiter, now, done);
   if (op === "verify_code") return verifyCode(msg, deps, limiter, now, settings, base, done);
   if (!["logins", "sign_in", "save"].includes(op)) return done(fail("unknown_op"));
   if (op === "save" && !agentSaveAllowed(settings)) return done(fail("not_allowed", { reason: "save_off" }));
@@ -486,16 +527,16 @@ export function initAgent(deps) {
   }
 
   /** @returns {Promise<{ ok: boolean, code?: string, error?: string }>} */
-  function readCode() {
+  function readCode(/** @type {"pin" | undefined} */ kind) {
     if (codeRead) return Promise.resolve({ ok: false, error: "busy" });
     if (!port || !relayCode) return Promise.resolve({ ok: false, error: port ? "reader_missing" : "reader_failed" });
     const p = port;
     return new Promise((resolve) => {
       const rid = crypto.randomUUID();
-      const timer = setTimeout(() => finishRead({ ok: false, error: "reader_failed" }), 85000);
+      const timer = setTimeout(() => finishRead({ ok: false, error: "reader_failed" }), kind === "pin" ? 40000 : 85000);
       codeRead = { rid, resolve, timer };
       try {
-        p.postMessage({ cmd: "read_code", rid });
+        p.postMessage(kind === "pin" ? { cmd: "read_code", rid, kind } : { cmd: "read_code", rid });
       } catch {
         finishRead({ ok: false, error: "reader_failed" });
       }

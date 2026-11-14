@@ -118,7 +118,7 @@ foreach ($agentFile in @("passbridge-agent.py", "passbridge-agent-cli.py")) {
   Copy-Item -Force $agentSrc (Join-Path $Dest $agentFile)
 }
 # verification-code reader: the release zip has both files beside this script, a repo checkout has them in native/windows
-foreach ($readerFile in @("code-reader.ps1", "code-reader.json")) {
+foreach ($readerFile in @("code-reader.ps1", "code-reader.json", "read-pair-code.ps1")) {
   $readerSrc = Join-Path $Here $readerFile
   if (-not (Test-Path -LiteralPath $readerSrc)) { $readerSrc = Join-Path (Join-Path (Split-Path -Parent $Here) "windows") $readerFile }
   Copy-Item -Force $readerSrc (Join-Path $Dest $readerFile)
