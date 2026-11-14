@@ -443,5 +443,10 @@
   "err_incorrectCode": { "message": "Incorrect code." },
   "err_noPassword": { "message": "There is no password to save." },
   "err_noTotpSetup": { "message": "This helper can't set up verification codes." },
-  "err_noNewPasswordSheet": { "message": "This helper can't open the new password sheet." }
+  "err_noNewPasswordSheet": { "message": "This helper can't open the new password sheet." },
+  "agentCodeReader": {"message": "Let agents read verification codes and verify for you"},
+  "agentCodeReaderHelp": {"message": "This browser profile on this Mac only. When an agent signs in to an Apple Account on an allowed Apple sign-in page, PassBridge presses Allow on Apple's prompt for you, with no tap from you, and enters the code in that tab. The agent never sees the code. Needs Accessibility access for PassBridge Code Reader (see Setup). At most 3 per 10 minutes, and a notification each time."},
+  "agentCodeReaderMacOnly": {"message": "macOS only for now."},
+  "agentCodeFilled": {"message": "Entered an Apple verification code on $1", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}},
+  "agentCodeNotFilled": {"message": "Read an Apple verification code for $1 but found no field to enter it", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}}
 }

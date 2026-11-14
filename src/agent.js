@@ -19,6 +19,13 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(tab: any, username: string, opts: Record<string, unknown>) => Promise<any>} fillLoginOnTab
  * @property {(tabId: number | undefined, url: string, username: string, password: string) => Promise<any>} [saveLogin] adds a login, reports an unanswered Apple prompt as an error
  * @property {(host: string, username: string) => void} [notifySaved]
+ * @property {() => Promise<string>} [platform] "mac", "win" or other, after the platform is known
+ * @property {() => Promise<boolean>} [codeReaderOn] the per-profile code reader switch
+ * @property {(tab: any) => Promise<{ frameId: number, host: string }[]>} [codeFrames]
+ * @property {(tabId: number, frames: { frameId: number, host: string }[]) => Promise<{ frameId: number, host: string } | null>} [probeCodeField]
+ * @property {(tabId: number, frame: { frameId: number, host: string }, code: string) => Promise<boolean>} [fillCode]
+ * @property {() => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode]
+ * @property {(host: string, filled: boolean) => void} [notifyCode]
  */
 
 const HOST = "com.passbridge.agent";
@@ -28,6 +35,9 @@ const PIN_FAILS_KEY = "agentPinFails";
 export const PIN_FAILS_MAX = 5;
 export const RATE_MAX = 10;
 export const RATE_WINDOW_MS = 10 * 60 * 1000;
+export const CODE_RATE_MAX = 3;
+// Apple sign-in hosts that may receive a verification code, matched exactly (no subdomains)
+export const CODE_HOSTS = ["appleid.apple.com", "account.apple.com", "idmsa.apple.com", "www.icloud.com", "icloud.com"];
 
 // exact host or a subdomain of an entry, so github.com.evil.io and evilgithub.com stay out
 export const hostAllowed = hostBlocked;
@@ -72,23 +82,66 @@ export function pickAllowedFrames(frames, allowlist, hostnameOf) {
   return out;
 }
 
-// sliding window, the caller passes the clock so tests need no timers
+/**
+ * @param {string} host
+ */
+export function isCodeHost(host) {
+  return CODE_HOSTS.includes(String(host || "").toLowerCase());
+}
+
+// frames that may get a verification code: the top frame or a child, on the allowlist and an exact Apple sign-in host
+/**
+ * @param {any} frames webNavigation.getAllFrames result
+ * @param {unknown[] | undefined} allowlist
+ * @param {(url: string) => any} hostnameOf the host, or null for an unparsable url
+ */
+export function pickCodeFrames(frames, allowlist, hostnameOf) {
+  /** @type {{ frameId: number, host: string }[]} */
+  const out = [];
+  for (const f of Array.isArray(frames) ? frames : []) {
+    if (!f) continue;
+    let host = "";
+    try {
+      host = hostnameOf(f.url);
+    } catch {}
+    if (host && hostAllowed(host, allowlist) && isCodeHost(host)) out.push({ frameId: f.frameId || 0, host });
+  }
+  return out;
+}
+
+// sliding window, the caller passes the clock so tests need no timers. entries are {t, op}
 export function createLimiter(max = RATE_MAX, windowMs = RATE_WINDOW_MS) {
-  /** @type {number[]} */
+  /** @type {{ t: number, op: string }[]} */
   let hits = [];
+  /**
+   * @param {number} now
+   * @param {string} op
+   * @param {number} opMax
+   */
+  const ok = (now, op, opMax) => {
+    hits = hits.filter((h) => now - h.t < windowMs);
+    if (hits.length >= max) return false;
+    if (opMax && hits.filter((h) => h.op === op).length >= opMax) return false;
+    return true;
+  };
   return {
-    take(now = Date.now()) {
-      hits = hits.filter((t) => now - t < windowMs);
-      if (hits.length >= max) return false;
-      hits.push(now);
+    take(now = Date.now(), op = "", opMax = 0) {
+      if (!ok(now, op, opMax)) return false;
+      hits.push({ t: now, op });
       return true;
     },
+    // the same question as take, nothing recorded
+    peek: (now = Date.now(), op = "", opMax = 0) => ok(now, op, opMax),
     dump: () => hits.slice(),
     /**
      * @param {unknown} list
      */
     load(list) {
-      hits = (Array.isArray(list) ? list : []).filter((t) => typeof t === "number");
+      hits = (Array.isArray(list) ? list : []).flatMap((h) => {
+        if (typeof h === "number") return [{ t: h, op: "" }];
+        if (h && typeof h === "object" && typeof h.t === "number") return [{ t: h.t, op: typeof h.op === "string" ? h.op : "" }];
+        return [];
+      });
     },
   };
 }
@@ -201,6 +254,61 @@ async function pair(op, msg, deps) {
   }
 }
 
+// the code never leaves this function: it goes from the reader to the probed field and nowhere else
+/**
+ * @param {any} msg
+ * @param {AgentDeps} deps
+ * @param {ReturnType<typeof createLimiter>} limiter
+ * @param {number} now
+ * @param {any} settings
+ * @param {{ host: string, username: string }} base
+ * @param {(reply: any, extra?: Record<string, unknown>) => any} done
+ */
+async function verifyCode(msg, deps, limiter, now, settings, base, done) {
+  if (!(await deps.codeReaderOn?.())) return done(fail("not_allowed", { reason: "code_reader_off" }));
+  if ((await deps.platform?.()) !== "mac") return done(fail("not_allowed", { reason: "mac_only" }));
+  if (msg.url != null) return done(fail("bad_request"));
+  /** @type {any} */
+  let tab = null;
+  try {
+    tab = await deps.getTab(Number(msg.tabId));
+  } catch {}
+  if (!tab || !tab.url || tab.id == null) return done(fail("no_tab"));
+  const host = deps.hostnameOf(tab.url);
+  base.host = host;
+  if (msg.site != null) {
+    const want = hostOfSite(msg.site);
+    if (!host || !want || !onSiteOrSubdomain(host, want)) return done(fail("not_allowed", { reason: "site_mismatch" }));
+  }
+  if (!host || hostBlocked(host, settings.blockedDomains)) return done(fail("not_allowed"));
+  // the every-site path never applies here
+  if (!hostAllowed(host, settings.agentAllowlist) || !(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
+  if (!isCodeHost(host)) return done(fail("not_allowed", { reason: "not_apple_site" }));
+  if (!limiter.peek(now, "verify_code", CODE_RATE_MAX)) return done(fail("rate_limited"));
+  const frames = (await deps.codeFrames?.(tab)) || [];
+  const frame = await deps.probeCodeField?.(tab.id, frames);
+  if (!frame) return done(fail("no_field"));
+  if (!limiter.take(now, "verify_code", CODE_RATE_MAX)) return done(fail("rate_limited"));
+  try {
+    const r = await deps.readCode?.();
+    if (!r?.ok) {
+      const e = r?.error || "reader_failed";
+      if (e === "code_reader_off" || e === "mac_only" || e === "not_apple_site" || e === "site_mismatch") return done(fail("not_allowed", { reason: e }));
+      if (e === "reader_permission") return done(fail("needs_user", { reason: "reader_permission" }));
+      if (["busy", "no_prompt", "several_prompts", "not_configured", "reader_missing"].includes(e)) return done(fail(e));
+      return done(fail("reader_failed"));
+    }
+    if (typeof r.code !== "string" || !/^\d{6}$/.test(r.code)) return done(fail("reader_failed"));
+    if (!(await deps.codeReaderOn?.())) return done(fail("not_allowed", { reason: "code_reader_off" }));
+    const filled = await deps.fillCode?.(tab.id, frame, r.code);
+    deps.notifyCode?.(host, !!filled);
+    if (!filled) return done(fail("fill_failed"));
+    return done({ ok: true, domain: host, filled: true });
+  } catch {
+    return done(fail("reader_failed"));
+  }
+}
+
 // the whole request flow, deps injected so it runs without chrome
 /**
  * @param {any} msg request from the native host, any JSON
@@ -226,6 +334,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
     if (!limiter.take(now)) return done(fail("rate_limited"));
     return done(await pair(op, msg, deps));
   }
+  if (op === "verify_code") return verifyCode(msg, deps, limiter, now, settings, base, done);
   if (!["logins", "sign_in", "save"].includes(op)) return done(fail("unknown_op"));
   if (op === "save" && !agentSaveAllowed(settings)) return done(fail("not_allowed", { reason: "save_off" }));
   /** @type {string} */
@@ -330,10 +439,11 @@ async function appendLog(entry) {
 /**
  * A relay tells the extension whether it owns the endpoint ("active") or waits behind another browser ("standby").
  * @param {any} m
- * @returns {"active" | "standby" | null}
+ * @returns {"active" | "standby" | "code" | null}
  */
 export function relayEvent(m) {
   if (!m || typeof m !== "object" || "id" in m) return null;
+  if (m.event === "code") return "code";
   return m.event === "active" || m.event === "standby" ? m.event : null;
 }
 
@@ -358,6 +468,38 @@ export function initAgent(deps) {
   const limiter = createLimiter();
   /** @type {chrome.runtime.Port | null} */
   let port = null;
+  // the helper says on active/standby whether it can read codes (an older helper does not)
+  let relayCode = false;
+  /** @type {{ rid: string, resolve: (r: { ok: boolean, code?: string, error?: string }) => void, timer: ReturnType<typeof setTimeout> } | null} */
+  let codeRead = null;
+
+  /**
+   * @param {{ ok: boolean, code?: string, error?: string }} r
+   */
+  function finishRead(r) {
+    const c = codeRead;
+    if (!c) return;
+    codeRead = null;
+    clearTimeout(c.timer);
+    c.resolve(r);
+  }
+
+  /** @returns {Promise<{ ok: boolean, code?: string, error?: string }>} */
+  function readCode() {
+    if (codeRead) return Promise.resolve({ ok: false, error: "busy" });
+    if (!port || !relayCode) return Promise.resolve({ ok: false, error: port ? "reader_missing" : "reader_failed" });
+    const p = port;
+    return new Promise((resolve) => {
+      const rid = crypto.randomUUID();
+      const timer = setTimeout(() => finishRead({ ok: false, error: "reader_failed" }), 85000);
+      codeRead = { rid, resolve, timer };
+      try {
+        p.postMessage({ cmd: "read_code", rid });
+      } catch {
+        finishRead({ ok: false, error: "reader_failed" });
+      }
+    });
+  }
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timer;
   let delay = 1000;
@@ -387,7 +529,7 @@ export function initAgent(deps) {
     /** @type {any} */
     let out;
     try {
-      out = await handleAgentRequest(msg, deps, limiter);
+      out = await handleAgentRequest(msg, { ...deps, readCode }, limiter);
     } catch {
       out = { reply: fail("fill_failed"), host: "", username: "" };
     }
@@ -410,11 +552,17 @@ export function initAgent(deps) {
       port = p;
       p.onMessage.addListener((m) => {
         const ev = relayEvent(m);
-        if (ev) setRelay(ev);
-        else onRequest(p, m);
+        if (ev === "code") {
+          // only the read in flight; any other code event is dropped
+          if (codeRead && m.rid === codeRead.rid) finishRead({ ok: m.ok === true, code: m.code, error: m.error });
+        } else if (ev) {
+          relayCode = m.code === true;
+          setRelay(ev);
+        } else onRequest(p, m);
       });
       p.onDisconnect.addListener(() => {
         void chrome.runtime.lastError;
+        finishRead({ ok: false, error: "reader_failed" });
         if (port === p) {
           port = null;
           setRelay(null);
@@ -455,6 +603,12 @@ export function initAgent(deps) {
   }
 
   chrome.storage?.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.agentCodeReader && changes.agentCodeReader.newValue !== true && codeRead) {
+      try {
+        port?.postMessage({ cmd: "cancel_code", rid: codeRead.rid });
+      } catch {}
+      finishRead({ ok: false, error: "code_reader_off" });
+    }
     if (area === SETTINGS_AREA && changes.agentSignIn) {
       delay = 1000;
       sync();

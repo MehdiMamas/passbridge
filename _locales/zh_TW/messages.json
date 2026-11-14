@@ -441,5 +441,10 @@
   "err_incorrectCode": { "message": "驗證碼不正確。" },
   "err_noPassword": { "message": "沒有可儲存的密碼。" },
   "err_noTotpSetup": { "message": "此輔助程式無法設定驗證碼。" },
-  "err_noNewPasswordSheet": { "message": "此輔助程式無法開啟新密碼頁面。" }
+  "err_noNewPasswordSheet": { "message": "此輔助程式無法開啟新密碼頁面。" },
+  "agentCodeReader": {"message": "允許代理讀取驗證碼並為你驗證"},
+  "agentCodeReaderHelp": {"message": "僅限這台 Mac 上的此瀏覽器設定檔。當代理在允許的 Apple 登入頁面登入 Apple 帳號時，PassBridge 會替你按下 Apple 提示中的「允許」，不需你操作，並在該分頁中輸入驗證碼。代理永遠看不到驗證碼。需要為 PassBridge Code Reader 授予輔助使用權限（見設定說明）。每 10 分鐘最多 3 次，每次都會有通知。"},
+  "agentCodeReaderMacOnly": {"message": "目前僅支援 macOS。"},
+  "agentCodeFilled": {"message": "已在 $1 上輸入 Apple 驗證碼", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}},
+  "agentCodeNotFilled": {"message": "已讀取 $1 的 Apple 驗證碼，但找不到可輸入的欄位", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}}
 }
