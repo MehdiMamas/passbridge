@@ -125,6 +125,8 @@
   "httpHelp": { "message": "HTTP sayfaları şifrelenmemiştir ve taklit edilebilir. Gerekmedikçe kapalı tutun." },
   "askSave": { "message": "Yeni hesapları kaydetmeyi öner" },
   "askSaveHelp": { "message": "Giriş yaptıktan sonra PassBridge'de henüz olmayan hesabı kaydetmeyi önerir." },
+  "autoSave": {"message": "Yeni hesapları sormadan kaydet"},
+  "autoSaveHelp": {"message": "Kullanıcı adı bilinen yeni bir hesabı giriş yaptıktan hemen sonra sormadan kaydeder. Değişen parolalar ve kullanıcı adı olmayan hesaplar yine sorar."},
   "askUpdate": { "message": "Değişen parolaları güncellemeyi öner" },
   "askUpdateHelp": { "message": "Yeni parolayla giriş yaptığınızda kayıtlı hesabı güncellemeyi önerir." },
   "neverSave": { "message": "Hesap kaydedilmeyecek siteler" },

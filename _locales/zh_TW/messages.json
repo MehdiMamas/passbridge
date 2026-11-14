@@ -126,6 +126,8 @@
   "httpHelp": { "message": "HTTP 頁面未加密且可能被偽造。除非需要，否則請保持關閉。" },
   "askSave": { "message": "詢問在新登入時儲存" },
   "askSaveHelp": { "message": "在你登入後，提示儲存 PassBridge 還沒有的登入。" },
+  "autoSave": {"message": "不詢問直接儲存新登入"},
+  "autoSaveHelp": {"message": "登入後，已知使用者名稱的新登入會直接儲存，不再提示。變更的密碼和沒有使用者名稱的登入仍會詢問。"},
   "askUpdate": { "message": "詢問是否更新已變更的密碼" },
   "askUpdateHelp": { "message": "當你用新密碼登入時，提示更新已儲存的登入。" },
   "neverSave": { "message": "永不儲存的網站" },

@@ -300,6 +300,7 @@ function AutofillTab({ settings, onChange, lists, onListChange, onListBlur, isMr
       />
       <SwitchRow label={t("httpFill")} help={t("httpHelp")} {...toggle("canFillOnHttp")} />
       <SwitchRow label={t("askSave")} help={t("askSaveHelp")} {...toggle("askToSave")} />
+      <SwitchRow label={t("autoSave")} help={t("autoSaveHelp")} {...toggle("autoSaveLogins")} />
       <SwitchRow label={t("askUpdate")} help={t("askUpdateHelp")} {...toggle("askToUpdate")} />
       <ListRow label={t("neverSave")} help={t("neverSaveHelp")} {...list("excludedDomains")} />
       <SwitchRow label={t("copyCodesFill")} help={t("copyCodesHelp")} {...toggle("copyTotpAfterFill")} />

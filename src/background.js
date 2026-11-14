@@ -12,7 +12,7 @@ import { passwordSearchSteps } from "./session/password-search.js";
 import { listOtpEntries } from "./session/otp-list.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { orderByUse, recordUse } from "./session/mru.js";
-import { pickSaveTarget } from "./save-target.js";
+import { pickSaveTarget, tryAutoSave } from "./save-target.js";
 import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
@@ -212,10 +212,12 @@ async function flushPendingSaves() {
       if (hostBlocked(s.host, settings.excludedDomains)) continue;
       /** @type {string[]} */
       let existing = [];
+      let lookedUp = false;
       try {
         existing = (await siteLogins(s.tabId, s.frameUrl))
           .map((l) => l.username)
           .filter(Boolean);
+        lookedUp = true;
       } catch {}
       const target = await saveTargetFor({ ...s, existing });
       if (target === null) continue;
@@ -229,6 +231,7 @@ async function flushPendingSaves() {
         host: s.host,
         update: isUpdate,
         generated: s.generated,
+        lookedUp,
       });
     } catch {}
   }
@@ -616,9 +619,28 @@ const cycleByTab = new Map();
 
 // the bar must answer; a closed port used to look like "no bar" and saved immediately
 /**
- * @param {{ tabId: number, frameUrl: string, target: string, password: string, host: string | null, update: boolean, generated?: boolean }} offer
+ * @param {{ tabId: number, frameUrl: string, target: string, password: string, host: string | null, update: boolean, generated?: boolean, lookedUp?: boolean }} offer
  */
-async function presentSaveOffer({ tabId, frameUrl, target, password, host, update, generated }) {
+async function presentSaveOffer({ tabId, frameUrl, target, password, host, update, generated, lookedUp }) {
+  // opt-in: a new login whose username is known needs no decision, so it saves without the bar
+  const autoSaved = await tryAutoSave({
+    getEnabled: async () => (await getSettings()).autoSaveLogins === true,
+    update,
+    lookedUp: lookedUp === true,
+    target,
+    password,
+    save: async () => {
+      await ensureConnected();
+      await client.saveLogin(tabId, frameUrl, target, password);
+    },
+  });
+  if (autoSaved) {
+    saveOffers.delete(tabId);
+    try {
+      chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("agentSavedLogin", [host || hostnameOf(frameUrl) || "", target]) });
+    } catch {}
+    return { ok: true, saved: true, auto: true };
+  }
   saveOffers.set(tabId, {
     tabId,
     frameUrl,
@@ -1412,10 +1434,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
           /** @type {string[]} */
           let existing = [];
+          let lookedUp = false;
           try {
             existing = (await siteLogins(sender.tab.id, frameUrl))
               .map((l) => l.username)
               .filter(Boolean);
+            lookedUp = true;
           } catch {}
           const target = await saveTargetFor({ host, existing, detected, generated, newPwCtx });
           console.debug("[PassBridge] resolveSave", {
@@ -1443,6 +1467,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             host,
             update: isUpdate,
             generated,
+            lookedUp,
           }));
           break;
         }

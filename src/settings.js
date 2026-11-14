@@ -12,6 +12,8 @@ export const SETTINGS_DEFAULTS = {
   enableBadge: true,
   askToSave: true,
   askToUpdate: true,
+  // opt-in: a new login with a known username is saved with no bar; updates and unknown usernames still ask
+  autoSaveLogins: false,
   excludedDomains: [],
   blockedDomains: [],
   showAnimations: true,
