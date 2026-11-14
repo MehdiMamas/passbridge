@@ -36,6 +36,7 @@ const DRIVERS = [
   ["Folder update on Chrome's file system (OPFS)", "drive-update-fs.ts"],
   ["E2E pairing with the simulated Apple helper (mac and win)", "drive-e2e-pair.ts"],
   ["E2E fill and save against the simulated helper", "drive-e2e-fill-save.ts"],
+  ["E2E verification codes (fake reader, mac and win)", "drive-e2e-code.ts"],
   ["E2E verification codes against the simulated helper", "drive-e2e-otp.ts"],
   ["E2E passkey store against the simulated helper (win)", "drive-e2e-passkeys.ts"],
   ["E2E Touch ID denied or unanswered, relogin and re-pair", "drive-e2e-auth.ts"],

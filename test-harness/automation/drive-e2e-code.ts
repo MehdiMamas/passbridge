@@ -1,0 +1,123 @@
+// e2e: agent verification codes. The real extension, the real relay (native/passbridge-agent.py) and a fake code reader
+// (test-harness/fake-code-reader.py) that speaks the reader's socket protocol, so no Apple prompt is touched.
+// idmsa.apple.com is served by the browser's route, with a 6-box code field.
+
+import { execFile } from "child_process";
+import { existsSync } from "fs";
+import { mkdir, rm, writeFile } from "fs/promises";
+import { join } from "path";
+import { BASE, main, ok } from "./lib.ts";
+import { AGENT_CLI, startE2E } from "./e2e-lib.ts";
+
+const CODE = "482915";
+const SITE = "https://idmsa.apple.com/";
+const boxes = [1, 2, 3, 4, 5, 6].map((i) => `<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" ${i === 1 ? 'autocomplete="one-time-code"' : ""} aria-label="Digit ${i}" name="code${i}">`).join("");
+const CODE_PAGE = `<!doctype html><title>Verify</title><div>${boxes}</div>`;
+const PLAIN_PAGE = "<!doctype html><title>Welcome</title><p>No code field here.</p>";
+
+const cli = (appDir: string, ...args: string[]) =>
+  new Promise<any>((resolve) => {
+    execFile("python3", ["-I", AGENT_CLI, ...args], { env: { ...process.env, PASSBRIDGE_APPDIR: appDir, PASSBRIDGE_NO_WSL_REEXEC: "1" }, timeout: 110000 }, (err, stdout) => {
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        resolve({ ok: false, error: `unreadable: ${stdout} ${err?.message ?? ""}` });
+      }
+    });
+  });
+
+const scenario = async (appDir: string, name: string) => {
+  await mkdir(appDir, { recursive: true });
+  await writeFile(join(appDir, "fake-reader-scenario"), name);
+  for (const f of ["fake-reader-argv", "fake-reader-connected", "fake-reader-exited"]) await rm(join(appDir, f), { force: true });
+};
+
+const route = (ctx: import("playwright").BrowserContext) =>
+  ctx.route(SITE + "**", (r) => r.fulfill({ contentType: "text/html", body: r.request().url().includes("plain") ? PLAIN_PAGE : CODE_PAGE }));
+
+async function setup(platform: "mac" | "win", opts: { relay?: "real" | "old" } = {}) {
+  const e2e = await startE2E(platform, { agent: true, codeReader: true, relay: opts.relay });
+  await route(e2e.ctx);
+  const sw = e2e.ctx.serviceWorkers()[0] || (await e2e.ctx.waitForEvent("serviceworker", { timeout: 10000 }));
+  const home = await e2e.ctx.newPage();
+  await home.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
+  await sw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true, agentAllowlist: ["apple.com"] }));
+  await sw.evaluate(() => chrome.storage.local.set({ agentCodeReader: true }));
+  await sw.evaluate(() => {
+    (globalThis as any).__notes = [];
+    (chrome.notifications as any).create = (o: any) => (globalThis as any).__notes.push(String(o.message));
+  });
+  const sock = join(e2e.appDir, "agent.sock");
+  for (let i = 0; i < 60 && !existsSync(sock); i++) await home.waitForTimeout(250);
+  const open = async (path: string) => {
+    const page = await e2e.ctx.newPage();
+    await page.goto(SITE + path, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(500);
+    const tabId = String(await sw.evaluate(async (u) => (await chrome.tabs.query({})).find((x) => x.url === u)?.id, SITE + path));
+    return { page, tabId };
+  };
+  return { ...e2e, sw, home, open };
+}
+
+await main(async () => {
+  {
+    const t = (n: string) => `mac: ${n}`;
+    const { sw, appDir, open, home } = await setup("mac");
+    const field = await open("code");
+    await home.waitForTimeout(1500); // the relay's "active" event carries code: true
+
+    await scenario(appDir, "ok");
+    const res = await cli(appDir, "verify-code", field.tabId, "apple.com");
+    const filled = [];
+    for (let i = 1; i <= 6; i++) filled.push(await field.page.inputValue(`input[name="code${i}"]`));
+    ok(t("happy path fills the code"), filled.join("") === CODE, filled.join(","));
+    ok(t("the reply has no digits"), res.ok === true && res.domain === "idmsa.apple.com" && res.filled === true && Object.keys(res).sort().join() === "domain,filled,id,ok" && !/\d{3}/.test(JSON.stringify({ ...res, id: "" })), JSON.stringify(res));
+    const log = (await sw.evaluate(async () => (await chrome.storage.session.get("agentLog")).agentLog ?? [])) as any[];
+    const row = log.filter((e) => e.op === "verify_code").pop();
+    ok(t("Activity row ok, host named, no digits"), row?.result === "ok" && row.host === "idmsa.apple.com" && row.username === "" && !/\d{4}/.test(JSON.stringify({ ...row, t: 0 })), JSON.stringify(row));
+    const notes = (await sw.evaluate(() => (globalThis as any).__notes)) as string[];
+    ok(t("one notification naming the host, never the code"), notes.length === 1 && notes[0].includes("idmsa.apple.com") && !notes[0].includes(CODE), JSON.stringify(notes));
+
+    await scenario(appDir, "ok");
+    const plain = await open("plain");
+    const none = await cli(appDir, "verify-code", plain.tabId, "apple.com");
+    ok(t("no field page -> no_field"), none.ok === false && none.error === "no_field", JSON.stringify(none));
+    ok(t("fake reader not started"), !existsSync(join(appDir, "fake-reader-argv")));
+    await plain.page.close();
+
+    // switch off while the reader waits: the reply and the reader's exit are both under a second
+    await scenario(appDir, "hang");
+    const pending = cli(appDir, "verify-code", field.tabId, "apple.com");
+    for (let i = 0; i < 100 && !existsSync(join(appDir, "fake-reader-connected")); i++) await home.waitForTimeout(100);
+    const t0 = Date.now();
+    await sw.evaluate(() => chrome.storage.local.set({ agentCodeReader: false }));
+    const cut = await pending;
+    const replyMs = Date.now() - t0;
+    ok(t("switch off mid-read -> code_reader_off under 1 s"), cut.error === "not_allowed" && cut.reason === "code_reader_off" && replyMs < 1000, `${JSON.stringify(cut)} ${replyMs} ms`);
+    for (let i = 0; i < 20 && !existsSync(join(appDir, "fake-reader-exited")); i++) await home.waitForTimeout(100);
+    ok(t("the fake reader exited under 1 s"), existsSync(join(appDir, "fake-reader-exited")) && Date.now() - t0 < 1500, String(Date.now() - t0));
+    const off = await cli(appDir, "verify-code", field.tabId, "apple.com");
+    ok(t("with the switch off a request is refused, reader not started"), off.reason === "code_reader_off", JSON.stringify(off));
+
+    await sw.evaluate(() => chrome.storage.local.set({ agentCodeReader: true }));
+    const where = (await sw.evaluate(async () => ({ local: (await chrome.storage.local.get("agentCodeReader")).agentCodeReader, sync: Object.keys(await chrome.storage.sync.get(null)) }))) as any;
+    ok(t("switch value lives in local storage, sync storage has no agentCodeReader"), where.local === true && !where.sync.includes("agentCodeReader"), JSON.stringify(where));
+    await field.page.close();
+  }
+  {
+    const t = (n: string) => `mac: ${n}`;
+    const { appDir, open, home } = await setup("mac", { relay: "old" });
+    const field = await open("code");
+    await home.waitForTimeout(1500);
+    const t0 = Date.now();
+    const res = await cli(appDir, "verify-code", field.tabId, "apple.com");
+    ok(t("old relay -> reader_missing in under 1 s"), res.error === "reader_missing" && Date.now() - t0 < 1000, `${JSON.stringify(res)} ${Date.now() - t0} ms`);
+  }
+  {
+    const { appDir, open, home } = await setup("win");
+    const field = await open("code");
+    await home.waitForTimeout(1000);
+    const res = await cli(appDir, "verify-code", field.tabId, "apple.com");
+    ok("win: mac_only", res.error === "not_allowed" && res.reason === "mac_only", JSON.stringify(res));
+  }
+});

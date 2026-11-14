@@ -24,7 +24,7 @@ const BROWSER_ROWS = [
   "Hide the browser's password manager",
   "The browser's saved passwords",
 ];
-const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allow agents to save new logins", "Allowed sites", "Activity"];
+const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Let agents save new logins", "Let agents read verification codes and verify for you", "Allowed sites", "Activity"];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el: Element) {
@@ -343,4 +343,41 @@ await main(async () => {
   await helped.close({ runBeforeUnload: true });
   await new Promise((r) => setTimeout(r, 500));
   ok("options: allowed sites save when the page closes without a blur", (await savedAllowlist()).includes("example.net"), await savedAllowlist());
+
+  // the code reader row: the real builds report their own platform
+  const CODE_ROW = "Let agents read verification codes and verify for you";
+  for (const platform of ["mac", "win"] as const) {
+    const real = await launchExtension(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`));
+    const rsw = real.serviceWorkers()[0] || (await real.waitForEvent("serviceworker", { timeout: 10000 }));
+    const rUrl = new URL("options.html", rsw.url()).href;
+    const rp = await real.newPage();
+    const codeRow = rp.locator(`[data-row="${CODE_ROW}"]`);
+    const codeSwitch = codeRow.locator('[role="switch"]');
+    const localValue = () => rsw.evaluate(() => chrome.storage.local.get("agentCodeReader").then((o) => o.agentCodeReader));
+    if (platform === "mac") {
+      await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: false }));
+      await rp.goto(`${rUrl}#agents`);
+      await codeSwitch.waitFor();
+      ok("options: code reader locked while sign-in off", (await codeSwitch.isDisabled()) && (await codeRow.locator("[data-help]").innerText()).includes("Needs Accessibility access"));
+      await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));
+      await rp.reload();
+      await codeSwitch.waitFor();
+      await rp.waitForFunction(() => !document.querySelector(`[data-row="Let agents read verification codes and verify for you"] [role="switch"]`)?.hasAttribute("disabled"), null, { timeout: 5000 }).catch(() => {});
+      ok("options: code reader is off by default", !(await codeSwitch.isChecked()) && (await localValue()) !== true);
+      await codeSwitch.click();
+      await rp.waitForTimeout(500);
+      const sync = await rsw.evaluate(() => chrome.storage.sync.get(null).then((o) => Object.keys(o)));
+      ok("options: code reader toggles local storage on mac", (await localValue()) === true && !sync.includes("agentCodeReader"), `${await localValue()} ${sync.join()}`);
+      await rp.reload();
+      await codeSwitch.waitFor();
+      ok("options: code reader survives a reload", await codeSwitch.isChecked());
+    } else {
+      await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));
+      await rp.goto(`${rUrl}#agents`);
+      await codeSwitch.waitFor();
+      await rp.waitForTimeout(500);
+      ok("options: code reader locked with macOS-only note on win", (await codeSwitch.isDisabled()) && (await codeRow.innerText()).includes("macOS only for now."), await codeRow.innerText());
+    }
+    await real.close();
+  }
 });
