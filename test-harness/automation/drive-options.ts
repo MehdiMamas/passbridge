@@ -8,6 +8,7 @@ const AUTOFILL_ROWS = [
   "Autofill on page load",
   "Fill and save on HTTP pages",
   "Ask to save new logins",
+  "Save new logins without asking",
   "Ask to update changed passwords",
   "Never-save sites",
   "Copy codes after filling",

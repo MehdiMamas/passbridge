@@ -629,9 +629,13 @@ async function presentSaveOffer({ tabId, frameUrl, target, password, host, updat
     lookedUp: lookedUp === true,
     target,
     password,
-    save: () => client.saveLogin(tabId, frameUrl, target, password),
+    save: async () => {
+      await ensureConnected();
+      await client.saveLogin(tabId, frameUrl, target, password);
+    },
   });
   if (autoSaved) {
+    saveOffers.delete(tabId);
     try {
       chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("agentSavedLogin", [host || hostnameOf(frameUrl) || "", target]) });
     } catch {}
