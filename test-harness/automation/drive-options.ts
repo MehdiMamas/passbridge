@@ -384,7 +384,10 @@ await main(async () => {
       await rp.goto(`${rUrl}#agents`);
       await codeSwitch.waitFor();
       await rp.waitForTimeout(500);
-      ok("options: code reader locked with macOS-only note on win", (await codeSwitch.isDisabled()) && (await codeRow.innerText()).includes("macOS only for now."), await codeRow.innerText());
+      ok("options: code reader switch is enabled on win", !(await codeSwitch.isDisabled()) && !(await codeRow.innerText()).includes("only for now"), await codeRow.innerText());
+      await codeSwitch.click();
+      await rp.waitForTimeout(500);
+      ok("options: code reader toggles local storage on win", (await localValue()) === true, String(await localValue()));
     }
     await real.close();
   }

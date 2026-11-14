@@ -170,10 +170,14 @@ await main(async () => {
     ok(t("old relay -> reader_missing in under 1 s"), res.error === "reader_missing" && Date.now() - t0 < 1000, `${JSON.stringify(res)} ${Date.now() - t0} ms`);
   }
   {
+    const t = (n: string) => `win: ${n}`;
     const { appDir, open, home } = await setup("win");
     const field = await open("code");
-    await home.waitForTimeout(1000);
+    await home.waitForTimeout(1500);
+    await scenario(appDir, "ok");
     const res = await cli(appDir, "verify-code", field.tabId, "apple.com");
-    ok("win: mac_only", res.error === "not_allowed" && res.reason === "mac_only", JSON.stringify(res));
+    const filled = [];
+    for (let i = 1; i <= 6; i++) filled.push(await field.page.inputValue(`input[name="code${i}"]`));
+    ok(t("the platform is allowed: the code fills and the reply has no digits"), filled.join("") === CODE && res.ok === true && !/\d{3}/.test(JSON.stringify({ ...res, id: "" })), `${filled.join(",")} ${JSON.stringify(res)}`);
   }
 });

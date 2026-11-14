@@ -289,7 +289,7 @@ function OptionsApp() {
         privacy={{ bubble, address }}
         onPrivacy={onPrivacy}
         agentLog={agentLog}
-        codeReader={{ isOn: codeReaderOn, onToggle: (/** @type {boolean} */ on) => void chrome.storage.local.set({ agentCodeReader: on }), isMac: os === "mac" }}
+        codeReader={{ isOn: codeReaderOn, onToggle: (/** @type {boolean} */ on) => void chrome.storage.local.set({ agentCodeReader: on }), supported: os === "mac" || os === "win" }}
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
         passkeys={passkeysView(IS_WINDOWS)}
         passkeyStore={IS_WINDOWS ? { isOn: passkeyOn, onToggle: onPasskeyToggle, onPick: onPasskeyPick, progress: passkeyProgress, results: passkeyResults, note: passkeyNote, allSites, onAllSites, stayUnlocked, onStayUnlocked, syncSteps, onSyncAll } : null}
