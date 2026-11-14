@@ -56,7 +56,8 @@ What it cannot prove: the fake is an in-process class (`test-harness/fake-apple-
 - PassBridge's own hosts use the same mechanism with one id: `native/install.sh:73`, `:82`, `:91` and `native/windows/install.ps1:162` (`allowed_origins` is `chrome-extension://<ext id>/`). `native/install.sh` does not write Apple's manifest on macOS; that one is Apple's.
 - PassBridge's manifest key forces Apple's extension id, because "macOS only accepts Apple's extension id" (`SETUP.md:3`). That is the repo's own statement that the Mac side is tied to the id; the repo does not say whether the check is the browser's or the helper's.
 - The Windows probe ran the helper as "Native-messaging client, origin `chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/`" (`docs/windows-findings.md:36`), so the helper is started with the origin as an argument; whether it looks at it is not recorded.
-- The fake has no origin check (`host.ts` takes no argument), so the question stays open. Verdict: needs owner (checklist item 1).
+- On Windows this is partly answered already: a probe spawned the real helper from Node, with no browser, through the alias and the package path (`docs/windows-findings.md:32`), got `GET_CAPABILITIES` (cmd 14) back, and its client hello (`m0`) was accepted (`docs/windows-findings.md:54-64`). So on Windows a non-browser process can connect and start a handshake. That probe did not type the code, so pairing and any lookup are still unproven there.
+- macOS is the open part: nothing in the repo shows a non-browser process reaching the Mac helper. The fake has no origin check (`host.ts` takes no argument), so it cannot answer it. Verdict: needs owner on macOS (checklist item 1).
 
 ## 3. Messages that exist in the protocol
 
@@ -66,6 +67,7 @@ Defined in the pinned client reference, which is a client, not the helper: `vend
 |---|---|---|---|
 | `Action.DELETE = 0`, `QueryStatus.FAILED_TO_DELETE = 4` | yes | never | `vendor/au2001/src/utils/enums.ts:35-37`, `:50`; absent from `src/apple/protocol.ts:76` |
 | `Action.UPDATE = 1`, `QueryStatus.FAILED_TO_UPDATE = 5` | yes | never (declared at `protocol.ts:76`, no use) | `vendor/au2001/src/utils/enums.ts:38`, `:51` |
+| `Action.ADD_NEW = 3` | yes | never (declared at `protocol.ts:76`, no use) | `vendor/au2001/src/utils/enums.ts:40` |
 | `Action.GHOST_SEARCH = 5` (login names for a host) | yes | yes, with `URL: hostname` | `src/apple/protocol.ts:462`, `:537`; `vendor/au2001/src/utils/api.ts:274` |
 | `Action.SEARCH = 2` (one password) | yes | yes, with `URL` and `USR` | `src/apple/protocol.ts:484`, `:551`; `vendor/au2001/src/utils/api.ts:339` |
 | `Action.MAYBE_ADD = 4` (add, Apple shows its own prompt) | yes | yes | `src/apple/protocol.ts:507` |
@@ -89,15 +91,15 @@ Read on 2026-11-14; each repo was reachable and had source.
 
 ## 5. Go or no-go: Tauri 2 quick-access app (search, codes, unlock, add)
 
-Verdict: no-go for a browser-free app today; go for it only after owner checklist item 1 passes. Without item 1, an app has to run beside a browser that has the extension, which is what the extension already is.
+Verdict: on Windows a browser-free start is shown to work as far as the hello (`docs/windows-findings.md:32`, `:54-64`); on macOS it is unknown. So: no-go for a browser-free Mac app today; go for it only after owner checklist item 1 passes on macOS, and Windows still needs the pairing step (items 2-4) checked. Without item 1, an app has to run beside a browser that has the extension, which is what the extension already is.
 
 Cost per feature, on the protocol as PassBridge uses it (sizes are estimates, not measured):
 
 | Feature | Needs | Cost |
 |---|---|---|
-| Search by site | per-site `GHOST_SEARCH` (`protocol.ts:454`), one password read needs Touch ID or Windows Hello (`docs/agent-protocol.md:50`) | small if the extension stays the engine; large if the SRP and crypto in `src/apple/*` move to Rust |
+| Search by site | per-site `GHOST_SEARCH` (`protocol.ts:454`), each password read still needs approval in Apple's Passwords (Touch ID) (`docs/agent-protocol.md:50`) | small if the extension stays the engine; large if the SRP and crypto in `src/apple/*` move to Rust |
 | Codes | cmds 16 and 17 (`protocol.ts:534`, `:549`), or the code reader on a prompt (`docs/agent-protocol.md:78-104`) | small to medium; the reader is already a signed app |
-| Unlock | the 6-digit code from Apple's app every time the session is lost (`docs/agent-protocol.md:53`) | small once connected, but it is a person typing a code, never silent on macOS |
+| Unlock | the 6-digit code from Apple's app every time the session is lost (`docs/agent-protocol.md:53`) | small once connected; a person types the code, except that Windows has an opt-in `unlock` agent op that reads and enters it (`docs/agent-protocol.md:105-111`), which is not supported on macOS |
 | Add | `MAYBE_ADD` plus Apple's own prompt (`protocol.ts:499-530`) | small; add-only |
 | Browse all, edit, delete | no list-all message; update and delete never sent | not available; not in scope |
 
