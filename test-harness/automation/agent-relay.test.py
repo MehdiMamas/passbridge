@@ -459,6 +459,67 @@ else:
     skip("Windows: reader files missing -> reader_missing")
 nr.stop()
 
+# ---- unlock: read_code with kind pin runs the pairing-code reader (bare digits, exit 1 while no window is up) ----
+PIN_FAKE = ROOT / "test-harness" / "fake-pin-reader.py"
+
+
+class PinRelay(CodeRelay):
+    def __init__(self, total_s=None, with_reader=True):
+        self.dir = tempfile.mkdtemp(prefix="pb-pin-")
+        env = {**os.environ, "PASSBRIDGE_APPDIR": self.dir, "PASSBRIDGE_NO_WSL_REEXEC": "1"}
+        env.pop("PASSBRIDGE_CODE_READER", None)
+        env.pop("PASSBRIDGE_PIN_READER", None)
+        if total_s is not None:
+            env["PASSBRIDGE_PIN_TOTAL_S"] = str(total_s)
+        if with_reader:
+            env["PASSBRIDGE_PIN_READER"] = json.dumps([sys.executable, "-I", str(PIN_FAKE)])
+        self.err = open(os.path.join(tempfile.mkdtemp(prefix="pb-err-"), "stderr"), "w+b")
+        self.proc = subprocess.Popen([sys.executable, "-I", str(RELAY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.err, env=env)
+        self.msgs = []
+        self.lock = threading.Lock()
+        threading.Thread(target=self.pump, daemon=True).start()
+
+    def pin(self, rid, scenario=None, seconds=15):
+        if scenario:
+            with open(self.path("fake-pin-scenario"), "w") as f:
+                f.write(scenario)
+        self.send({"cmd": "read_code", "rid": rid, "kind": "pin"})
+        return self.wait_msg(lambda m: m.get("event") == "code" and m.get("rid") == rid, seconds)
+
+
+pr = PinRelay(total_s=3)
+ok("unlock: active event says pin: true", pr.wait_msg(lambda m: m.get("event") == "active" and m.get("pin") is True, 10) is not None, pr.msgs)
+r = pr.pin("p1", "ok")
+ok("unlock: pin read prints 6 digits -> they reach the extension", r and r.get("ok") is True and r.get("code") == "482915", r)
+r = pr.pin("p2", "spaced")
+ok("unlock: spaced digits are normalized", r and r.get("ok") is True and r.get("code") == "482915", r)
+r = pr.pin("p3", "bad")
+ok("unlock: output that is not 6 digits -> reader_failed, no code", err(r) == "reader_failed" and "code" not in r, r)
+r = pr.pin("p4", "crash")
+ok("unlock: script exits with an error -> reader_failed", err(r) == "reader_failed" and "code" not in r, r)
+t0 = time.time()
+r = pr.pin("p5", "no_window")
+ok("unlock: no pairing window -> retried, then no_prompt", err(r) == "no_prompt" and time.time() - t0 >= 2, (r, time.time() - t0))
+ok("unlock: no_prompt retried the script more than once", len(open(pr.path("fake-pin-runs")).read()) > 3)
+pr.send({"cmd": "read_code", "rid": "p6", "kind": "pin"})
+with open(pr.path("fake-pin-scenario"), "w") as f:
+    f.write("hang")
+pr.send({"cmd": "cancel_code", "rid": "p6"})
+r = pr.code("p6", 5)
+ok("unlock: cancel_code ends a pin read -> reader_failed, no code", err(r) in ("reader_failed", "no_prompt") and "code" not in r, r)
+out = open(pr.err.name, "rb").read()
+ok("unlock: relay stderr is empty and holds no code", out == b"" and b"482915" not in out, out)
+pr.stop()
+pn = PinRelay(with_reader=False)
+r = pn.pin("n1")
+if WINDOWS:
+    ok("unlock: Windows: script missing -> reader_missing", err(r) == "reader_missing", r)
+    skip("unlock: not Windows and no test reader -> mac_only")
+else:
+    ok("unlock: not Windows and no test reader -> mac_only", err(r) == "mac_only", r)
+    skip("unlock: Windows: script missing -> reader_missing")
+pn.stop()
+
 failed = results.count(False)
 print(f"\n==== {len(results) - failed}/{len(results)} PASS ====")
 sys.exit(1 if failed or not results else 0)

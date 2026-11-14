@@ -358,14 +358,18 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   };
   const spy: any = { fill: [] as any[], notify: [] as any[] };
   const frame = { frameId: 0, host: "idmsa.apple.com" };
+  const aclient = { ready: true };
+  const pinSpy: string[] = [];
   initAgent({
-    client: { ready: true },
+    client: aclient,
+    pairStart: async () => {},
+    pairPin: async (pin: string) => { pinSpy.push(pin); return { ok: true }; },
     getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["apple.com"] }),
     getTab: async () => ({ id: 1, url: "https://idmsa.apple.com/" }),
     hostnameOf: (u: any) => new URL(u).hostname,
     isFillUrlAllowed: async () => true,
     isLocalDevHost: () => false,
-    platform: async () => "mac",
+    platform: async () => (aclient.ready ? "mac" : "win"),
     codeReaderOn: async () => true,
     codeFrames: async () => [frame],
     probeCodeField: async () => frame,
@@ -387,6 +391,22 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   await until(() => posted.some((m) => m.id === "r1"));
   const answer = posted.find((m) => m.id === "r1");
   ok("initAgent: the matching rid fills once and the reply has no digits", spy.fill.join() === "482915" && answer?.ok === true && !/\d{4}/.test(JSON.stringify({ ...answer, id: "" })));
+  // unlock through the port: a relay that says code but not pin (1.4.32) is never sent a pin read, it would press Allow
+  aclient.ready = false;
+  posted.length = 0;
+  deliver({ id: "u1", op: "unlock" });
+  await until(() => posted.some((m) => m.id === "u1"));
+  ok("initAgent: a relay without pin: true -> unlock is reader_missing and no read_code is posted", posted.find((m) => m.id === "u1")?.error === "reader_missing" && !posted.some((m) => m.cmd === "read_code"));
+  deliver({ event: "active", code: true, pin: true });
+  posted.length = 0;
+  deliver({ id: "u2", op: "unlock" });
+  await until(() => posted.some((m) => m.cmd === "read_code"));
+  const prid = posted.find((m) => m.cmd === "read_code");
+  ok("initAgent: a relay with pin: true gets read_code with kind pin", prid?.kind === "pin");
+  deliver({ event: "code", rid: prid.rid, ok: true, code: "482915" });
+  await until(() => posted.some((m) => m.id === "u2"));
+  const ua = posted.find((m) => m.id === "u2");
+  ok("initAgent: the pin goes to pairPin only; the unlock reply has no digits", pinSpy.join() === "482915" && ua?.ok === true && ua?.state === "paired" && !JSON.stringify(ua).includes("482915"));
 }
 
 const agentList = ["github.com", "google.com"];
@@ -419,7 +439,7 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
     fillLoginOnTab: async (tab: any, username: any) => ({ filled: true, username, password: "leak" }),
     ...over,
   });
-  const run = (msg: any, d = deps(), lim = createLimiter()) => handleAgentRequest(msg, (d as any), lim);
+  const run = (msg: any, d = deps(), lim = createLimiter(), now?: number) => handleAgentRequest(msg, (d as any), lim, now);
   ok("agent: disabled refuses", (await run({ op: "logins", tabId: 1 }, deps({ getSettings: async () => ({ agentSignIn: false }) }))).reply.error === "not_enabled");
   ok("agent: a host off the list is not_allowed", (await run({ op: "logins", tabId: 1 }, deps({ getTab: async () => ({ id: 1, url: "https://github.com.evil.io/" }) }))).reply.error === "not_allowed");
   ok("agent: a missing tab is no_tab", (await run({ op: "logins", tabId: 9 }, deps({ getTab: async () => { throw new Error("x"); } }))).reply.error === "no_tab");
@@ -482,6 +502,57 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
     const rl = createLimiter(1, 1000);
     await run({ op: "pair_pin", pin: "000000" }, pd(), rl);
     ok("agent: both pair ops count toward the rate limit", (await run({ op: "pair_start" }, pd(), rl)).reply.error === "rate_limited");
+    delete (globalThis as any).chrome;
+  }
+
+  // unlock: pair a locked store with the code read on this computer (Windows, code-reader switch). the digits are made-up values
+  {
+    const store: Record<string, any> = {};
+    (globalThis as any).chrome = { storage: { session: { get: async (k: string) => ({ [k]: store[k] }), set: async (o: any) => Object.assign(store, o) } } };
+    const spy: any = { start: 0, read: 0, kinds: [] as any[], tried: [] as string[] };
+    const ud = (over = {}) =>
+      deps({
+        client: { ready: false },
+        platform: async () => "win",
+        codeReaderOn: async () => true,
+        pairStart: async () => { spy.start++; },
+        pairPin: async (pin: string) => { spy.tried.push(pin); return pin === "482915" ? { ok: true, state: "ready" } : { ok: false, error: "x" }; },
+        readCode: async (kind: any) => { spy.read++; spy.kinds.push(kind); return { ok: true, code: "482915" }; },
+        getTab: async () => { throw new Error("no tab needed"); },
+        ...over,
+      });
+    const reset = () => { spy.start = 0; spy.read = 0; spy.kinds = []; spy.tried = []; store.agentPinFails = 0; };
+    const un = async (over = {}, lim = createLimiter(), now = 0) => { reset(); return run({ op: "unlock" }, ud(over), lim, now); };
+    let r = await un({ codeReaderOn: async () => false });
+    ok("unlock: given the code-reader switch is off -> expect not_allowed with reason code_reader_off and no read started", r.reply.error === "not_allowed" && r.reply.reason === "code_reader_off" && spy.start === 0 && spy.read === 0);
+    r = await un({ platform: async () => "mac" });
+    ok("unlock: given the platform is Mac -> expect not_allowed with reason win_only", r.reply.error === "not_allowed" && r.reply.reason === "win_only" && spy.start === 0 && spy.read === 0);
+    r = await un({ client: { ready: true } });
+    ok("unlock: given the store is already paired -> expect ok state paired and no read started", r.reply.ok === true && r.reply.state === "paired" && spy.start === 0 && spy.read === 0);
+    const lim = createLimiter();
+    const rs = [await un({}, lim, 0), await un({}, lim, 1), await un({}, lim, 2), await un({}, lim, 3)];
+    ok("unlock: given 3 unlocks in 10 minutes -> expect rate_limited on the 4th", rs.slice(0, 3).every((x) => x.reply.ok === true) && rs[3].reply.error === "rate_limited");
+    reset();
+    store.agentPinFails = 5;
+    r = await run({ op: "unlock" }, ud());
+    ok("unlock: given 5 wrong codes in a row -> expect locked", r.reply.error === "locked" && spy.read === 0 && spy.start === 0);
+    r = await un({ readCode: async () => ({ ok: false, error: "no_prompt" }) });
+    ok("unlock: given the pairing window never appears -> expect no_prompt and nothing entered", r.reply.error === "no_prompt" && spy.tried.length === 0);
+    r = await un({ readCode: async () => ({ ok: false, error: "reader_missing" }) });
+    ok("unlock: given the reader script is missing -> expect reader_missing", r.reply.error === "reader_missing" && spy.tried.length === 0);
+    r = await un({ readCode: async () => ({ ok: true, code: "12ab56" }) });
+    ok("unlock: given the reader returns something that is not 6 digits -> expect reader_failed and nothing entered", r.reply.error === "reader_failed" && spy.tried.length === 0);
+    r = await un({ readCode: async () => ({ ok: true, code: "000000" }) });
+    ok("unlock: given Apple rejects the code -> expect wrong_pin", r.reply.error === "wrong_pin" && store.agentPinFails === 1);
+    let n = 0;
+    r = await un({ codeReaderOn: async () => n++ < 1 });
+    ok("unlock: given the switch is turned off during the read -> expect the read is cancelled and not_allowed with reason code_reader_off", r.reply.error === "not_allowed" && r.reply.reason === "code_reader_off" && spy.tried.length === 0);
+    r = await un({ readCode: async () => ({ ok: false, error: "reader_missing" }) });
+    ok("unlock: given an older relay without code support -> expect reader_missing", r.reply.error === "reader_missing");
+    r = await un();
+    const entry = logEntry({ op: "unlock" }, r, r.reply);
+    const safe = sanitizeReply({ ...r.reply, id: "u" });
+    ok("unlock: given a successful unlock -> expect the reply, the Activity log and storage hold no digits", r.reply.ok === true && spy.kinds[0] === "pin" && spy.tried[0] === "482915" && !JSON.stringify([safe, entry, store]).includes("482915") && Object.keys(safe).sort().join() === "id,ok,state");
     delete (globalThis as any).chrome;
   }
 

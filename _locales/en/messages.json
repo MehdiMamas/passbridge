@@ -445,7 +445,7 @@
   "err_noTotpSetup": { "message": "This helper can't set up verification codes." },
   "err_noNewPasswordSheet": { "message": "This helper can't open the new password sheet." },
   "agentCodeReader": {"message": "Allow agents to read verification codes and verify for you"},
-  "agentCodeReaderHelp": {"message": "This browser profile on this computer only. When an agent signs in to an Apple Account on an allowed Apple sign-in page, PassBridge presses Allow on Apple's prompt for you, with no tap from you, and enters the code in that tab. The agent never sees the code. On macOS it needs Accessibility access for PassBridge Code Reader (see Setup); on Windows it needs nothing extra. At most 3 per 10 minutes, and a notification each time."},
+  "agentCodeReaderHelp": {"message": "This browser profile on this computer only. When an agent signs in to an Apple Account on an allowed Apple sign-in page, PassBridge presses Allow on Apple's prompt for you, with no tap from you, and enters the code in that tab. The agent never sees the code. On Windows it also lets an agent unlock PassBridge when it is locked, by reading the pairing code Apple shows. On macOS it needs Accessibility access for PassBridge Code Reader (see Setup); on Windows it needs nothing extra. At most 3 per 10 minutes, and a notification each time."},
   "agentCodeReaderMacOnly": {"message": "macOS and Windows only for now."},
   "agentCodeFilled": {"message": "Entered an Apple verification code on $1", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}},
   "agentCodeNotFilled": {"message": "Read an Apple verification code for $1 but found no field to enter it", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}}

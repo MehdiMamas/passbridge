@@ -80,7 +80,7 @@ if ($locked.Count -gt 0) {
   }
 }
 
-foreach ($readerFile in @("code-reader.ps1", "code-reader.json")) {
+foreach ($readerFile in @("code-reader.ps1", "code-reader.json", "read-pair-code.ps1")) {
   $readerPath = Join-Path $Dest $readerFile
   if (Test-Path -LiteralPath $readerPath) {
     Remove-Item -LiteralPath $readerPath -Force
