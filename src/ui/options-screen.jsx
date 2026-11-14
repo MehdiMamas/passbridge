@@ -481,8 +481,8 @@ function BrowserTab({ settings, onChange, view, policy, onPolicy, privacy, onPri
   );
 }
 
-/** @param {{ settings: OptionsSettings, onChange: OnSettingsChange, view: OptionsView, lists: Record<string, string>, onListChange: (key: string, text: string) => void, onListBlur: (key: string) => void, agentLog: AgentLogRow[] }} props */
-function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, agentLog }) {
+/** @param {{ settings: OptionsSettings, onChange: OnSettingsChange, view: OptionsView, lists: Record<string, string>, onListChange: (key: string, text: string) => void, onListBlur: (key: string) => void, agentLog: AgentLogRow[], codeReader: { isOn: boolean, onToggle: (on: boolean) => void, isMac: boolean } }} props */
+function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, agentLog, codeReader }) {
   const state = view.rows.agents;
   return (
     <>
@@ -503,6 +503,14 @@ function AgentsTab({ settings, onChange, view, lists, onListChange, onListBlur, 
         help={t("agentSaveHelp")}
         state={settings.agentSignIn === true ? state : "locked"}
         {...toggleProps(settings, onChange, "agentSave")}
+      />
+      <SwitchRow
+        label={t("agentCodeReader")}
+        help={t("agentCodeReaderHelp")}
+        note={codeReader.isMac ? undefined : t("agentCodeReaderMacOnly")}
+        state={settings.agentSignIn === true && codeReader.isMac ? state : "locked"}
+        checked={codeReader.isOn}
+        onChange={codeReader.onToggle}
       />
       <ListRow
         label={t("allowedSites")}

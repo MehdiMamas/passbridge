@@ -27,6 +27,7 @@ export const SETTINGS_DEFAULTS = {
   agentAllowAll: false,
   // a local program may add a new login for a site it just signed up on; never overwrites or reads one
   agentSave: false,
+  // the code reader switch lives in chrome.storage.local (agentCodeReader): per browser profile, never synced
   canCheckForUpdates: true,
   // installs a newer signed release on its own when the update helper is there
   autoInstallUpdates: true,

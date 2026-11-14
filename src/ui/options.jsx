@@ -27,6 +27,8 @@ function OptionsApp() {
   const [relay, setRelay] = useState("");
   const [passkeyOn, setPasskeyOn] = useState(false);
   const [passkeyNote, setPasskeyNote] = useState("");
+  const [codeReaderOn, setCodeReaderOn] = useState(false);
+  const [os, setOs] = useState("");
   const [allSites, setAllSites] = useState(true);
   const [stayUnlocked, setStayUnlocked] = useState(false);
   const [syncSteps, setSyncSteps] = useState([]);
@@ -86,6 +88,15 @@ function OptionsApp() {
     };
     chrome.storage.onChanged.addListener(onRelay);
     readPasskeySetting();
+    try {
+      chrome.storage.local.get({ agentCodeReader: false }, (o) => setCodeReaderOn(o.agentCodeReader === true));
+      chrome.runtime.sendMessage({ type: "getPlatform" }).then((r) => setOs(r?.os || "")).catch(() => {});
+    } catch {}
+    /** @param {Record<string, { newValue?: any }>} changes @param {string} area */
+    const onCodeReader = (changes, area) => {
+      if (area === "local" && changes.agentCodeReader) setCodeReaderOn(changes.agentCodeReader.newValue === true);
+    };
+    chrome.storage.onChanged.addListener(onCodeReader);
     sendPolicy("get").then((r) => applyPolicy(r, policyMessage(r, false)));
     updaterAvailable().then((has) => setHelpers((h) => ({ ...h, updater: has ? "present" : "missing" })));
     readPrivacy("passwordSavingEnabled", setBubble);
@@ -104,6 +115,7 @@ function OptionsApp() {
       chrome.storage.onChanged.removeListener(onLog);
       chrome.storage.onChanged.removeListener(onAllowlist);
       chrome.storage.onChanged.removeListener(onRelay);
+      chrome.storage.onChanged.removeListener(onCodeReader);
       removeEventListener("hashchange", onHash);
       removeEventListener("pagehide", onPageHide);
       onPageHide();
@@ -277,6 +289,7 @@ function OptionsApp() {
         privacy={{ bubble, address }}
         onPrivacy={onPrivacy}
         agentLog={agentLog}
+        codeReader={{ isOn: codeReaderOn, onToggle: (/** @type {boolean} */ on) => void chrome.storage.local.set({ agentCodeReader: on }), isMac: os === "mac" }}
         onCheckNow={() => chrome.tabs.create({ url: chrome.runtime.getURL(UPDATE_PAGE) })}
         passkeys={passkeysView(IS_WINDOWS)}
         passkeyStore={IS_WINDOWS ? { isOn: passkeyOn, onToggle: onPasskeyToggle, onPick: onPasskeyPick, progress: passkeyProgress, results: passkeyResults, note: passkeyNote, allSites, onAllSites, stayUnlocked, onStayUnlocked, syncSteps, onSyncAll } : null}

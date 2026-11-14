@@ -45,6 +45,7 @@ if pm_forced; then
   fi
 fi
 
+tccutil reset Accessibility com.passbridge.codereader 2>/dev/null || true
 rm -rf "$SUPPORT/PassBridge"
 
 if pm_forced; then

@@ -14,7 +14,7 @@ PassBridge: a Chrome extension (macOS and Windows) that fills logins from the Ap
 
 ## Where things live
 - `src/`: extension code (`background.js`, `content.js`, `menu.js`, `autofill/`, `apple/`, `ui/`, `update/`, popup/options pages).
-- `overlay/`: save and TOTP bar pages. `native/`: Python helper agent and install scripts. `manifest.json`: extension manifest (its key fixes the extension id).
+- `overlay/`: save and TOTP bar pages. `native/`: Python helper agent and install scripts. `manifest.json`: extension manifest (its key fixes the extension id). `native/code-reader/`: the Swift Accessibility app (PassBridge Code Reader) that presses Allow on Apple's prompt and reads the code; `sh native/code-reader/build.sh <dir>` builds it, `--self-test test-harness/code-reader-fixtures` checks it.
 - `vendor/`, `upstreams.json`, `UPSTREAMS.md`, `scripts/sync-upstream.ts`: pinned upstream code and how to update it (`pnpm sync <name> [commit]`, add `--accept` only after tests agree). `patches/site-fixes.md`: site-specific fixes.
 - `test-harness/`: test pages and automated Playwright tests. `docs/`: agent protocol, releasing, Windows findings. `VERIFICATION.md`, `COMPLAINTS.md`: audit logs.
 

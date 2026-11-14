@@ -12,7 +12,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { agentSaveAllowed, createLimiter, handleAgentRequest, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -228,6 +228,162 @@ ok("no match keeps the order", orderByPageUsername([{ username: "a" }, { usernam
 
 ok("agent: relay events set the state", relayEvent({ event: "standby" }) === "standby" && relayEvent({ event: "active" }) === "active");
 ok("agent: requests and odd messages are not relay events", relayEvent({ id: "1", event: "standby" }) === null && relayEvent({ id: "1", op: "status" }) === null && relayEvent({ event: "x" }) === null && relayEvent(null) === null);
+
+// verify_code: the reader, probe, fill and notify are spies, no chrome
+ok("relayEvent: event code -> \"code\"; a message with id -> null", relayEvent({ event: "code", rid: "r", ok: true }) === "code" && relayEvent({ id: "1", event: "code" }) === null);
+ok("isCodeHost: exact sign-in hosts only", ["appleid.apple.com", "account.apple.com", "idmsa.apple.com", "www.icloud.com", "icloud.com"].every(isCodeHost) && !isCodeHost("support.apple.com") && !isCodeHost("evil.idmsa.apple.com") && !isCodeHost("apple.com") && !isCodeHost("github.com"));
+{
+  const host = (u: string) => new URL(u).hostname;
+  const picked = pickCodeFrames(
+    [{ frameId: 0, url: "https://account.apple.com/sign-in" }, { frameId: 3, url: "https://idmsa.apple.com/x" }, { frameId: 4, url: "https://support.apple.com/x" }, { frameId: 5, url: "https://evil.com/x" }, null],
+    ["apple.com"],
+    host,
+  );
+  ok("pickCodeFrames: keeps top frame and allowlisted idmsa.apple.com child, drops support.apple.com and other hosts", picked.map((f) => `${f.frameId}:${f.host}`).join() === "0:account.apple.com,3:idmsa.apple.com");
+  ok("pickCodeFrames: an Apple frame off the allowlist is dropped", pickCodeFrames([{ frameId: 0, url: "https://idmsa.apple.com/" }], ["github.com"], host).length === 0);
+}
+{
+  const l = createLimiter(5, 1000);
+  ok("limiter: per-op cap and shared cap", l.take(0, "v", 2) && l.take(1, "v", 2) && !l.take(2, "v", 2) && l.take(3) && l.take(4) && l.take(5) && !l.take(6));
+  const p = createLimiter(5, 1000);
+  p.take(0, "v", 1);
+  ok("limiter: peek spends nothing", !p.peek(1, "v", 1) && p.peek(1, "w", 1) && p.dump().length === 1);
+  const o = createLimiter(2, 1000);
+  o.load([10, 20]);
+  ok("limiter: load accepts the old number list", !o.take(30) && o.dump().every((h: any) => h.op === "") && o.take(2000));
+  const r = createLimiter(5, 1000);
+  r.load(o.dump());
+  ok("limiter: load accepts its own dump", r.dump().length === o.dump().length);
+}
+ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync leaves it", !("agentCodeReader" in SETTINGS_DEFAULTS) && !String(migrateSettingsToSync).includes("agentCodeReader"));
+{
+  const calls: any = { read: 0, probe: 0, fill: [] as any[], notify: [] as any[] };
+  const frame = { frameId: 3, host: "idmsa.apple.com" };
+  const base = (over: any = {}) => ({
+    client: { ready: false },
+    getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["apple.com"] }),
+    getTab: async () => ({ id: 1, url: "https://account.apple.com/sign-in" }),
+    hostnameOf: (u: any) => new URL(u).hostname,
+    isFillUrlAllowed: async () => true,
+    isLocalDevHost: () => false,
+    platform: async () => "mac",
+    codeReaderOn: async () => true,
+    codeFrames: async () => [frame],
+    probeCodeField: async () => { calls.probe++; return frame; },
+    readCode: async () => { calls.read++; return { ok: true, code: "482915" }; },
+    fillCode: async (tabId: any, f: any, code: any) => { calls.fill.push([tabId, f, code]); return true; },
+    notifyCode: (h: any, filled: any) => calls.notify.push([h, filled]),
+    ...over,
+  });
+  const reset = () => { calls.read = 0; calls.probe = 0; calls.fill = []; calls.notify = []; };
+  const vc = async (msg: any = {}, over: any = {}, lim = createLimiter(), now = 0) => { reset(); return (await handleAgentRequest({ op: "verify_code", tabId: 1, ...msg }, base(over) as any, lim, now)).reply; };
+
+  let r = await vc({}, { codeReaderOn: async () => false });
+  ok("verify_code: reader off -> code_reader_off, readCode not called", r.error === "not_allowed" && r.reason === "code_reader_off" && calls.read === 0);
+  r = await vc({}, { getSettings: async () => ({ agentSignIn: false, agentAllowlist: ["apple.com"] }) });
+  ok("verify_code: sign-in off -> not_enabled", r.error === "not_enabled" && calls.read === 0);
+  r = await vc({}, { platform: async () => "win" });
+  ok("verify_code: platform() resolves win -> mac_only", r.error === "not_allowed" && r.reason === "mac_only" && calls.read === 0);
+  r = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true }) });
+  ok("verify_code: not allowlisted, allowAll on -> not_allowed", r.error === "not_allowed" && !r.reason && calls.probe === 0 && calls.read === 0);
+  r = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }), getTab: async () => ({ id: 1, url: "https://github.com/login" }) });
+  ok("verify_code: allowlisted non-Apple host -> not_apple_site", r.error === "not_allowed" && r.reason === "not_apple_site" && calls.read === 0);
+  r = await vc({}, { getTab: async () => ({ id: 1, url: "https://support.apple.com/" }) });
+  ok("verify_code: allowlisted support.apple.com -> not_apple_site, probe not called", r.reason === "not_apple_site" && calls.probe === 0);
+  r = await vc({ site: "github.com" });
+  ok("verify_code: site mismatch", r.error === "not_allowed" && r.reason === "site_mismatch" && calls.read === 0);
+  ok("verify_code: site match passes", (await vc({ site: "apple.com" })).ok === true);
+  r = await vc({}, { getTab: async () => ({ id: 1, url: "http://account.apple.com/" }), isFillUrlAllowed: async () => false });
+  const b = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["apple.com"], blockedDomains: ["apple.com"] }) });
+  ok("verify_code: http / blocked -> not_allowed", r.error === "not_allowed" && b.error === "not_allowed" && calls.read === 0);
+  r = await vc({ url: "https://account.apple.com/" });
+  ok("verify_code: url field -> bad_request", r.error === "bad_request" && calls.read === 0);
+  r = await vc({}, { probeCodeField: async () => null });
+  ok("verify_code: no field -> no_field, readCode not called", r.error === "no_field" && calls.read === 0);
+
+  const lim = createLimiter();
+  const a = [await vc({}, {}, lim, 0), await vc({}, {}, lim, 1), await vc({}, {}, lim, 2)];
+  r = await vc({}, {}, lim, 3);
+  ok("verify_code: 4th in 10 min -> rate_limited, probe not called", a.every((x) => x.ok) && r.error === "rate_limited" && calls.probe === 0 && calls.read === 0);
+  ok("verify_code: rate_limited again frees after the window", (await vc({}, {}, lim, 11 * 60 * 1000)).ok === true);
+  const sh = createLimiter(10, 600000);
+  for (let i = 0; i < 8; i++) sh.take(0);
+  await vc({}, {}, sh, 1);
+  await vc({}, {}, sh, 2);
+  r = await vc({}, {}, sh, 3);
+  ok("verify_code: counts toward the shared 10", r.error === "rate_limited" && calls.read === 0);
+  const nf = createLimiter();
+  for (let i = 0; i < 3; i++) await vc({}, { probeCodeField: async () => null }, nf, i);
+  ok("verify_code: 3 no_field calls, then a call with a field still reaches readCode", (await vc({}, {}, nf, 4)).ok === true && calls.read === 1);
+
+  ok("verify_code: busy passes through", (await vc({}, { readCode: async () => ({ ok: false, error: "busy" }) })).error === "busy");
+  const map: Record<string, any[]> = {
+    reader_missing: ["reader_missing"], not_configured: ["not_configured"], no_prompt: ["no_prompt"], several_prompts: ["several_prompts"], reader_failed: ["reader_failed"],
+  };
+  let allMapped = true;
+  for (const [e] of Object.entries(map)) allMapped = allMapped && (await vc({}, { readCode: async () => ({ ok: false, error: e }) })).error === e;
+  r = await vc({}, { readCode: async () => ({ ok: false, error: "reader_permission" }) });
+  ok("verify_code: each reader error maps per the reply table", allMapped && r.error === "needs_user" && r.reason === "reader_permission" && (await vc({}, { readCode: async () => ({ ok: false, error: "code_reader_off" }) })).reason === "code_reader_off" && (await vc({}, { readCode: async () => ({ ok: false, error: "weird" }) })).error === "reader_failed");
+
+  r = await vc({}, { readCode: async () => ({ ok: true, code: "12ab56" }) });
+  ok("verify_code: reader returns 12ab56 -> reader_failed, fillCode not called", r.error === "reader_failed" && calls.fill.length === 0);
+  let n = 0;
+  r = await vc({}, { codeReaderOn: async () => n++ < 1 });
+  ok("verify_code: switch off before fill -> code dropped, fillCode not called", r.reason === "code_reader_off" && calls.fill.length === 0 && !JSON.stringify(r).includes("482915"));
+  r = await vc();
+  ok("verify_code: fillCode gets only the probed frame", calls.fill.length === 1 && calls.fill[0][1] === frame && calls.fill[0][0] === 1);
+  r = await vc({}, { fillCode: async () => false });
+  ok("verify_code: fill fails -> fill_failed, notifyCode(host,false)", r.error === "fill_failed" && calls.notify.length === 1 && calls.notify[0][0] === "account.apple.com" && calls.notify[0][1] === false);
+  reset();
+  const full = await handleAgentRequest({ op: "verify_code", tabId: 1, id: "q" }, base() as any, createLimiter(), 0);
+  const safe = sanitizeReply({ ...full.reply, id: "q" });
+  ok("verify_code happy path: reply keys are exactly ok, domain, filled, id; no digits; notifyCode(host,true) once", Object.keys(safe).sort().join() === "domain,filled,id,ok" && !/\d{3}/.test(JSON.stringify(safe)) && safe.domain === "account.apple.com" && calls.notify.length === 1 && calls.notify[0][1] === true && calls.notify[0][0] === "account.apple.com");
+  ok("sanitizeReply drops a code key from a verify_code reply", !("code" in sanitizeReply({ ok: true, domain: "a.com", filled: true, code: "482915" })));
+  const le = logEntry({ op: "verify_code", tabId: 1 }, full, safe);
+  ok("logEntry verify_code: no digits, username empty", le.username === "" && le.op === "verify_code" && le.result === "ok" && !/\d{4}/.test(JSON.stringify({ ...le, t: 0 })));
+}
+// initAgent with a fake native port: a code event whose rid is not the read in flight is dropped, never reaches onRequest or the page
+{
+  const listeners: any[] = [];
+  const posted: any[] = [];
+  const port = { onMessage: { addListener: (f: any) => listeners.push(f) }, onDisconnect: { addListener() {} }, postMessage: (m: any) => posted.push(m), disconnect() {} };
+  const stub = { get: async (d: any) => ({ ...(d && typeof d === "object" ? d : {}) }), set: async () => {}, remove: async () => {} };
+  (globalThis as any).chrome = {
+    runtime: { connectNative: () => port, lastError: undefined },
+    storage: { sync: { ...stub, get: (d: any, cb: any) => cb({ ...d, agentSignIn: true }) }, local: stub, session: stub, onChanged: { addListener() {} } },
+  };
+  const spy: any = { fill: [] as any[], notify: [] as any[] };
+  const frame = { frameId: 0, host: "idmsa.apple.com" };
+  initAgent({
+    client: { ready: true },
+    getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["apple.com"] }),
+    getTab: async () => ({ id: 1, url: "https://idmsa.apple.com/" }),
+    hostnameOf: (u: any) => new URL(u).hostname,
+    isFillUrlAllowed: async () => true,
+    isLocalDevHost: () => false,
+    platform: async () => "mac",
+    codeReaderOn: async () => true,
+    codeFrames: async () => [frame],
+    probeCodeField: async () => frame,
+    fillCode: async (_t: any, _f: any, code: any) => { spy.fill.push(code); return true; },
+    notifyCode: (h: any, filled: any) => spy.notify.push([h, filled]),
+  } as any);
+  const until = async (pred: () => boolean) => { for (let i = 0; i < 100 && !pred(); i++) await new Promise((r) => setTimeout(r, 10)); };
+  await until(() => listeners.length > 0);
+  const deliver = (m: any) => listeners.forEach((f) => f(m));
+  deliver({ event: "active", code: true });
+  deliver({ id: "r1", op: "verify_code", tabId: 1 });
+  await until(() => posted.some((m) => m.cmd === "read_code"));
+  const rid = posted.find((m) => m.cmd === "read_code")?.rid;
+  deliver({ event: "code", rid: "not-the-read", ok: true, code: "111111" });
+  deliver({ event: "code", rid: undefined, ok: true, code: "222222" });
+  await new Promise((r) => setTimeout(r, 50));
+  ok("initAgent: a code event with another rid is dropped, nothing is filled or answered", !!rid && spy.fill.length === 0 && !posted.some((m) => m.id === "r1"));
+  deliver({ event: "code", rid, ok: true, code: "482915" });
+  await until(() => posted.some((m) => m.id === "r1"));
+  const answer = posted.find((m) => m.id === "r1");
+  ok("initAgent: the matching rid fills once and the reply has no digits", spy.fill.join() === "482915" && answer?.ok === true && !/\d{4}/.test(JSON.stringify({ ...answer, id: "" })));
+}
 
 const agentList = ["github.com", "google.com"];
 ok("agent: the exact host is allowed", hostAllowed("github.com", agentList));

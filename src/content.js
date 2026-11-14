@@ -444,10 +444,28 @@ onChrome(chrome.runtime.onMessage, (/** @type {any} */ msg, /** @type {chrome.ru
       chrome.runtime.sendMessage({ type: "reportFrame", id: msg.id, frame }).catch(gone);
       return false;
     }
+    case "otpFieldPresent": {
+      if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
+      const found = otpTargetField();
+      if (!found) return false;
+      // remembered so the fill goes to this field only
+      probedOtpField = found;
+      clearTimeout(probedOtpTimer);
+      probedOtpTimer = setTimeout(() => { probedOtpField = null; }, 90000);
+      sendResponse({ present: true });
+      return true;
+    }
     case "fillOtp": {
       if (msg.expectedHost && location.hostname.toLowerCase() !== msg.expectedHost) return false;
       // a frame with no code field stays silent so another frame's answer wins
-      const target = otpTargetField();
+      let target = otpTargetField();
+      if (msg.probed) {
+        const probed = probedOtpField;
+        probedOtpField = null;
+        clearTimeout(probedOtpTimer);
+        if (!probed || !probed.isConnected || !isVisible(probed) || probed !== target) return false;
+        target = probed;
+      }
       if (!target) return false;
       fillOtp(target, msg.code);
       sendResponse({ ok: true, filled: true });
@@ -1599,6 +1617,11 @@ function fillOtp(/** @type {HTMLInputElement} */ field, /** @type {string} */ co
     setTimeout(() => { otpFilling = false; }, 0);
   }
 }
+
+/** @type {HTMLInputElement | null} */
+let probedOtpField = null;
+/** @type {ReturnType<typeof setTimeout> | undefined} */
+let probedOtpTimer;
 
 function otpTargetField() {
   const anchored = liveField(otpAnchor);

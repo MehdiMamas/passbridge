@@ -17,7 +17,7 @@ import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-all
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
-import { initAgent, loginSavedFor, pickAllowedFrames } from "./agent.js";
+import { initAgent, loginSavedFor, pickAllowedFrames, pickCodeFrames } from "./agent.js";
 import { UPDATE_PAGE, availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
 import { getEffectiveSettings } from "./managed.js";
 import { reloadIfStale } from "./update/stale.js";
@@ -1981,6 +1981,29 @@ initAgent({
   uniqueByUsername,
   fillLoginOnTab,
   saveLogin: (tabId, url, username, password) => client.saveLogin(tabId, url, username, password, { reportTimeout: true }),
+  platform: () => platformReady,
+  codeReaderOn: async () => (await chrome.storage.local.get({ agentCodeReader: false })).agentCodeReader === true,
+  codeFrames: async (tab) => pickCodeFrames(await chrome.webNavigation.getAllFrames({ tabId: tab.id }).catch(() => []), (await getSettings()).agentAllowlist, hostnameOf),
+  probeCodeField: async (tabId, frames) => {
+    for (const f of frames) {
+      try {
+        const r = await chrome.tabs.sendMessage(tabId, { type: "otpFieldPresent", expectedHost: f.host }, { frameId: f.frameId });
+        if (r?.present) return f;
+      } catch {}
+    }
+    return null;
+  },
+  // one frame only, no clipboard, no submit
+  fillCode: async (tabId, frame, code) => {
+    try {
+      const r = await chrome.tabs.sendMessage(tabId, { type: "fillOtp", code, expectedHost: frame.host, probed: true }, { frameId: frame.frameId });
+      return r?.filled === true;
+    } catch {
+      return false;
+    }
+  },
+  notifyCode: (host, filled) =>
+    chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t(filled ? "agentCodeFilled" : "agentCodeNotFilled", [host]) }),
   notifySaved: (host, username) =>
     chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("agentSavedLogin", [host, username]) }),
 });

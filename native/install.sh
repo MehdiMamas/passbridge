@@ -31,6 +31,32 @@ UPDATER="$APPDIR/passbridge-updater.py"
 # the release zip says which version this is, so the extension knows when the helper is behind
 if [ -f "$DIR/VERSION" ]; then cp "$DIR/VERSION" "$APPDIR/helper-version"; fi
 
+# verification code reader: the signed app from a release zip, else an ad-hoc build from source
+READER="$APPDIR/PassBridge Code Reader.app"
+if [ -f "$DIR/code-reader.zip" ]; then
+  ZIP_SHA="$(shasum -a 256 "$DIR/code-reader.zip" | cut -d' ' -f1)"
+  if [ "$ZIP_SHA" != "$(cat "$APPDIR/code-reader.sha" 2>/dev/null)" ] || [ ! -d "$READER" ]; then
+    rm -rf "$READER"
+    ditto -x -k "$DIR/code-reader.zip" "$APPDIR"
+    xattr -dr com.apple.quarantine "$READER" 2>/dev/null || true
+    echo "$ZIP_SHA" > "$APPDIR/code-reader.sha"
+    echo "Code reader installed"
+  else
+    echo "Code reader up to date"
+  fi
+elif [ -f "$DIR/code-reader/main.swift" ] && command -v swiftc >/dev/null 2>&1; then
+  SRC_SHA="$(cat "$DIR/code-reader/main.swift" "$DIR/code-reader/prompt.json" "$DIR/code-reader/Info.plist" | shasum -a 256 | cut -d' ' -f1)"
+  if [ "$SRC_SHA" != "$(cat "$APPDIR/code-reader.src-sha" 2>/dev/null)" ] || [ ! -d "$READER" ]; then
+    sh "$DIR/code-reader/build.sh" "$APPDIR"
+    echo "$SRC_SHA" > "$APPDIR/code-reader.src-sha"
+    echo "Code reader built from source (ad-hoc). Grant it Accessibility access again after each rebuild."
+  else
+    echo "Code reader up to date"
+  fi
+else
+  echo "Code reader not included: install a release helper zip to use verification codes"
+fi
+
 # the pairing-code reader earlier versions installed
 rm -rf "$APPDIR/passbridge-autopair.py" "$APPDIR/PassBridge Helper.app"
 

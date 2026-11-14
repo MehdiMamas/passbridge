@@ -4,6 +4,7 @@
 # and "install-helper" (the helper zip: replaces these scripts in APPDIR).
 # it never fetches anything and trusts the zip only as far as the checks below.
 import base64
+import hashlib
 import glob
 import io
 import json
@@ -328,7 +329,18 @@ def install_helper(zip_bytes, version, installer=None):
             shutil.copyfile(os.path.join(root, name), part)
             os.chmod(part, 0o755)
             os.replace(part, dest)
-        if new_hosts:
+        # a new code reader app needs the installer even when no host script is new; install.sh writes code-reader.sha
+        new_reader = False
+        reader_zip = os.path.join(root, "code-reader.zip")
+        if os.path.isfile(reader_zip):
+            with open(reader_zip, "rb") as f:
+                have = hashlib.sha256(f.read()).hexdigest()
+            try:
+                with open(os.path.join(APPDIR, "code-reader.sha"), encoding="utf-8") as f:
+                    new_reader = f.read().strip() != have
+            except OSError:
+                new_reader = True
+        if new_hosts or new_reader:
             (installer or run_installer)(root)
         with open(os.path.join(APPDIR, HELPER_VERSION_FILE), "w", encoding="utf-8") as f:
             f.write(version)

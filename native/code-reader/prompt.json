@@ -1,0 +1,1 @@
+{"bundleIds":["TODO-DESCRIBE"],"allowButton":{"identifier":"TODO-DESCRIBE"},"doneButton":{"identifier":"TODO-DESCRIBE"},"codePattern":"^\\d{3}\\s?\\d{3}$","timeoutMs":60000}

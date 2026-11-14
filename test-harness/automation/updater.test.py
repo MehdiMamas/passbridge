@@ -244,6 +244,20 @@ ok("install-helper: a new host script runs the installer, no leftover temp files
 ran.clear()
 r = up.handle(hreq(helper_zip(), "2.0.0"), installer=lambda root: ran.append(root))
 ok("install-helper: no new host means no installer run", r.get("ok") and not ran, (r, ran))
+ok("install-helper: no new .py and no code-reader.zip -> no installer call", r.get("ok") and not ran, (r, ran))
+import hashlib
+
+reader_zip = ("passbridge-macos-helper/code-reader.zip", "fake app zip A")
+ran.clear()
+r = up.handle(hreq(helper_zip("2.0.0", [reader_zip]), "2.0.0"), installer=lambda root: ran.append(root))
+ok("install-helper: new code-reader.zip sha runs installer", r.get("ok") and len(ran) == 1, (r, ran))
+(app / "code-reader.sha").write_text(hashlib.sha256(b"fake app zip A").hexdigest() + "\n")
+ran.clear()
+r = up.handle(hreq(helper_zip("2.0.0", [reader_zip]), "2.0.0"), installer=lambda root: ran.append(root))
+ok("install-helper: same sha does not", r.get("ok") and not ran, (r, ran))
+ran.clear()
+r = up.handle(hreq(helper_zip("2.0.0", [("passbridge-macos-helper/code-reader.zip", "fake app zip B")]), "2.0.0"), installer=lambda root: ran.append(root))
+ok("install-helper: a different code-reader.zip sha runs installer again", r.get("ok") and len(ran) == 1, (r, ran))
 for label, z, v in [
     ("no VERSION file", helper_zip(None), "3.0.0"),
     ("path traversal", helper_zip("3.0.0", [("passbridge-macos-helper/../../evil.py", "x")]), "3.0.0"),

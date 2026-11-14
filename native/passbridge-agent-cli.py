@@ -8,7 +8,7 @@ import subprocess
 import sys
 import uuid
 
-USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | save --url <https-url> <username>  (save reads the password from stdin)"
+USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | verify-code <tabId> [site] | save --url <https-url> <username>  (save reads the password from stdin)"
 
 WINDOWS = os.name == "nt"
 if WINDOWS:
@@ -79,7 +79,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(USAGE)
         return 0
-    if not argv or argv[0] not in ("status", "pair-start", "pair-pin", "logins", "sign_in", "save"):
+    if not argv or argv[0] not in ("status", "pair-start", "pair-pin", "logins", "sign_in", "save", "verify-code"):
         print(USAGE, file=sys.stderr)
         return 2
     if under_wsl():
@@ -98,6 +98,8 @@ def main(argv):
         req["tabId"] = int(argv[1])
     if argv[0] == "sign_in" and len(argv) > 2:
         req["username"] = argv[2]
+    if argv[0] == "verify-code" and len(argv) > 2:
+        req["site"] = argv[2]
     if argv[0] == "save":
         if by_url:
             if len(argv) < 4:

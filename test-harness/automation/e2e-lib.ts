@@ -12,9 +12,11 @@ export const AGENT_CLI = join(HERE, "..", "..", "native", "passbridge-agent-cli.
 export const PLATFORMS: ("mac" | "win")[] = ["mac", "win"];
 const HOST = join(HERE, "..", "fake-apple-helper", "host.ts");
 const AGENT = join(HERE, "..", "..", "native", "passbridge-agent.py");
+const FAKE_READER = join(HERE, "..", "fake-code-reader.py");
+const FAKE_OLD_RELAY = join(HERE, "..", "fake-old-relay.py");
 
 // platform: "mac" or "win". Returns the browser context, the helper and the folders it uses.
-export async function startE2E(platform: "mac" | "win", { agent = false, vault }: { agent?: boolean, vault?: ReturnType<typeof seedVault> } = {}) {
+export async function startE2E(platform: "mac" | "win", { agent = false, vault, codeReader = false, relay = "real" }: { agent?: boolean, vault?: ReturnType<typeof seedVault>, codeReader?: boolean, relay?: "real" | "old" } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "pb-e2e-"));
   const helper = new FakeHelper({ style: platform, vault: vault ?? seedVault() });
   const sock = await serveHelper(helper, join(dir, "helper.sock"));
@@ -23,7 +25,9 @@ export async function startE2E(platform: "mac" | "win", { agent = false, vault }
   if (agent) {
     // the relay is not an executable file in the repo, so the browser starts it through a small launcher
     const launcher = join(dir, "agent-host.sh");
-    await writeFile(launcher, `#!/bin/sh\nexec python3 -I "${AGENT}"\n`);
+    // codeReader: the relay starts the fake reader instead of the app, through python3 -I like the relay itself
+    const reader = codeReader ? `export PASSBRIDGE_CODE_READER='["python3","-I","${FAKE_READER}"]'\n` : "";
+    await writeFile(launcher, `#!/bin/sh\n${reader}exec python3 -I "${relay === "old" ? FAKE_OLD_RELAY : AGENT}"\n`);
     hosts["com.passbridge.agent"] = launcher;
   }
   const ctx = await launchExtension(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`), {
