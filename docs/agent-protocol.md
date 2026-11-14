@@ -168,3 +168,5 @@ The reference CLI adds two codes of its own, without an `id`: `no_host`, when it
 ## Removed
 
 `fill_code` (filling a one-time code the agent supplied) was removed before 1.4.0 and now returns `unknown_op`. `verify_code` is not its return: the agent never sends or receives a code.
+
+A one-day spike on whether a program outside the browser can use Apple's helper, with its findings and a go or no-go for a desktop app, is in [desktop-app-spike.md](desktop-app-spike.md).
