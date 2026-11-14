@@ -419,6 +419,8 @@ def file_text(n):
 files_text = "".join(file_text(n) for n in os.listdir(sr.dir) if os.path.isfile(sr.path(n)))
 ok("stdout: the code is in no argv and no file in the app folder, no socket files exist", CODE not in argv_text and CODE not in files_text and sr.reader_files() == [], (argv_text, sr.reader_files()))
 
+# one relay at a time: on Windows every relay listens on the same per-user pipe
+sr.stop()
 # a reader that hangs: killed at the total deadline (shortened here)
 sd = CodeRelay(total_s=3, stdout=True)
 t0 = time.time()
@@ -437,7 +439,6 @@ sm.wait_file("fake-reader-beat", 5)
 sm.proc.stdin.close()
 ok("stdout: relay stdin closed mid-read -> the child is killed", sm.beat_stops(5))
 sm.stop()
-sr.stop()
 out = b"".join(open(x.err.name, "rb").read() for x in (sr, sd, sm))
 ok("stdout: relay stderr is empty and holds no code across all scenarios", out == b"" and CODE.encode() not in out, out)
 
