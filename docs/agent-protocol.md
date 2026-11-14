@@ -63,7 +63,7 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 | `sign_in` | `tabId` (number), `username` (optional string), `site` (optional string) | fills that login into the tab's sign-in form |
 | `pair_start` | none | asks Apple's Passwords to show a pairing code. Replies `{"ok":true,"state":"paired"}` when already paired, else `{"ok":true,"state":"needs_pin"}` (a new code, or the one already on screen) |
 | `pair_pin` | `pin` (string, exactly 6 digits) | checks the code shown on the Mac. Replies `{"ok":true,"state":"paired"}`, or `wrong_pin` |
-| `verify_code` | `tabId` (number), `site` (optional string) | macOS only. Presses Allow on Apple's sign-in prompt on the Mac, reads the 6-digit code and enters it in that tab. The reply holds no digits (see Verification codes below) |
+| `verify_code` | `tabId` (number), `site` (optional string) | macOS and Windows. Presses Allow on Apple's sign-in prompt on this computer, reads the 6-digit code and enters it in that tab. The reply holds no digits (see Verification codes below) |
 | `save` | `tabId` (number) or `url` (string, `https://`), not both; `username` (string), `password` (string), `site` (optional string) | adds a new login for the tab's site, or for the site of `url` when no tab is named. Add-only: if that username already has a login for the site, the reply is `exists` and nothing changes |
 
 `pair_start` and `pair_pin` need Allow agent sign-in but no tab and no allowlist, and both count toward the rate limit. After 5 wrong codes in a row, `pair_pin` answers `locked` until a `pair_start` issues a fresh code. The pin is never in a reply or the Activity list.
@@ -74,24 +74,26 @@ On Windows, iCloud for Windows shows the code in a window that is excluded from 
 
 `site` is the site the client believes the tab is on, a host or a URL. If the tab's host is not that site or a subdomain of it, the reply is `not_allowed` with `reason: "site_mismatch"`. A client that leaves `site` out still works. Send it, so a tab that navigated away between your steps is refused.
 
-## Verification codes (macOS)
+## Verification codes (macOS and Windows)
 
-Off by default and macOS only. In Settings, on the Agents tab, the user turns on Allow agents to read verification codes and verify for you. The setting is per browser profile and lives in `chrome.storage.local`, so it is never synced to another device. It only does anything while Allow agent sign-in is on.
+Off by default, and only on macOS and Windows. In Settings, on the Agents tab, the user turns on Allow agents to read verification codes and verify for you. The setting is per browser profile and lives in `chrome.storage.local`, so it is never synced to another device. It only does anything while Allow agent sign-in is on.
 
 `verify_code` takes `tabId` and an optional `site`, and is for an Apple sign-in page (`appleid.apple.com`, `account.apple.com`, `idmsa.apple.com`, `www.icloud.com` or `icloud.com`, matched exactly) that is on the agent allowlist. Allow every site (*) does not apply. It works in this order, and each step that fails ends the request with the error shown:
 
-1. the setting is on, else `not_allowed` with `reason: "code_reader_off"`; the platform is macOS, else `not_allowed` with `reason: "mac_only"`;
+1. the setting is on, else `not_allowed` with `reason: "code_reader_off"`; the platform is macOS or Windows, else `not_allowed` with `reason: "mac_only"`;
 2. `url` is not accepted (`bad_request`); the tab exists (`no_tab`); `site` matches the tab (`site_mismatch`); the host is not blocked and is on the allowlist, and PassBridge may fill there (`not_allowed`); the host is an Apple sign-in host (`not_apple_site`);
 3. fewer than 3 `verify_code` requests succeeded the field probe in the last 10 minutes (`rate_limited`);
 4. the page has a code field (`no_field`). Nothing is spent and the reader is not started before this probe passes;
-5. the reader presses Allow on Apple's prompt on the Mac, with no tap from the user, and reads the 6 digits;
+5. the reader presses Allow on Apple's prompt on this computer, with no tap from the user, and reads the 6 digits;
 6. the extension checks the digits again, checks the setting is still on (switching it off mid-read cancels the read), and enters the code only in the field it probed. The digits go from the reader to that field and nowhere else: not to the agent, not to the Activity list, not to a log.
 
 Success is `{"id":"…","ok":true,"domain":"appleid.apple.com","filled":true}`. A notification names the site each time, whether or not the code was entered. `verify_code` does not submit the page; the client clicks the page's own button.
 
-Errors from the reader: `busy` (another read is running), `no_prompt` (no Apple prompt appeared), `several_prompts` (more than one, so nothing is pressed), `not_configured` (this build has no recorded prompt description), `reader_missing` (the code reader app or the relay support for it is missing), `reader_failed` (it crashed, timed out or sent something that was not 6 digits), and `needs_user` with `reason: "reader_permission"` (PassBridge Code Reader has no Accessibility access). The Python relay passes the code reader work to a signed app, `PassBridge Code Reader`, over a private socket in the app folder. The one-time nonce is in a `0600` file next to that socket (never in argv), the socket closes after the first connection, and a read is cancelled when the extension or the setting goes away.
+Errors from the reader: `busy` (another read is running), `no_prompt` (no Apple prompt appeared), `several_prompts` (more than one, so nothing is pressed), `not_configured` (this build has no recorded prompt description), `reader_missing` (the code reader app or the relay support for it is missing), `reader_failed` (it crashed, timed out or sent something that was not 6 digits), and `needs_user` with `reason: "reader_permission"` (PassBridge Code Reader has no Accessibility access, macOS only). The Python relay passes the code reader work to a signed app, `PassBridge Code Reader`, over a private socket in the app folder. The one-time nonce is in a `0600` file next to that socket (never in argv), the socket closes after the first connection, and a read is cancelled when the extension or the setting goes away.
 
 The reader presses Allow on Apple's prompt, reads the 6 digits, then presses Done on that prompt. It refuses to run (presses nothing, sends nothing) unless the socket it is given is a `reader-*.sock` directly in the PassBridge app folder and the process listening on it, found through the socket's peer pid, was started with the relay script installed in that folder (`passbridge-agent.py`). The self-test (`--self-test`) covers a foreign script, a foreign socket path, a wrong socket name and an unreadable peer.
+
+On Windows there is no signed app and no socket. The relay starts `code-reader.ps1` from the app folder with PowerShell (`-NoProfile -NonInteractive -ExecutionPolicy Bypass -File`, for that one file only), as the signed-in user and without admin rights. The script reads iCloud for Windows' windows with UI Automation, presses Allow once, reads the 6 digits, presses Done and prints one JSON line on stdout, which is a pipe private to the relay (stdin and stderr are discarded). Accessibility access is not needed on Windows. `code-reader.json` next to the script names the iCloud helper's processes, the Allow and Done AutomationIds, the code pattern and the timeout; it ships with `TODO-DESCRIBE` values, so the reader answers `not_configured` and presses nothing until the real prompt is recorded. Only windows of the named processes count. Output that is not JSON, not 6 digits, a non-zero exit or a crash is `reader_failed`; a missing script or config is `reader_missing`. A cancel or the total time limit kills the child. The self-test is `powershell -File native/windows/code-reader.ps1 -SelfTest test-harness/code-reader-fixtures-win`.
 
 Residual limit: PassBridge is not a barrier against other programs running as the same user. Such a program can start a copy of the relay script from the app folder, or change the process arguments it shows, and so pass the reader's check. The reader cannot see the extension's setting, the allowlist or the rate limit; those are enforced only on the path through the extension. The claim that digits are never returned to an agent holds for requests through the relay, not against a hostile same-user program.
 
@@ -136,19 +138,19 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `locked` | `pair_pin`: 5 wrong codes in a row; send `pair_start` for a fresh code |
 | `exists` | `save`: a login with that username already exists for the site |
 | `no_tab` | no tab with that id, or it has no URL |
-| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Allow agents to save new logins is off (`reason: "save_off"`), or `verify_code` with the setting off (`reason: "code_reader_off"`), off macOS (`reason: "mac_only"`) or on a page that is not an Apple sign-in host (`reason: "not_apple_site"`) |
+| `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Allow agents to save new logins is off (`reason: "save_off"`), or `verify_code` with the setting off (`reason: "code_reader_off"`), on a platform other than macOS and Windows (`reason: "mac_only"`) or on a page that is not an Apple sign-in host (`reason: "not_apple_site"`) |
 | `rate_limited` | more than 10 `sign_in` or `save` requests in 10 minutes, or more than 3 `verify_code` requests in 10 minutes (counted separately) |
 | `needs_user` | the user has to act: the extension isn't paired, or the Passwords approval (Touch ID) was refused or not given in time |
 | `no_login` | no saved login for the site, or none matching `username` |
 | `choose_login` | several logins and no `username` given; pick one from `usernames` |
 | `fill_failed` | no sign-in form was found or the fill didn't take (`verify_code`: the code was read but not entered) |
 | `no_field` | `verify_code`: the tab has no code field |
-| `busy`, `no_prompt`, `several_prompts`, `not_configured`, `reader_missing`, `reader_failed` | `verify_code`: see Verification codes (macOS) |
+| `busy`, `no_prompt`, `several_prompts`, `not_configured`, `reader_missing`, `reader_failed` | `verify_code`: see Verification codes (macOS and Windows) |
 | `timeout` | the extension didn't answer within 90 s (sent by the host) |
 | `extension_gone` | the browser or extension went away mid-request (sent by the host) |
 
 The reference CLI: `status`, `pair-start`, `pair-pin` (reads the 6 digits as one line from stdin, never from the command line, for example `printf '%s
-' 123456 | python3 passbridge-agent-cli.py pair-pin`), `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>` or `save --url <https-url> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`, or `... save --url https://github.com/login octocat`. `verify-code <tabId> [site]` runs `verify_code` (macOS only).
+' 123456 | python3 passbridge-agent-cli.py pair-pin`), `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>` or `save --url <https-url> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`, or `... save --url https://github.com/login octocat`. `verify-code <tabId> [site]` runs `verify_code` (macOS and Windows only).
 
 The reference CLI adds two codes of its own, without an `id`: `no_host`, when it can't connect, and `no_reply`, when the connection closed with no answer. Wait at least 90 s for a reply, because a Touch ID prompt can take that long. The CLI waits 100 s.
 
