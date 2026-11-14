@@ -266,7 +266,8 @@ async function pair(op, msg, deps) {
  */
 async function verifyCode(msg, deps, limiter, now, settings, base, done) {
   if (!(await deps.codeReaderOn?.())) return done(fail("not_allowed", { reason: "code_reader_off" }));
-  if ((await deps.platform?.()) !== "mac") return done(fail("not_allowed", { reason: "mac_only" }));
+  const platform = await deps.platform?.();
+  if (platform !== "mac" && platform !== "win") return done(fail("not_allowed", { reason: "mac_only" }));
   if (msg.url != null) return done(fail("bad_request"));
   /** @type {any} */
   let tab = null;

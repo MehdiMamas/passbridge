@@ -45,6 +45,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -I test-harness/automation/agent-relay.test.py
+      - name: Windows code reader self-test
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -File native/windows/code-reader.ps1 -SelfTest test-harness/code-reader-fixtures-win
 
   # the Swift verification code reader: build ad-hoc, run its fixture self-test, and check install.sh builds it once and then reports it up to date
   code-reader:

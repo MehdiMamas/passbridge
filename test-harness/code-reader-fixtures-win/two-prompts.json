@@ -1,0 +1,42 @@
+{
+ "config": {
+  "processNames": [
+   "ExampleHelper"
+  ],
+  "allowAutomationId": "allow-btn",
+  "doneAutomationId": "done-btn",
+  "codePattern": "^\\d{3}\\s?\\d{3}$",
+  "timeoutMs": 2000
+ },
+ "timeline": [
+  {
+   "tick": 0,
+   "windows": []
+  },
+  {
+   "tick": 2,
+   "windows": [
+    {
+     "key": "p1",
+     "buttons": [
+      "allow-btn"
+     ],
+     "texts": [],
+     "process": "ExampleHelper"
+    },
+    {
+     "key": "p2",
+     "buttons": [
+      "allow-btn"
+     ],
+     "texts": [],
+     "process": "ExampleHelper"
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "result": "several_prompts",
+  "pressed": []
+ }
+}

@@ -282,8 +282,12 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   ok("verify_code: reader off -> code_reader_off, readCode not called", r.error === "not_allowed" && r.reason === "code_reader_off" && calls.read === 0);
   r = await vc({}, { getSettings: async () => ({ agentSignIn: false, agentAllowlist: ["apple.com"] }) });
   ok("verify_code: sign-in off -> not_enabled", r.error === "not_enabled" && calls.read === 0);
+  r = await vc({}, { platform: async () => "linux" });
+  ok("verify_code: platform() resolves neither mac nor win -> mac_only", r.error === "not_allowed" && r.reason === "mac_only" && calls.read === 0);
   r = await vc({}, { platform: async () => "win" });
-  ok("verify_code: platform() resolves win -> mac_only", r.error === "not_allowed" && r.reason === "mac_only" && calls.read === 0);
+  ok("verify_code: platform() resolves win -> the read runs", r.ok === true && calls.read === 1);
+  r = await vc({}, { platform: async () => "mac" });
+  ok("verify_code: platform() resolves mac -> the read runs", r.ok === true && calls.read === 1);
   r = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true }) });
   ok("verify_code: not allowlisted, allowAll on -> not_allowed", r.error === "not_allowed" && !r.reason && calls.probe === 0 && calls.read === 0);
   r = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }), getTab: async () => ({ id: 1, url: "https://github.com/login" }) });

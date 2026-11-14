@@ -443,8 +443,8 @@
   "err_noTotpSetup": { "message": "此辅助程序无法设置验证码。" },
   "err_noNewPasswordSheet": { "message": "此辅助程序无法打开新密码页面。" },
   "agentCodeReader": {"message": "允许代理读取验证码并为你验证"},
-  "agentCodeReaderHelp": {"message": "仅限这台 Mac 上的此浏览器配置文件。当代理在允许的 Apple 登录页面登录 Apple 账户时，PassBridge 会替你点按 Apple 提示中的“允许”，无需你操作，并在该标签页中输入验证码。代理永远看不到验证码。需要为 PassBridge Code Reader 授予辅助功能权限（见设置说明）。每 10 分钟最多 3 次，每次都会有通知。"},
-  "agentCodeReaderMacOnly": {"message": "目前仅支持 macOS。"},
+  "agentCodeReaderHelp": {"message": "仅限这台电脑上的此浏览器配置文件。当代理在允许的 Apple 登录页面登录 Apple 账户时，PassBridge 会替你点按 Apple 提示中的“允许”，无需你操作，并在该标签页中输入验证码。代理永远看不到验证码。在 macOS 上需要为 PassBridge Code Reader 授予辅助功能权限（见设置说明），在 Windows 上无需额外设置。每 10 分钟最多 3 次，每次都会有通知。"},
+  "agentCodeReaderMacOnly": {"message": "目前仅支持 macOS 和 Windows。"},
   "agentCodeFilled": {"message": "已在 $1 上输入 Apple 验证码", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}},
   "agentCodeNotFilled": {"message": "已读取 $1 的 Apple 验证码，但找不到可输入的字段", "placeholders": {"site": {"content": "$1", "example": "apple.com"}}}
 }

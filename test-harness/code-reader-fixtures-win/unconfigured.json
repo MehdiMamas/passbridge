@@ -1,0 +1,34 @@
+{
+ "config": {
+  "processNames": [
+   "TODO-DESCRIBE"
+  ],
+  "allowAutomationId": "TODO-DESCRIBE",
+  "doneAutomationId": "done-btn",
+  "codePattern": "^\\d{3}\\s?\\d{3}$",
+  "timeoutMs": 2000
+ },
+ "timeline": [
+  {
+   "tick": 0,
+   "windows": []
+  },
+  {
+   "tick": 2,
+   "windows": [
+    {
+     "key": "p1",
+     "buttons": [
+      "allow-btn"
+     ],
+     "texts": [],
+     "process": "ExampleHelper"
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "result": "not_configured",
+  "pressed": []
+ }
+}

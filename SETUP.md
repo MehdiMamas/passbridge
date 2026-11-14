@@ -69,16 +69,18 @@ Apple's Passwords asks for Touch ID every time a password is read (except within
 
 Errors you may see: `not_enabled`, `bad_pin`, `wrong_pin`, `locked`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
 
-### Verification codes (macOS)
+### Verification codes (macOS and Windows)
 
-Optional, off by default, macOS only. When an agent signs in to an Apple Account, Apple shows a prompt on this Mac and a 6-digit code. With this on, PassBridge Code Reader presses Allow on that prompt for you, with no tap from you, reads the code and enters it in the agent's allowed Apple sign-in tab. The agent never sees the code. Use it only if you are fine with that.
+Optional, off by default, macOS and Windows only. When an agent signs in to an Apple Account, Apple shows a prompt on this computer and a 6-digit code. With this on, PassBridge Code Reader (on Windows, a PowerShell script installed with the helper) presses Allow on that prompt for you, with no tap from you, reads the code and enters it in the agent's allowed Apple sign-in tab. The agent never sees the code. Use it only if you are fine with that.
+
+On Windows, run `native/windows/install.ps1` again instead (it copies `code-reader.ps1` and `code-reader.json` into the PassBridge folder); Accessibility is not needed, because UI Automation works in your own signed-in session, so skip step 2. Until the real Apple prompt is described in `code-reader.json`, the reader answers `not_configured` and presses nothing.
 
 1. Run `./native/install.sh` again. A release helper zip includes the signed reader; a source checkout builds it ad-hoc if Xcode's command line tools are installed.
 2. In System Settings > Privacy & Security > Accessibility, turn on PassBridge Code Reader.
 3. In PassBridge settings, on the Agents tab, turn on Allow agent sign-in, then Allow agents to read verification codes and verify for you. The setting belongs to this browser profile only; turn it on in each profile that needs it, and turn it off there to stop it.
 4. Test with `"$P/passbridge-agent-cli.py" verify-code <tabId>` on an allowlisted Apple sign-in tab.
 
-You get a notification each time a code is entered, and at most 3 are allowed in 10 minutes. A build from source is signed ad-hoc, so macOS asks for the Accessibility grant again after each rebuild. Uninstalling removes the grant.
+You get a notification each time a code is entered, and at most 3 are allowed in 10 minutes. A build from source is signed ad-hoc, so macOS asks for the Accessibility grant again after each rebuild. Uninstalling removes the grant (macOS) or the two reader files (Windows).
 
 ### Agent sign-in (Windows)
 

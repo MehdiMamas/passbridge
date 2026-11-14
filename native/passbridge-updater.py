@@ -340,6 +340,18 @@ def install_helper(zip_bytes, version, installer=None):
                     new_reader = f.read().strip() != have
             except OSError:
                 new_reader = True
+        # the Windows reader files: a changed or missing copy in the app folder needs the installer too
+        for name in ("code-reader.ps1", "code-reader.json"):
+            src = os.path.join(root, name)
+            if not os.path.isfile(src):
+                continue
+            with open(src, "rb") as f:
+                want = hashlib.sha256(f.read()).hexdigest()
+            try:
+                with open(os.path.join(APPDIR, name), "rb") as f:
+                    new_reader = new_reader or hashlib.sha256(f.read()).hexdigest() != want
+            except OSError:
+                new_reader = True
         if new_hosts or new_reader:
             (installer or run_installer)(root)
         with open(os.path.join(APPDIR, HELPER_VERSION_FILE), "w", encoding="utf-8") as f:
