@@ -211,19 +211,20 @@ class CodeRelay:
         return False
 
     def beat_stops(self, within):
-        # the hanging fake reader writes a heartbeat; it stops when the relay kills the process
+        # the hanging fake reader writes a heartbeat; it stops when the relay kills the process.
+        # a kill can land between the fake's truncate and write, so an unchanged (even empty) file counts, a missing or unreadable one does not
+        def beat():
+            try:
+                with open(self.path("fake-reader-beat")) as f:
+                    return f.read()
+            except OSError:
+                return None
+
         end = time.time() + within
         while time.time() < end:
-            try:
-                a = open(self.path("fake-reader-beat")).read()
-            except OSError:
-                a = ""
+            a = beat()
             time.sleep(0.4)
-            try:
-                b = open(self.path("fake-reader-beat")).read()
-            except OSError:
-                b = ""
-            if a and a == b:
+            if a is not None and a == beat():
                 return True
         return False
 
@@ -385,7 +386,7 @@ for sc, want in (("no_prompt", "no_prompt"), ("several_prompts", "several_prompt
 
 # busy, a stale cancel, and a real cancel that kills the child
 sr.start("s-h1", "hang")
-ok("stdout: hang: the fake reader started", sr.wait_file("fake-reader-connected", 5))
+ok("stdout: hang: the fake reader started", sr.wait_file("fake-reader-connected", 5) and sr.wait_file("fake-reader-beat", 5))
 r = sr.read("s-h2", "ok")
 ok("stdout: a second read_code while one runs -> busy", err(r) == "busy", r)
 sr.scenario("hang")  # the busy read must not have disturbed the running one
@@ -398,7 +399,7 @@ ok("stdout: cancel_code kills the child", sr.beat_stops(4))
 
 # a read right after a cancel runs
 sr.start("s-h3", "hang")
-sr.wait_file("fake-reader-connected", 5)
+sr.wait_file("fake-reader-beat", 5)
 sr.send({"cmd": "cancel_code", "rid": "s-h3"})
 sr.scenario("ok")
 sr.send({"cmd": "read_code", "rid": "s-after"})
@@ -407,23 +408,32 @@ ok("stdout: read_code right after cancel_code -> runs", r and r.get("ok") is Tru
 
 # the code is in no argv, no file in the app folder and no stderr
 argv_text = open(sr.path("fake-reader-argv")).read()
-files_text = "".join(open(sr.path(n), "rb").read().decode("latin-1") for n in os.listdir(sr.dir) if os.path.isfile(sr.path(n)) and n != "agent.key")
+def file_text(n):
+    try:
+        with open(sr.path(n), "rb") as f:
+            return f.read().decode("latin-1")
+    except OSError:  # the relay's lock file is held open on Windows
+        return ""
+
+
+files_text = "".join(file_text(n) for n in os.listdir(sr.dir) if os.path.isfile(sr.path(n)))
 ok("stdout: the code is in no argv and no file in the app folder, no socket files exist", CODE not in argv_text and CODE not in files_text and sr.reader_files() == [], (argv_text, sr.reader_files()))
 
 # a reader that hangs: killed at the total deadline (shortened here)
-sd = CodeRelay(total_s=1.5, stdout=True)
+sd = CodeRelay(total_s=3, stdout=True)
 t0 = time.time()
 sd.start("s-dl", "hang")
-r = sd.code("s-dl", 8)
+sd.wait_file("fake-reader-beat", 5)
+r = sd.code("s-dl", 10)
 took = time.time() - t0
-ok("stdout: reader runs longer than the total time -> reader_failed", err(r) == "reader_failed" and 1.2 < took < 5, (r, took))
+ok("stdout: reader runs longer than the total time -> reader_failed", err(r) == "reader_failed" and 2.5 < took < 9, (r, took))
 ok("stdout: reader runs longer than the total time -> the child is killed", sd.beat_stops(4))
 sd.stop()
 
 # the extension goes away mid-read: the child is killed
 sm = CodeRelay(stdout=True)
 sm.start("s-m1", "hang")
-sm.wait_file("fake-reader-connected", 5)
+sm.wait_file("fake-reader-beat", 5)
 sm.proc.stdin.close()
 ok("stdout: relay stdin closed mid-read -> the child is killed", sm.beat_stops(5))
 sm.stop()
