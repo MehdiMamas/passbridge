@@ -71,5 +71,9 @@ ok("save --url without a username is refused", r.returncode == 2, r.stderr)
 r = cli("osr-linux", "save", "--url", "https://site.example/login", "u@x.com", stdin="")
 ok("save --url with an empty stdin is refused", r.returncode == 2, r.stderr)
 
+r = cli("osr-wsl", "verify-code", "7", "apple.com")
+argv = (TMP / "argv").read_text().splitlines()
+ok("verify-code is re-exec'd with the same argv", r.returncode == 0 and argv == ["-3", "C:\\wsl\\cli.py", "verify-code", "7", "apple.com"], argv)
+
 shutil.rmtree(TMP, ignore_errors=True)
 sys.exit(0 if all(results) else 1)
