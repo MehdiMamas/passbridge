@@ -52,5 +52,5 @@ export async function pairFromMenu(page: import("playwright").Page, helper: Fake
   await waitFor(async () => helper.codesShown.length > codes && (await pierced(page)).menuInput() !== null, 10000);
   await typeInMenu(page, helper.code);
   await waitFor(() => helper.pairings > pairings, 10000);
-  return helper.paired;
+  return helper.pairings > pairings;
 }
