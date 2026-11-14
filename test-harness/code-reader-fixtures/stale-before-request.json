@@ -1,0 +1,92 @@
+{
+ "config": {
+  "bundleIds": [
+   "com.example.prompt"
+  ],
+  "allowButton": {
+   "identifier": "allow-btn"
+  },
+  "doneButton": {
+   "identifier": "done-btn"
+  },
+  "codePattern": "^\\d{3}\\s?\\d{3}$",
+  "timeoutMs": 2000
+ },
+ "timeline": [
+  {
+   "tick": 0,
+   "windows": [
+    {
+     "key": "old",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "allow-btn"
+      }
+     ],
+     "texts": []
+    }
+   ]
+  },
+  {
+   "tick": 2,
+   "windows": [
+    {
+     "key": "old",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "allow-btn"
+      }
+     ],
+     "texts": []
+    },
+    {
+     "key": "p1",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "allow-btn"
+      }
+     ],
+     "texts": []
+    }
+   ]
+  },
+  {
+   "tick": 4,
+   "windows": [
+    {
+     "key": "old",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "allow-btn"
+      }
+     ],
+     "texts": []
+    },
+    {
+     "key": "c1",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "done-btn"
+      }
+     ],
+     "texts": [
+      "731 204"
+     ]
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "result": "ok",
+  "pressed": [
+   "p1:allow-btn",
+   "c1:done-btn"
+  ],
+  "code": "731204"
+ }
+}

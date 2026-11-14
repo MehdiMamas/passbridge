@@ -1,0 +1,50 @@
+{
+ "config": {
+  "bundleIds": [
+   "com.example.prompt"
+  ],
+  "allowButton": {
+   "identifier": "allow-btn"
+  },
+  "doneButton": {
+   "identifier": "done-btn"
+  },
+  "codePattern": "^\\d{3}\\s?\\d{3}$",
+  "timeoutMs": 2000
+ },
+ "timeline": [
+  {
+   "tick": 0,
+   "windows": []
+  },
+  {
+   "tick": 2,
+   "windows": [
+    {
+     "key": "p1",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "allow-btn"
+      }
+     ],
+     "texts": []
+    },
+    {
+     "key": "p2",
+     "bundleId": "com.example.prompt",
+     "buttons": [
+      {
+       "identifier": "allow-btn"
+      }
+     ],
+     "texts": []
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "result": "several_prompts",
+  "pressed": []
+ }
+}
