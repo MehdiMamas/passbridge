@@ -24,7 +24,7 @@ const BROWSER_ROWS = [
   "Hide the browser's password manager",
   "The browser's saved passwords",
 ];
-const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Let agents save new logins", "Allow agents to read verification codes and verify for you", "Allowed sites", "Activity"];
+const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allow agents to save new logins", "Allow agents to read verification codes and verify for you", "Allowed sites", "Activity"];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el: Element) {
