@@ -366,7 +366,7 @@ await main(async () => {
       await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: false }));
       await rp.goto(`${rUrl}#agents`);
       await codeSwitch.waitFor();
-      ok("options: code reader locked while sign-in off", (await codeSwitch.isDisabled()) && (await codeRow.locator("[data-help]").innerText()).includes("Needs Accessibility access"));
+      ok("options: code reader locked while sign-in off", (await codeSwitch.isDisabled()) && (await codeRow.locator("[data-help]").innerText()).includes("Accessibility access"));
       await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));
       await rp.reload();
       await codeSwitch.waitFor();
