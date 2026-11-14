@@ -3,7 +3,7 @@
 // idmsa.apple.com is served by the browser's route, with a 6-box code field.
 
 import { execFile } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, rmSync } from "fs";
 import { mkdir, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { BASE, main, ok } from "./lib.ts";
@@ -187,8 +187,12 @@ await main(async () => {
 
       // a field that already has a digit asks for nothing
       await scenario(appDir, "ok");
+      rmSync(join(appDir, "fake-reader-argv"), { force: true });
+      await sw.evaluate(() => ((globalThis as any).__notes.length = 0));
       const filledAlready = await open("code");
-      await filledAlready.page.fill('input[name="code1"]', "7");
+      await filledAlready.page.evaluate(() => {
+        (document.querySelector('input[name="code1"]') as HTMLInputElement).value = "7";
+      });
       await filledAlready.page.focus('input[name="code1"]');
       await home.waitForTimeout(1500);
       ok(t("given the field already has digits -> the reader is not started"), !started());
@@ -196,6 +200,7 @@ await main(async () => {
 
       // not an Apple sign-in host
       await scenario(appDir, "ok");
+      rmSync(join(appDir, "fake-reader-argv"), { force: true });
       await ctx.route("https://sign-in.example.test/**", (r) => r.fulfill({ contentType: "text/html", body: CODE_PAGE }));
       const other = await ctx.newPage();
       await other.goto("https://sign-in.example.test/", { waitUntil: "domcontentloaded" });
@@ -206,17 +211,20 @@ await main(async () => {
 
       // no prompt: silent
       await scenario(appDir, "no_prompt");
+      rmSync(join(appDir, "fake-reader-argv"), { force: true });
+      await sw.evaluate(() => ((globalThis as any).__notes.length = 0));
       const quiet = await open("code");
       await quiet.page.focus('input[name="code1"]');
       for (let i = 0; i < 40 && !started(); i++) await home.waitForTimeout(100);
       await home.waitForTimeout(1000);
       const notes2 = (await sw.evaluate(() => (globalThis as any).__notes)) as string[];
-      ok(t("given no Apple prompt -> nothing filled and no new notification"), (await boxesOf(quiet.page)) === "" && notes2.length === 1, `${await boxesOf(quiet.page)} ${notes2.length}`);
+      ok(t("given no Apple prompt -> nothing filled and no new notification"), (await boxesOf(quiet.page)) === "" && notes2.length === 0, `${await boxesOf(quiet.page)} ${notes2.length}`);
       await quiet.page.close();
 
       // switch off: nothing
       await sw.evaluate(() => chrome.storage.local.set({ agentCodeReader: false }));
       await scenario(appDir, "ok");
+      rmSync(join(appDir, "fake-reader-argv"), { force: true });
       const off = await open("code");
       await off.page.focus('input[name="code1"]');
       await home.waitForTimeout(1500);
