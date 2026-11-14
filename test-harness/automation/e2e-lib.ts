@@ -44,10 +44,13 @@ export async function startE2E(platform: "mac" | "win", { agent = false, vault, 
 
 // pair from a login page's menu: click "Unlock to autofill", then type the code the helper is showing
 export async function pairFromMenu(page: import("playwright").Page, helper: FakeHelper, field: string = 'input[name="username"]') {
+  // a code or a pairing from before this call (an earlier pairing, a connection not closed yet) must not count
+  const codes = helper.codesShown.length;
+  const pairings = helper.pairings;
   await page.focus(field);
   await clickMenuWhenShown(page, "Unlock to autofill");
-  await waitFor(async () => helper.code !== undefined && (await pierced(page)).menuInput() !== null, 10000);
+  await waitFor(async () => helper.codesShown.length > codes && (await pierced(page)).menuInput() !== null, 10000);
   await typeInMenu(page, helper.code);
-  await waitFor(() => helper.paired, 10000);
+  await waitFor(() => helper.pairings > pairings, 10000);
   return helper.paired;
 }
