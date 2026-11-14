@@ -6,7 +6,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { FakeHelper, seedVault } from "../fake-apple-helper/helper.ts";
 import { serveHelper } from "../fake-apple-helper/serve.ts";
-import { HERE, build, clickMenu, launchExtension, onCleanup, typeInMenu } from "./lib.ts";
+import { HERE, build, clickMenu, launchExtension, onCleanup, pierced, typeInMenu, waitFor, clickMenuWhenShown } from "./lib.ts";
 
 export const AGENT_CLI = join(HERE, "..", "..", "native", "passbridge-agent-cli.py");
 export const PLATFORMS: ("mac" | "win")[] = ["mac", "win"];
@@ -41,10 +41,9 @@ export async function startE2E(platform: "mac" | "win", { agent = false, vault }
 // pair from a login page's menu: click "Unlock to autofill", then type the code the helper is showing
 export async function pairFromMenu(page: import("playwright").Page, helper: FakeHelper, field: string = 'input[name="username"]') {
   await page.focus(field);
-  await page.waitForTimeout(600);
-  await clickMenu(page, "Unlock to autofill");
-  await page.waitForTimeout(1500);
+  await clickMenuWhenShown(page, "Unlock to autofill");
+  await waitFor(async () => helper.code !== undefined && (await pierced(page)).menuInput() !== null, 10000);
   await typeInMenu(page, helper.code);
-  await page.waitForTimeout(2000);
+  await waitFor(() => helper.paired, 10000);
   return helper.paired;
 }

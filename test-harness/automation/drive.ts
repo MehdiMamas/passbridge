@@ -1,5 +1,5 @@
 import { join } from "path";
-import { BASE, SHOTS, build, clickMenu, launchExtension, main, menuShown, menuText, ok, pierced } from "./lib.ts";
+import { BASE, SHOTS, build, clickMenu, launchExtension, main, menuShown, menuText, ok, pierced, waitFor } from "./lib.ts";
 
 await main(async () => {
   const ctx = await launchExtension(build("unlocked"));
@@ -119,11 +119,11 @@ await main(async () => {
   await lp.goto(`${BASE}/login-standard.html`, { waitUntil: "domcontentloaded" });
   await lp.waitForTimeout(300);
   await lp.focus('input[name="username"]').catch(() => {});
-  await lp.waitForTimeout(400);
+  await waitFor(async () => /Unlock to autofill/i.test(await menuText(lp)), 10000);
   const lt = await menuText(lp);
   ok("locked: offer on focus", /Unlock to autofill/i.test(lt), lt);
   await clickMenu(lp, "Unlock to autofill");
-  await lp.waitForTimeout(500);
+  await waitFor(async () => /Enter the unlock code/i.test(await menuText(lp)), 10000);
   const t2 = await menuText(lp);
   ok("locked: PIN field after click", /Enter the unlock code/i.test(t2), `got "${t2}"`);
   await lp.screenshot({ path: join(SHOTS, "v4-locked-pin.png") });

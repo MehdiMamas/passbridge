@@ -215,6 +215,23 @@ export async function menuShown(page: import("playwright").Page) {
   return (await page.locator('[data-passbridge="suggestions"]').count()) > 0;
 }
 
+// poll until fn is true (up to ms); returns the last value, so a slow runner waits longer and a fast one does not
+export async function waitFor(fn: () => Promise<boolean> | boolean, ms = 10000, step = 100) {
+  const end = Date.now() + ms;
+  for (;;) {
+    let v = false;
+    try { v = await fn(); } catch {}
+    if (v || Date.now() >= end) return v;
+    await new Promise((r) => setTimeout(r, step));
+  }
+}
+
+// click the menu row labelled str once it is on screen; false if the menu or the row never appears
+export async function clickMenuWhenShown(page: import("playwright").Page, str: string, ms = 10000) {
+  await waitFor(async () => (await menuText(page)).includes(str), ms);
+  return clickMenu(page, str);
+}
+
 // click the menu row labelled str; false if the menu or the row is missing
 export async function clickMenu(page: import("playwright").Page, str: string) {
   const view = await pierced(page);
