@@ -117,6 +117,12 @@ foreach ($agentFile in @("passbridge-agent.py", "passbridge-agent-cli.py")) {
   if (-not (Test-Path -LiteralPath $agentSrc)) { $agentSrc = Join-Path (Split-Path -Parent $Here) $agentFile }
   Copy-Item -Force $agentSrc (Join-Path $Dest $agentFile)
 }
+# verification-code reader: the release zip has both files beside this script, a repo checkout has them in native/windows
+foreach ($readerFile in @("code-reader.ps1", "code-reader.json")) {
+  $readerSrc = Join-Path $Here $readerFile
+  if (-not (Test-Path -LiteralPath $readerSrc)) { $readerSrc = Join-Path (Join-Path (Split-Path -Parent $Here) "windows") $readerFile }
+  Copy-Item -Force $readerSrc (Join-Path $Dest $readerFile)
+}
 # the release zip says which version this is, so the extension knows when the helper is behind
 $versionSrc = Join-Path $Here "VERSION"
 if (Test-Path -LiteralPath $versionSrc) { Copy-Item -Force $versionSrc (Join-Path $Dest "helper-version") }
