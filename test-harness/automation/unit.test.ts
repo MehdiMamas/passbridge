@@ -12,7 +12,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { agentSaveAllowed, createLimiter, isCodeHost, pickCodeFrames, handleAgentRequest, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -341,6 +341,48 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   ok("sanitizeReply drops a code key from a verify_code reply", !("code" in sanitizeReply({ ok: true, domain: "a.com", filled: true, code: "482915" })));
   const le = logEntry({ op: "verify_code", tabId: 1 }, full, safe);
   ok("logEntry verify_code: no digits, username empty", le.username === "" && le.op === "verify_code" && le.result === "ok" && !/\d{4}/.test(JSON.stringify({ ...le, t: 0 })));
+}
+// initAgent with a fake native port: a code event whose rid is not the read in flight is dropped, never reaches onRequest or the page
+{
+  const listeners: any[] = [];
+  const posted: any[] = [];
+  const port = { onMessage: { addListener: (f: any) => listeners.push(f) }, onDisconnect: { addListener() {} }, postMessage: (m: any) => posted.push(m), disconnect() {} };
+  const stub = { get: async (d: any) => ({ ...(d && typeof d === "object" ? d : {}) }), set: async () => {}, remove: async () => {} };
+  (globalThis as any).chrome = {
+    runtime: { connectNative: () => port, lastError: undefined },
+    storage: { sync: { ...stub, get: (d: any, cb: any) => cb({ ...d, agentSignIn: true }) }, local: stub, session: stub, onChanged: { addListener() {} } },
+  };
+  const spy: any = { fill: [] as any[], notify: [] as any[] };
+  const frame = { frameId: 0, host: "idmsa.apple.com" };
+  initAgent({
+    client: { ready: true },
+    getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["apple.com"] }),
+    getTab: async () => ({ id: 1, url: "https://idmsa.apple.com/" }),
+    hostnameOf: (u: any) => new URL(u).hostname,
+    isFillUrlAllowed: async () => true,
+    isLocalDevHost: () => false,
+    platform: async () => "mac",
+    codeReaderOn: async () => true,
+    codeFrames: async () => [frame],
+    probeCodeField: async () => frame,
+    fillCode: async (_t: any, _f: any, code: any) => { spy.fill.push(code); return true; },
+    notifyCode: (h: any, filled: any) => spy.notify.push([h, filled]),
+  } as any);
+  const until = async (pred: () => boolean) => { for (let i = 0; i < 100 && !pred(); i++) await new Promise((r) => setTimeout(r, 10)); };
+  await until(() => listeners.length > 0);
+  const deliver = (m: any) => listeners.forEach((f) => f(m));
+  deliver({ event: "active", code: true });
+  deliver({ id: "r1", op: "verify_code", tabId: 1 });
+  await until(() => posted.some((m) => m.cmd === "read_code"));
+  const rid = posted.find((m) => m.cmd === "read_code")?.rid;
+  deliver({ event: "code", rid: "not-the-read", ok: true, code: "111111" });
+  deliver({ event: "code", rid: undefined, ok: true, code: "222222" });
+  await new Promise((r) => setTimeout(r, 50));
+  ok("initAgent: a code event with another rid is dropped, nothing is filled or answered", !!rid && spy.fill.length === 0 && !posted.some((m) => m.id === "r1"));
+  deliver({ event: "code", rid, ok: true, code: "482915" });
+  await until(() => posted.some((m) => m.id === "r1"));
+  const answer = posted.find((m) => m.id === "r1");
+  ok("initAgent: the matching rid fills once and the reply has no digits", spy.fill.join() === "482915" && answer?.ok === true && !/\d{4}/.test(JSON.stringify({ ...answer, id: "" })));
 }
 
 const agentList = ["github.com", "google.com"];

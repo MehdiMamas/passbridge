@@ -32,8 +32,11 @@ const scenario = async (appDir: string, name: string) => {
   for (const f of ["fake-reader-argv", "fake-reader-connected", "fake-reader-exited"]) await rm(join(appDir, f), { force: true });
 };
 
-const route = (ctx: import("playwright").BrowserContext) =>
-  ctx.route(SITE + "**", (r) => r.fulfill({ contentType: "text/html", body: r.request().url().includes("plain") ? PLAIN_PAGE : CODE_PAGE }));
+const route = async (ctx: import("playwright").BrowserContext) => {
+  await ctx.route(SITE + "**", (r) => r.fulfill({ contentType: "text/html", body: r.request().url().includes("plain") ? PLAIN_PAGE : CODE_PAGE }));
+  // a second Apple host with the same code page, for the tab that moves while the reader runs
+  await ctx.route("https://appleid.apple.com/**", (r) => r.fulfill({ contentType: "text/html", body: CODE_PAGE }));
+};
 
 async function setup(platform: "mac" | "win", opts: { relay?: "real" | "old" } = {}) {
   const e2e = await startE2E(platform, { agent: true, codeReader: true, relay: opts.relay });
@@ -103,6 +106,59 @@ await main(async () => {
     const where = (await sw.evaluate(async () => ({ local: (await chrome.storage.local.get("agentCodeReader")).agentCodeReader, sync: Object.keys(await chrome.storage.sync.get(null)) }))) as any;
     ok(t("switch value lives in local storage, sync storage has no agentCodeReader"), where.local === true && !where.sync.includes("agentCodeReader"), JSON.stringify(where));
     await field.page.close();
+  }
+  {
+    // the page changes after the probe and before the fill (late_connect keeps the reader busy for about 2 s); 3 reads, the most the limiter allows
+    const t = (n: string) => `mac: ${n}`;
+    const { sw, appDir, open, home } = await setup("mac");
+    const boxesOf = (page: import("playwright").Page) => page.evaluate(() => [...document.querySelectorAll<HTMLInputElement>('input[name^="code"]')].map((i) => i.value).join(""));
+    await sw.evaluate(() => ((globalThis as any).__notes.length = 0));
+
+    // the tab moves to another host: expectedHost no longer matches, nothing is filled, fill_failed and a "no field" notification for the first host
+    const moved = await open("code");
+    await home.waitForTimeout(1500);
+    await scenario(appDir, "late_connect");
+    const movedReply = cli(appDir, "verify-code", moved.tabId, "apple.com");
+    await home.waitForTimeout(500);
+    await moved.page.goto("https://appleid.apple.com/", { waitUntil: "domcontentloaded" });
+    const m = await movedReply;
+    ok(t("tab moved to another host mid-read -> fill_failed"), m.ok === false && m.error === "fill_failed", JSON.stringify(m));
+    ok(t("tab moved: nothing filled on the new host"), (await boxesOf(moved.page)) === "", await boxesOf(moved.page));
+    const movedNotes = (await sw.evaluate(() => (globalThis as any).__notes)) as string[];
+    ok(t("tab moved: the notification says no field for the first host, no digits"), movedNotes.length === 1 && movedNotes[0].includes("idmsa.apple.com") && movedNotes[0].includes("no field") && !movedNotes[0].includes(CODE), JSON.stringify(movedNotes));
+    await moved.page.close();
+
+    // the probed field is removed and a different field appears: nothing is filled, the new field stays empty
+    const swapped = await open("code");
+    await scenario(appDir, "late_connect");
+    const swappedReply = cli(appDir, "verify-code", swapped.tabId, "apple.com");
+    await home.waitForTimeout(700);
+    await swapped.page.evaluate(() => {
+      document.querySelector("div")!.innerHTML = '<input type="text" autocomplete="one-time-code" name="other" aria-label="Code">';
+    });
+    const sw1 = await swappedReply;
+    ok(t("probed field removed, another added -> fill_failed"), sw1.ok === false && sw1.error === "fill_failed", JSON.stringify(sw1));
+    ok(t("the added field stays empty"), (await swapped.page.inputValue('input[name="other"]')) === "");
+    await swapped.page.close();
+
+    // another code field appears in front of the probed boxes: only the probed boxes or nothing are filled, the new field stays empty
+    const added = await open("code");
+    await scenario(appDir, "late_connect");
+    const addedReply = cli(appDir, "verify-code", added.tabId, "apple.com");
+    await home.waitForTimeout(700);
+    await added.page.evaluate(() => {
+      const extra = document.createElement("input");
+      extra.type = "text";
+      extra.name = "extra";
+      extra.autocomplete = "one-time-code";
+      extra.setAttribute("aria-label", "Verification code");
+      document.body.prepend(extra);
+    });
+    const ad = await addedReply;
+    const boxes6 = await boxesOf(added.page);
+    ok(t("another field added after the probe: the new field stays empty"), (await added.page.inputValue('input[name="extra"]')) === "");
+    ok(t("another field added after the probe: only the probed boxes or nothing are filled"), (ad.ok === true && boxes6 === CODE) || (ad.error === "fill_failed" && boxes6 === ""), `${JSON.stringify(ad)} boxes=${boxes6}`);
+    await added.page.close();
   }
   {
     const t = (n: string) => `mac: ${n}`;
