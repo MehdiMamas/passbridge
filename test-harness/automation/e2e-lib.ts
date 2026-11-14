@@ -42,7 +42,7 @@ export async function startE2E(platform: "mac" | "win", { agent = false, vault }
 export async function pairFromMenu(page: import("playwright").Page, helper: FakeHelper, field: string = 'input[name="username"]') {
   await page.focus(field);
   await clickMenuWhenShown(page, "Unlock to autofill");
-  await waitFor(async () => (await pierced(page)).menuInput() !== null, 10000);
+  await waitFor(async () => helper.code !== undefined && (await pierced(page)).menuInput() !== null, 10000);
   await typeInMenu(page, helper.code);
   await waitFor(() => helper.paired, 10000);
   return helper.paired;
