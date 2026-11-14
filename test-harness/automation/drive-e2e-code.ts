@@ -195,6 +195,7 @@ await main(async () => {
       await filledAlready.page.close();
 
       // not an Apple sign-in host
+      await scenario(appDir, "ok");
       await ctx.route("https://sign-in.example.test/**", (r) => r.fulfill({ contentType: "text/html", body: CODE_PAGE }));
       const other = await ctx.newPage();
       await other.goto("https://sign-in.example.test/", { waitUntil: "domcontentloaded" });

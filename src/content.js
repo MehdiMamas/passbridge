@@ -1843,7 +1843,9 @@ function frameIsSafe() {
 let userCodeBusy = false;
 let userCodeAt = 0;
 function requestUserCode(/** @type {HTMLInputElement} */ field) {
-  if (userCodeBusy || field.value || Date.now() - userCodeAt < 10000) return;
+  // our own fill moves focus through the boxes, and a half-filled group is not asking for a code
+  if (userCodeBusy || otpFilling || field.value || Date.now() - userCodeAt < 10000) return;
+  if ((otpBoxGroup(field) || []).some((b) => b.value)) return;
   userCodeBusy = true;
   chrome.runtime
     .sendMessage({ type: "userCodeRequest" })
