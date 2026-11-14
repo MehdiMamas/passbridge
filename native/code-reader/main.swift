@@ -236,9 +236,29 @@ final class FixtureScreen: Screen {
     }
 }
 
+func callerSelfTest() -> Bool {
+    let app = "/Users/u/Library/Application Support/PassBridge"
+    let relay = ["/usr/bin/python3", app + "/passbridge-agent.py", "--run"]
+    let sock = app + "/reader-ab12.sock"
+    let cases: [(String, Bool, Bool)] = [
+        ("caller relay", callerIsRelay(socketPath: sock, peerArgs: relay, appDir: app), true),
+        ("caller foreign script", callerIsRelay(socketPath: sock, peerArgs: ["/usr/bin/python3", "/tmp/evil.py"], appDir: app), false),
+        ("caller foreign socket path", callerIsRelay(socketPath: "/tmp/reader-ab12.sock", peerArgs: relay, appDir: app), false),
+        ("caller socket name", callerIsRelay(socketPath: app + "/other.sock", peerArgs: relay, appDir: app), false),
+        ("caller unreadable peer", callerIsRelay(socketPath: sock, peerArgs: nil, appDir: app), false),
+        ("caller script only as program", callerIsRelay(socketPath: sock, peerArgs: [app + "/passbridge-agent.py"], appDir: app), false),
+    ]
+    var good = true
+    for (n, got, want) in cases {
+        print((got == want ? "PASS " : "FAIL ") + n)
+        if got != want { good = false }
+    }
+    return good
+}
+
 func selfTest(_ dir: String) -> Int32 {
     let names = ((try? FileManager.default.contentsOfDirectory(atPath: dir)) ?? []).filter { $0.hasSuffix(".json") }.sorted()
-    var failed = names.isEmpty
+    var failed = names.isEmpty || !callerSelfTest()
     for n in names {
         let name = String(n.dropLast(5))
         guard let data = FileManager.default.contents(atPath: dir + "/" + n),
@@ -338,6 +358,36 @@ func loadConfig() -> PromptConfig? {
     return try? JSONDecoder().decode(PromptConfig.self, from: data)
 }
 
+// who may be on the other end: the socket is one the relay made in the app folder, and the process listening on it
+// is the PassBridge relay script installed there. A pure function, so the self-test can try foreign callers.
+func callerIsRelay(socketPath: String, peerArgs: [String]?, appDir: String) -> Bool {
+    guard let args = peerArgs else { return false }
+    let sock = URL(fileURLWithPath: socketPath).standardizedFileURL
+    let dir = URL(fileURLWithPath: appDir).standardizedFileURL
+    let name = sock.lastPathComponent
+    guard sock.deletingLastPathComponent().path == dir.path, name.hasPrefix("reader-"), name.hasSuffix(".sock") else { return false }
+    return args.dropFirst().contains(dir.path + "/passbridge-agent.py")
+}
+
+// the arguments of a process (the executable path is skipped), from the kernel
+func processArgs(_ pid: pid_t) -> [String]? {
+    var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+    var size = 0
+    if sysctl(&mib, 3, nil, &size, nil, 0) != 0 || size < 8 { return nil }
+    var buf = [UInt8](repeating: 0, count: size)
+    if sysctl(&mib, 3, &buf, &size, nil, 0) != 0 { return nil }
+    let argc = Int(buf[0]) | Int(buf[1]) << 8 | Int(buf[2]) << 16 | Int(buf[3]) << 24
+    let parts = buf[4..<size].split(separator: 0, omittingEmptySubsequences: true)
+    return parts.prefix(argc + 1).map { String(decoding: $0, as: UTF8.self) }
+}
+
+func peerPid(_ fd: Int32) -> pid_t? {
+    var pid: pid_t = 0
+    var len = socklen_t(MemoryLayout<pid_t>.size)
+    if getsockopt(fd, 0 /* SOL_LOCAL */, 0x002 /* LOCAL_PEERPID */, &pid, &len) != 0 || pid <= 0 { return nil }
+    return pid
+}
+
 func normalRun(socketPath: String) -> Int32 {
     // the nonce is in a file next to the socket, read once and removed
     let nonceFile = socketPath + ".nonce"
@@ -346,6 +396,9 @@ func normalRun(socketPath: String) -> Int32 {
     try? FileManager.default.removeItem(atPath: nonceFile)
     guard let fd = connectSocket(socketPath) else { return 1 }
     defer { close(fd) }
+    // refuse a caller that is not the relay: no Allow is pressed and nothing is sent
+    let appDir = NSHomeDirectory() + "/Library/Application Support/PassBridge"
+    guard let pid = peerPid(fd), callerIsRelay(socketPath: socketPath, peerArgs: processArgs(pid), appDir: appDir) else { return 1 }
     sendLine(fd, ["nonce": nonce, "state": "started"])
     func fail(_ e: String) -> Int32 {
         sendLine(fd, ["nonce": nonce, "ok": false, "error": e])
