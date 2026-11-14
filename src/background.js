@@ -580,6 +580,7 @@ const CONTENT_ALLOWED = new Set([
   "inlineLogins",
   "inlineFill",
   "inlineOneTimeCodes",
+  "userCodeRequest",
   "inlineFillOneTimeCode",
   "requestChallenge",
   "verifyPin",
@@ -1508,6 +1509,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
 
+        // your own Apple sign-in asks for a code; the page gets no result and no digits
+        case "userCodeRequest":
+          await agent.userCode(sender);
+          sendResponse({ ok: true });
+          break;
+
         case "dismissSave": {
           if (sender.tab?.id != null) saveOffers.delete(sender.tab.id);
           sendResponse({ ok: true });
@@ -1968,7 +1975,7 @@ async function submitPin(pin) {
   return { ok: true, state };
 }
 
-initAgent({
+const agent = initAgent({
   client,
   pairStart: startPairing,
   pairPin: submitPin,
