@@ -12,7 +12,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, handleUserCode, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -346,6 +346,64 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   const le = logEntry({ op: "verify_code", tabId: 1 }, full, safe);
   ok("logEntry verify_code: no digits, username empty", le.username === "" && le.op === "verify_code" && le.result === "ok" && !/\d{4}/.test(JSON.stringify({ ...le, t: 0 })));
 }
+// your own Apple sign-in: handleUserCode
+{
+  const calls: any = { read: 0, probe: [] as any[], fill: [] as any[], notify: [] as any[] };
+  const sender = (over: any = {}) => ({ id: "me", tab: { id: 7 }, frameId: 3, url: "https://idmsa.apple.com/auth", ...over });
+  const deps = (over: any = {}) => ({
+    getSettings: async () => ({ agentSignIn: false, agentAllowlist: [], blockedDomains: [] }),
+    hostnameOf: (u: any) => new URL(u).hostname,
+    isFillUrlAllowed: async () => true,
+    platform: async () => "mac",
+    codeReaderOn: async () => true,
+    probeCodeField: async (t: any, fr: any) => { calls.probe.push([t, fr]); return fr[0]; },
+    readCode: async () => { calls.read++; return { ok: true, code: "482915" }; },
+    fillCode: async (t: any, f: any, c: any) => { calls.fill.push([t, f, c]); return true; },
+    notifyCode: (h: any, f: any) => calls.notify.push([h, f]),
+    ...over,
+  });
+  const uc = async (sOver: any = {}, over: any = {}, lim = createLimiter(), now = 0) => { calls.read = 0; calls.probe = []; calls.fill = []; calls.notify = []; return handleUserCode(sender(sOver) as any, deps(over) as any, lim, now); };
+  const untouched = () => calls.read === 0 && calls.fill.length === 0 && calls.notify.length === 0;
+  let r = await uc();
+  ok("user code: happy path fills the sender's own frame only, with agent sign-in off", r === true && calls.fill.length === 1 && calls.fill[0][0] === 7 && calls.fill[0][1].frameId === 3 && calls.fill[0][2] === "482915" && calls.notify[0].join() === "idmsa.apple.com,true");
+  await uc({}, { codeReaderOn: async () => false });
+  ok("user code: given the switch is off -> nothing is read", untouched());
+  for (const url of ["https://apple.com.evil.io/", "https://evil.apple.com/", "https://github.com/", "https://x.idmsa.apple.com/"]) { await uc({ url }); ok(`user code: given ${url} -> nothing is read`, untouched() && calls.probe.length === 0); }
+  await uc({ url: "http://idmsa.apple.com/" });
+  ok("user code: given plain http -> nothing is read", untouched());
+  await uc({}, { getSettings: async () => ({ blockedDomains: ["idmsa.apple.com"] }) });
+  ok("user code: given a blocked Apple host -> nothing is read", untouched());
+  await uc({}, { isFillUrlAllowed: async () => false });
+  ok("user code: given a dev host or refused url -> nothing is read", untouched());
+  await uc({}, { platform: async () => "linux" });
+  ok("user code: given another platform -> nothing is read", untouched());
+  await uc({ tab: undefined });
+  await uc({ frameId: undefined });
+  ok("user code: given a sender with no tab or frame -> ignored", untouched() && calls.probe.length === 0);
+  await uc({ url: "https://IDMSA.apple.com/x" });
+  ok("user code: an upper-case host is lowered before the probe", calls.probe[0]?.[1][0].host === "idmsa.apple.com");
+  await uc({}, { probeCodeField: async () => null });
+  ok("user code: given no code field in the frame -> nothing is read", untouched());
+  for (const err of ["no_prompt", "several_prompts", "busy", "reader_failed"]) { await uc({}, { readCode: async () => ({ ok: false, error: err }) }); ok(`user code: reader says ${err} -> silent, nothing filled`, calls.fill.length === 0 && calls.notify.length === 0); }
+  await uc({}, { readCode: async () => ({ ok: true, code: "12ab56" }) });
+  ok("user code: a reply that is not 6 digits -> nothing is filled", calls.fill.length === 0 && calls.notify.length === 0);
+  let n = 0;
+  await uc({}, { codeReaderOn: async () => n++ < 1 });
+  ok("user code: given the switch goes off while the read runs -> nothing is filled", calls.fill.length === 0);
+  r = await uc({}, { fillCode: async () => false });
+  ok("user code: given the probed field is gone -> not filled, notification says so", r === false && calls.notify[0].join() === "idmsa.apple.com,false");
+  const lim = createLimiter();
+  const res = [];
+  for (let i = 0; i < 4; i++) res.push(await uc({}, {}, lim, i));
+  ok("user code: more than 3 reads in 10 minutes -> the 4th is dropped", res.join() === "true,true,true,false" && calls.read === 0);
+  const lim2 = createLimiter(); lim2.load(lim.dump());
+  ok("user code: the limit survives a restart (dump then load)", !(await uc({}, {}, lim2, 5)));
+  const lim3 = createLimiter();
+  for (let i = 0; i < 3; i++) await uc({}, {}, lim3, i);
+  const vcr = (await handleAgentRequest({ op: "verify_code", tabId: 1 }, { client: { ready: false }, getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["apple.com"] }), getTab: async () => ({ id: 1, url: "https://idmsa.apple.com/" }), hostnameOf: (u: any) => new URL(u).hostname, isFillUrlAllowed: async () => true, isLocalDevHost: () => false, platform: async () => "mac", codeReaderOn: async () => true, codeFrames: async () => [{ frameId: 0, host: "idmsa.apple.com" }], probeCodeField: async (_t: any, f: any) => f[0], readCode: async () => ({ ok: true, code: "482915" }), fillCode: async () => true, notifyCode() {} } as any, lim3, 6)).reply;
+  ok("user code: the agent verify_code limit is counted apart", vcr.ok === true);
+  ok("user code: no digits in any notification or call except the one fill", !JSON.stringify(calls.notify).match(/\d{4}/));
+}
 // initAgent with a fake native port: a code event whose rid is not the read in flight is dropped, never reaches onRequest or the page
 {
   const listeners: any[] = [];
@@ -360,7 +418,7 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   const frame = { frameId: 0, host: "idmsa.apple.com" };
   const aclient = { ready: true };
   const pinSpy: string[] = [];
-  initAgent({
+  const agentApi = initAgent({
     client: aclient,
     pairStart: async () => {},
     pairPin: async (pin: string) => { pinSpy.push(pin); return { ok: true }; },
@@ -391,6 +449,15 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   await until(() => posted.some((m) => m.id === "r1"));
   const answer = posted.find((m) => m.id === "r1");
   ok("initAgent: the matching rid fills once and the reply has no digits", spy.fill.join() === "482915" && answer?.ok === true && !/\d{4}/.test(JSON.stringify({ ...answer, id: "" })));
+  // your own sign-in through the returned userCode: same relay read, nothing posted back with a result
+  spy.fill = [];
+  const before = posted.length;
+  const done = agentApi.userCode({ id: "me", tab: { id: 1 }, frameId: 0, url: "https://idmsa.apple.com/" } as any);
+  await until(() => posted.filter((m) => m.cmd === "read_code").length > 1);
+  const rid2 = posted.filter((m) => m.cmd === "read_code")[1]?.rid;
+  deliver({ event: "code", rid: rid2, ok: true, code: "135790" });
+  await done;
+  ok("initAgent: userCode reads through the relay, fills once and posts no reply or log row", spy.fill.join() === "135790" && posted.slice(before).every((m) => m.cmd === "read_code"));
   // unlock through the port: a relay that says code but not pin (1.4.32) is never sent a pin read, it would press Allow
   aclient.ready = false;
   posted.length = 0;
