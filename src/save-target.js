@@ -53,3 +53,19 @@ export function pickSaveTarget({ existing = [], detected = "", generated = false
 export function canAutoSave({ enabled = false, update = false, target = "", password = "" }) {
   return enabled === true && !update && !!target && !!password;
 }
+
+/**
+ * Saves without the bar when allowed. Any failure (settings read, save) returns false so the caller shows the bar.
+ *
+ * @param {{ getEnabled: () => Promise<boolean>, update: boolean, target: string | null, password: string, save: () => Promise<unknown> }} p
+ * @returns {Promise<boolean>} true when the login was saved
+ */
+export async function tryAutoSave({ getEnabled, update, target, password, save }) {
+  try {
+    if (!canAutoSave({ enabled: await getEnabled(), update, target, password })) return false;
+    await save();
+    return true;
+  } catch {
+    return false;
+  }
+}

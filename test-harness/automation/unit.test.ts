@@ -9,7 +9,7 @@ import { hostsRelated, passwordSearchSteps } from "../../src/session/password-se
 import { addToAllowlist, agentHostFor, agentOfferFor } from "../../src/session/agent-allow.js";
 import { registrableDomain, siteLookupHosts } from "../../src/session/site-domain.js";
 import { orderByPageUsername, usernameMatchesPage } from "../../src/session/username-match.js";
-import { canAutoSave, newPasswordContext, pickSaveTarget } from "../../src/save-target.js";
+import { canAutoSave, newPasswordContext, pickSaveTarget, tryAutoSave } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
 import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, handleUserCode, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
@@ -1014,6 +1014,14 @@ const NOW = Date.UTC(2026, 9, 25);
   ok("auto-save: an update still asks", !canAutoSave({ enabled: true, update: true, target: "alex", password: "pw" }));
   ok("auto-save: no username still asks", !canAutoSave({ enabled: true, update: false, target: "", password: "pw" }));
   ok("auto-save: no password saves nothing", !canAutoSave({ enabled: true, update: false, target: "alex", password: "" }));
+  ok("auto-save: the shipped default is off", SETTINGS_DEFAULTS.autoSaveLogins === false);
+  {
+    let saved = 0;
+    const base = { update: false, target: "alex", password: "pw", getEnabled: async () => true };
+    ok("auto-save: saves and reports saved", (await tryAutoSave({ ...base, save: async () => { saved++; } })) === true && saved === 1);
+    ok("auto-save: a failing save falls back to the bar", (await tryAutoSave({ ...base, save: async () => { throw new Error("x"); } })) === false);
+    ok("auto-save: a failing settings read falls back to the bar", (await tryAutoSave({ ...base, getEnabled: async () => { throw new Error("x"); }, save: async () => { saved++; } })) === false && saved === 1);
+  }
   ok("settings: a machine's local settings move to sync once", sync.data.askToSave === false && !("askToSave" in local.data));
   ok("settings: machine state stays in local", local.data.updateCheckedAt === 5 && !("updateCheckedAt" in sync.data));
   local.data.askToSave = true;
