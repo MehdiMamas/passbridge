@@ -53,7 +53,8 @@ jobs:
           sh native/code-reader/build.sh "$RUNNER_TEMP/reader" "$MACOS_SIGN_IDENTITY"
       - name: Self-test
         if: steps.secrets.outputs.have == 'yes'
-        run: '"$RUNNER_TEMP/reader/PassBridge Code Reader.app/Contents/MacOS/passbridge-code-reader" --self-test test-harness/code-reader-fixtures'
+        run: |
+          "$RUNNER_TEMP/reader/PassBridge Code Reader.app/Contents/MacOS/passbridge-code-reader" --self-test test-harness/code-reader-fixtures
       - name: Notarize and staple
         if: steps.secrets.outputs.have == 'yes'
         run: |

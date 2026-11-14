@@ -53,7 +53,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sh native/code-reader/build.sh "$RUNNER_TEMP/reader"
-      - run: "$RUNNER_TEMP/reader/PassBridge Code Reader.app/Contents/MacOS/passbridge-code-reader" --self-test test-harness/code-reader-fixtures
+      - run: |
+          "$RUNNER_TEMP/reader/PassBridge Code Reader.app/Contents/MacOS/passbridge-code-reader" --self-test test-harness/code-reader-fixtures
       - name: install.sh builds, then reports up to date
         run: |
           export HOME="$(mktemp -d)"
