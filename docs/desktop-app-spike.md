@@ -46,9 +46,9 @@ The script (`node scripts/spike/non-browser-client.ts`) is a plain Node process.
 done: a plain Node process paired and looked up a login through the 4-byte framing.
 ```
 
-What it proves, and only that: the framing (4-byte little-endian length plus JSON, `test-harness/fake-apple-helper/host.ts:25-35`), the capability call, SRP pairing with the 6-digit code (`src/apple/protocol.ts:345-380` issue, `:381-430` verify), and an encrypted per-site lookup (`src/apple/protocol.ts:454-470`) all work from a process that is not a browser.
+What it proves, and only that: the framing (4-byte little-endian length plus JSON, `test-harness/fake-apple-helper/host.ts:20-35`), the capability call, SRP pairing with the 6-digit code (`src/apple/protocol.ts:345-380` issue, `:381-430` verify), and an encrypted per-site lookup (`src/apple/protocol.ts:454-470`) all work from a process that is not a browser.
 
-What it cannot prove: the fake is an in-process class (`test-harness/fake-apple-helper/helper.ts`, `FakeHelper.connect`); `host.ts` never looks at who started it. So the output says nothing about whether Apple's helper accepts a caller that is not the browser. The pairing code is the helper's own 6-digit PIN used as the SRP password (`src/apple/srp.ts:1`, `:90-110`); no other credential appears in the handshake.
+What it cannot prove: the fake is an in-process class (`test-harness/fake-apple-helper/helper.ts`, `FakeHelper.connect`); `host.ts` never looks at who started it. So the output says nothing about whether Apple's helper accepts a caller that is not the browser. The pairing code is the helper's own 6-digit PIN used as the SRP password (`src/apple/srp.ts:1`, `:95-112`); no other credential appears in the handshake.
 
 ## 2. The extension id and the origin rule
 
@@ -75,7 +75,7 @@ Commands with an encrypted query id are only 4, 5, 16 and 17 (`src/apple/protoco
 
 Verdicts: delete is defined by Apple's enum but nothing here has ever sent it, so whether the helper honours it is unknown. Update is defined and never sent, same. List-all has no message at all. Search is per site only.
 
-The agent protocol does not change this: `save` is add-only and answers `exists` rather than overwrite (`docs/agent-protocol.md:68`, `:150`), and a reply never carries a password or code (`docs/agent-protocol.md:5`). The agent reaches Apple only through the browser extension (`native/passbridge-agent.py:2`, `docs/agent-protocol.md:27`, `:44`), so it shows that a browser is needed today, not what Apple's helper needs.
+The agent protocol does not change this: `save` is add-only and answers `exists` rather than overwrite (`docs/agent-protocol.md:68`, `:150`), and a reply never carries a password or code (`docs/agent-protocol.md:5`). The agent reaches Apple only through the browser extension (`native/passbridge-agent.py:2`, `docs/agent-protocol.md:27`, `:42`), so it shows that a browser is needed today, not what Apple's helper needs.
 
 ## 4. Prior art (commits pinned)
 
@@ -96,7 +96,7 @@ Cost per feature, on the protocol as PassBridge uses it (sizes are estimates, no
 | Feature | Needs | Cost |
 |---|---|---|
 | Search by site | per-site `GHOST_SEARCH` (`protocol.ts:454`), one password read needs Touch ID or Windows Hello (`docs/agent-protocol.md:50`) | small if the extension stays the engine; large if the SRP and crypto in `src/apple/*` move to Rust |
-| Codes | cmds 16 and 17 (`protocol.ts:534`, `:549`), or the code reader on a prompt (`docs/agent-protocol.md:77-96`) | small to medium; the reader is already a signed app |
+| Codes | cmds 16 and 17 (`protocol.ts:534`, `:549`), or the code reader on a prompt (`docs/agent-protocol.md:78-104`) | small to medium; the reader is already a signed app |
 | Unlock | the 6-digit code from Apple's app every time the session is lost (`docs/agent-protocol.md:53`) | small once connected, but it is a person typing a code, never silent on macOS |
 | Add | `MAYBE_ADD` plus Apple's own prompt (`protocol.ts:499-530`) | small; add-only |
 | Browse all, edit, delete | no list-all message; update and delete never sent | not available; not in scope |
