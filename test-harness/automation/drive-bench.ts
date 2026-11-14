@@ -12,8 +12,10 @@ await main(async () => {
     else await page.waitForTimeout(700);
     const shown = await menuShown(page);
     ok(`${id} dropdown=${shown} (want ${want})`, shown === want);
-    await page.click("h1").catch(() => {});
-    // the next field must start with no menu left over from this one
-    await waitFor(async () => !(await menuShown(page)), 5000);
+    // the next field must start with no menu left over from this one; a click that landed before the menu opened is repeated
+    await waitFor(async () => {
+      await page.click("h1").catch(() => {});
+      return !(await menuShown(page));
+    }, 5000, 300);
   }
 });
