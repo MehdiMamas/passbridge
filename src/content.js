@@ -1847,12 +1847,12 @@ function requestUserCode(/** @type {HTMLInputElement} */ field) {
   if (userCodeBusy || otpFilling || field.value || Date.now() - userCodeAt < 10000) return;
   if ((otpBoxGroup(field) || []).some((b) => b.value)) return;
   userCodeBusy = true;
+  userCodeAt = Date.now();
   chrome.runtime
     .sendMessage({ type: "userCodeRequest" })
     .catch(gone)
     .finally(() => {
       userCodeBusy = false;
-      userCodeAt = Date.now();
     });
 }
 

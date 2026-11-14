@@ -1511,8 +1511,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         // your own Apple sign-in asks for a code; the page gets no result and no digits
         case "userCodeRequest":
-          await agent.userCode(sender);
+          // answered at once so the page cannot time the reader; the read runs on without the message
           sendResponse({ ok: true });
+          agent.userCode(sender).catch(() => {});
           break;
 
         case "dismissSave": {

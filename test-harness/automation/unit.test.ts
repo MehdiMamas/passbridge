@@ -458,6 +458,11 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   deliver({ event: "code", rid: rid2, ok: true, code: "135790" });
   await done;
   ok("initAgent: userCode reads through the relay, fills once and posts no reply or log row", spy.fill.join() === "135790" && posted.slice(before).every((m) => m.cmd === "read_code"));
+  // a message from another extension, or one with no tab or frame, reaches no reader
+  posted.length = 0;
+  await agentApi.userCode({ id: "other-ext", url: "https://idmsa.apple.com/" } as any);
+  await agentApi.userCode({ id: "other-ext", tab: { id: 1 }, url: "https://idmsa.apple.com/" } as any);
+  ok("initAgent: userCode from a sender with no tab or frame posts no read_code", !posted.some((m) => m.cmd === "read_code"));
   // unlock through the port: a relay that says code but not pin (1.4.32) is never sent a pin read, it would press Allow
   aclient.ready = false;
   posted.length = 0;
@@ -474,6 +479,77 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   await until(() => posted.some((m) => m.id === "u2"));
   const ua = posted.find((m) => m.id === "u2");
   ok("initAgent: the pin goes to pairPin only; the unlock reply has no digits", pinSpy.join() === "482915" && ua?.ok === true && ua?.state === "paired" && !JSON.stringify(ua).includes("482915"));
+}
+
+// the own-sign-in limit survives a restart of the service worker: a second initAgent reads the hits the first one saved
+{
+  const store: any = {};
+  const make = () => {
+    const listeners: any[] = [];
+    const posted: any[] = [];
+    const port = { onMessage: { addListener: (f: any) => listeners.push(f) }, onDisconnect: { addListener() {} }, postMessage: (m: any) => posted.push(m), disconnect() {} };
+    const stub = { get: async (d: any) => ({ ...(d && typeof d === "object" ? d : {}) }), set: async () => {}, remove: async () => {} };
+    (globalThis as any).chrome = {
+      runtime: { connectNative: () => port, lastError: undefined },
+      storage: {
+        sync: { ...stub, get: (d: any, cb: any) => cb({ ...d, agentSignIn: false }) },
+        local: { ...stub, get: async (d: any) => ({ ...(d && typeof d === "object" ? d : {}), agentCodeReader: true }) },
+        session: { get: async (k: any) => ({ [k]: store[k] }), set: async (o: any) => Object.assign(store, o), remove: async () => {} },
+        onChanged: { addListener() {} },
+      },
+    };
+    const frame = { frameId: 0, host: "idmsa.apple.com" };
+    const aclient = { ready: true };
+    const fills: any[] = [];
+    const api = initAgent({
+      client: aclient,
+      pairStart: async () => {},
+      pairPin: async () => ({ ok: true }),
+      getSettings: async () => ({ agentSignIn: false, agentAllowlist: [] }),
+      getTab: async () => ({ id: 1, url: "https://idmsa.apple.com/" }),
+      hostnameOf: (u: any) => new URL(u).hostname,
+      isFillUrlAllowed: async () => true,
+      isLocalDevHost: () => false,
+      platform: async () => "mac",
+      codeReaderOn: async () => true,
+      codeFrames: async () => [frame],
+      probeCodeField: async () => frame,
+      fillCode: async (_t: any, _f: any, code: any) => { fills.push(code); return true; },
+      notifyCode: () => {},
+    } as any);
+    return { api, listeners, posted, fills };
+  };
+  const until = async (pred: () => boolean) => { for (let i = 0; i < 100 && !pred(); i++) await new Promise((r) => setTimeout(r, 10)); };
+  const sender = { id: "me", tab: { id: 1 }, frameId: 0, url: "https://idmsa.apple.com/" } as any;
+  const first = make();
+  await until(() => first.listeners.length > 0);
+  first.listeners.forEach((f) => f({ event: "active", code: true }));
+  for (let i = 0; i < 3; i++) {
+    const n = first.posted.filter((m) => m.cmd === "read_code").length;
+    const done = first.api.userCode(sender);
+    await until(() => first.posted.filter((m) => m.cmd === "read_code").length > n);
+    const rid = first.posted.filter((m) => m.cmd === "read_code")[n]?.rid;
+    first.listeners.forEach((f) => f({ event: "code", rid, ok: true, code: "135790" }));
+    await done;
+  }
+  ok("initAgent: three own-sign-in reads fill three times", first.fills.length === 3);
+  const second = make();
+  await until(() => second.listeners.length > 0);
+  second.listeners.forEach((f) => f({ event: "active", code: true }));
+  await second.api.userCode(sender);
+  ok("initAgent: after a restart the 4th own-sign-in read in 10 minutes is dropped, no read_code", !second.posted.some((m) => m.cmd === "read_code") && second.fills.length === 0);
+}
+// the background side of userCodeRequest: allowed from a content script, answered {ok:true} before the read starts, the page gets nothing else
+{
+  const bg = readFileSync(new URL("../../src/background.js", import.meta.url), "utf8");
+  const allowed = bg.slice(bg.indexOf("const CONTENT_ALLOWED"), bg.indexOf("]);", bg.indexOf("const CONTENT_ALLOWED")));
+  ok("background: userCodeRequest is in CONTENT_ALLOWED", allowed.includes('"userCodeRequest"'));
+  const at = bg.indexOf('case "userCodeRequest":');
+  const handler = bg.slice(at, bg.indexOf("break;", at));
+  const reply = handler.indexOf("sendResponse({ ok: true })");
+  const run = handler.indexOf("agent.userCode(sender)");
+  ok("background: the page reply is exactly { ok: true }, sent before the read and without awaiting it", reply > -1 && run > reply && !handler.includes("await") && (handler.match(/sendResponse\(/g) || []).length === 1);
+  ok("background: another extension is refused before the handler (sender id and tab are checked)", bg.includes("sender.id === chrome.runtime.id && sender.tab !== undefined") && /!fromUi && !\(fromContent && CONTENT_ALLOWED\.has/.test(bg));
 }
 
 const agentList = ["github.com", "google.com"];
