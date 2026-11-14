@@ -22,7 +22,55 @@ def finish(code=0):
     sys.exit(code)
 
 
+def main_stdout():
+    # the Windows transport: one JSON line on stdout, no socket and no nonce
+    note("fake-reader-argv", json.dumps(sys.argv))
+    try:
+        os.unlink(os.path.join(APPDIR, "fake-reader-exited"))
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(APPDIR, "fake-reader-scenario")) as f:
+            scenario = f.read().strip()
+    except OSError:
+        scenario = "ok"
+    note("fake-reader-connected", "1")
+
+    def send(obj):
+        sys.stdout.write(json.dumps(obj) + "\n")
+        sys.stdout.flush()
+
+    if scenario == "launch_fails":
+        finish(1)
+    if scenario == "crash":
+        os._exit(1)
+    if scenario == "hang":
+        # a heartbeat file: a test sees it stop when the relay kills this process
+        while True:
+            note("fake-reader-beat", "%.3f" % time.time())
+            time.sleep(0.1)
+    if scenario in ("ok", "late_connect"):
+        send({"ok": True, "code": "482915"})
+    elif scenario == "ok_spaced":
+        send({"ok": True, "code": "482 915"})
+    elif scenario == "bad_code":
+        send({"ok": True, "code": "12ab56"})
+    elif scenario == "malformed":
+        sys.stdout.write("not json\n")
+        sys.stdout.flush()
+    elif scenario == "nonzero_exit":
+        send({"ok": True, "code": "482915"})
+        finish(3)
+    elif scenario in ("no_prompt", "several_prompts", "not_configured"):
+        send({"ok": False, "error": scenario})
+    elif scenario == "permission":
+        send({"ok": False, "error": "reader_permission"})
+    finish(0)
+
+
 def main():
+    if "--stdout" in sys.argv:
+        return main_stdout()
     path = sys.argv[sys.argv.index("--socket") + 1]
     note("fake-reader-argv", json.dumps(sys.argv))
     try:

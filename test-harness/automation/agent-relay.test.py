@@ -136,14 +136,16 @@ def skip(name):
 
 
 class CodeRelay:
-    def __init__(self, with_reader=True, total_s=None):
+    def __init__(self, with_reader=True, total_s=None, stdout=False):
         self.dir = tempfile.mkdtemp(prefix="pb-code-")
         env = {**os.environ, "PASSBRIDGE_APPDIR": self.dir, "PASSBRIDGE_NO_WSL_REEXEC": "1"}
         env.pop("PASSBRIDGE_CODE_READER", None)
         if total_s is not None:
             env["PASSBRIDGE_READER_TOTAL_S"] = str(total_s)
         if with_reader:
-            env["PASSBRIDGE_CODE_READER"] = json.dumps([sys.executable, "-I", str(FAKE)])
+            env["PASSBRIDGE_CODE_READER"] = json.dumps([sys.executable, "-I", str(FAKE)] + (["--stdout"] if stdout else []))
+            if stdout:
+                env["PASSBRIDGE_READER_STDOUT"] = "1"
         self.err = open(os.path.join(tempfile.mkdtemp(prefix="pb-err-"), "stderr"), "w+b")
         self.proc = subprocess.Popen([sys.executable, "-I", str(RELAY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.err, env=env)
         self.msgs = []
@@ -166,7 +168,7 @@ class CodeRelay:
     def scenario(self, name):
         with open(self.path("fake-reader-scenario"), "w") as f:
             f.write(name)
-        for n in ("fake-reader-exited", "fake-reader-connected", "fake-reader-argv"):
+        for n in ("fake-reader-exited", "fake-reader-connected", "fake-reader-argv", "fake-reader-beat"):
             try:
                 os.unlink(self.path(n))
             except OSError:
@@ -206,6 +208,23 @@ class CodeRelay:
             if os.path.exists(self.path(name)):
                 return True
             time.sleep(0.02)
+        return False
+
+    def beat_stops(self, within):
+        # the hanging fake reader writes a heartbeat; it stops when the relay kills the process
+        end = time.time() + within
+        while time.time() < end:
+            try:
+                a = open(self.path("fake-reader-beat")).read()
+            except OSError:
+                a = ""
+            time.sleep(0.4)
+            try:
+                b = open(self.path("fake-reader-beat")).read()
+            except OSError:
+                b = ""
+            if a and a == b:
+                return True
         return False
 
     def reader_files(self):
@@ -344,21 +363,89 @@ else:
     for n in ("active event carries code: true", "read_code scenarios", "cancel and stdin-closed cases"):
         skip(n)
 
+# ---- the stdout transport (Windows, and any OS with PASSBRIDGE_READER_STDOUT): the fake reader prints one JSON line ----
+CODE = "482915"  # a made-up value
+sr = CodeRelay(stdout=True)
+ok("stdout: active event carries code: true", sr.wait_msg(lambda m: m.get("event") == "active" and m.get("code") is True, 10) is not None, sr.msgs)
+r = sr.read("s-ok", "ok")
+ok("stdout: happy path -> the 6 digits reach the extension", r and r.get("ok") is True and r.get("code") == CODE, r)
+r = sr.read("s-sp", "ok_spaced")
+ok("stdout: spaced digits are normalized", r and r.get("ok") is True and r.get("code") == CODE, r)
+r = sr.read("s-bc", "bad_code")
+ok("stdout: reader prints not 6 digits -> reader_failed", err(r) == "reader_failed" and "code" not in r, r)
+ok("stdout: reader prints text that is not JSON -> reader_failed", err(sr.read("s-mj", "malformed")) == "reader_failed")
+t0 = time.time()
+r = sr.read("s-cr", "crash")
+ok("stdout: reader crashes -> reader_failed at once", err(r) == "reader_failed" and time.time() - t0 < 3, (r, time.time() - t0))
+ok("stdout: reader fails to start work and exits non-zero -> reader_failed", err(sr.read("s-lf", "launch_fails")) == "reader_failed")
+r = sr.read("s-nz", "nonzero_exit")
+ok("stdout: reader prints a code but exits non-zero -> reader_failed, no code", err(r) == "reader_failed" and "code" not in r, r)
+for sc, want in (("no_prompt", "no_prompt"), ("several_prompts", "several_prompts"), ("permission", "reader_permission"), ("not_configured", "not_configured")):
+    ok("stdout: %s is passed through" % sc, err(sr.read("s-" + sc, sc)) == want)
+
+# busy, a stale cancel, and a real cancel that kills the child
+sr.start("s-h1", "hang")
+ok("stdout: hang: the fake reader started", sr.wait_file("fake-reader-connected", 5))
+r = sr.read("s-h2", "ok")
+ok("stdout: a second read_code while one runs -> busy", err(r) == "busy", r)
+sr.scenario("hang")  # the busy read must not have disturbed the running one
+sr.send({"cmd": "cancel_code", "rid": "stale"})
+ok("stdout: cancel with an old rid: the running read goes on", sr.code("s-h1", 1.0) is None and not sr.beat_stops(0.9))
+sr.send({"cmd": "cancel_code", "rid": "s-h1"})
+r = sr.code("s-h1", 3)
+ok("stdout: cancel_code -> reader_failed, no code sent", err(r) == "reader_failed" and "code" not in r, r)
+ok("stdout: cancel_code kills the child", sr.beat_stops(4))
+
+# a read right after a cancel runs
+sr.start("s-h3", "hang")
+sr.wait_file("fake-reader-connected", 5)
+sr.send({"cmd": "cancel_code", "rid": "s-h3"})
+sr.scenario("ok")
+sr.send({"cmd": "read_code", "rid": "s-after"})
+r = sr.code("s-after", 10)
+ok("stdout: read_code right after cancel_code -> runs", r and r.get("ok") is True and r.get("code") == CODE, r)
+
+# the code is in no argv, no file in the app folder and no stderr
+argv_text = open(sr.path("fake-reader-argv")).read()
+files_text = "".join(open(sr.path(n), "rb").read().decode("latin-1") for n in os.listdir(sr.dir) if os.path.isfile(sr.path(n)) and n != "agent.key")
+ok("stdout: the code is in no argv and no file in the app folder, no socket files exist", CODE not in argv_text and CODE not in files_text and sr.reader_files() == [], (argv_text, sr.reader_files()))
+
+# a reader that hangs: killed at the total deadline (shortened here)
+sd = CodeRelay(total_s=1.5, stdout=True)
+t0 = time.time()
+sd.start("s-dl", "hang")
+r = sd.code("s-dl", 8)
+took = time.time() - t0
+ok("stdout: reader runs longer than the total time -> reader_failed", err(r) == "reader_failed" and 1.2 < took < 5, (r, took))
+ok("stdout: reader runs longer than the total time -> the child is killed", sd.beat_stops(4))
+sd.stop()
+
+# the extension goes away mid-read: the child is killed
+sm = CodeRelay(stdout=True)
+sm.start("s-m1", "hang")
+sm.wait_file("fake-reader-connected", 5)
+sm.proc.stdin.close()
+ok("stdout: relay stdin closed mid-read -> the child is killed", sm.beat_stops(5))
+sm.stop()
+sr.stop()
+out = b"".join(open(x.err.name, "rb").read() for x in (sr, sd, sm))
+ok("stdout: relay stderr is empty and holds no code across all scenarios", out == b"" and CODE.encode() not in out, out)
+
 # the relay without the test override
 nr = CodeRelay(with_reader=False)
 r = nr.read("n1")
 if WINDOWS:
-    ok("Windows: read_code -> mac_only", err(r) == "mac_only", r)
+    ok("Windows: reader files missing -> reader_missing", err(r) == "reader_missing", r)
     skip("reader app missing on darwin -> reader_missing")
     skip("no PASSBRIDGE_CODE_READER on non-darwin -> mac_only")
 elif DARWIN:
     ok("reader app missing on darwin -> reader_missing", err(r) == "reader_missing", r)
     skip("no PASSBRIDGE_CODE_READER on non-darwin -> mac_only")
-    skip("Windows: read_code -> mac_only")
+    skip("Windows: reader files missing -> reader_missing")
 else:
     ok("no PASSBRIDGE_CODE_READER on non-darwin -> mac_only", err(r) == "mac_only" and nr.reader_files() == [], r)
     skip("reader app missing on darwin -> reader_missing")
-    skip("Windows: read_code -> mac_only")
+    skip("Windows: reader files missing -> reader_missing")
 nr.stop()
 
 failed = results.count(False)

@@ -30,6 +30,10 @@ TIMEOUT = 90
 # the code reader: a signed app that presses Allow on Apple's prompt and sends the code back over a one-shot socket
 READER_APP = os.path.join(APPDIR, "PassBridge Code Reader.app")
 READER_CMD = os.environ.get("PASSBRIDGE_CODE_READER")  # a JSON argv list, tests only
+# Windows reads the code from the child's stdout pipe; tests set this to use that transport with PASSBRIDGE_CODE_READER on any OS
+READER_STDOUT = bool(os.environ.get("PASSBRIDGE_READER_STDOUT"))
+READER_PS1 = os.path.join(APPDIR, "code-reader.ps1")
+READER_JSON = os.path.join(APPDIR, "code-reader.json")
 READER_CONNECT_S = 10
 READER_TOTAL_S = float(os.environ.get("PASSBRIDGE_READER_TOTAL_S") or 70)  # the env var is for tests
 CODE_RE = re.compile(r"^\d{6}$")
@@ -183,6 +187,65 @@ def unlink_quietly(path):
         pass
 
 
+def kill_quietly(proc):
+    try:
+        if proc.poll() is None:
+            proc.kill()
+    except Exception:
+        pass
+
+
+def reply_result(reply, result):
+    # one answer from the reader, whatever the transport: 6 digits or a known error name
+    if result.get("ok") is True:
+        code = str(result.get("code", "")).replace(" ", "")
+        if not CODE_RE.match(code):
+            return reply(ok=False, error="reader_failed")
+        return reply(ok=True, code=code)
+    err = result.get("error")
+    return reply(ok=False, error=err if err in READER_ERRORS else "reader_failed")
+
+
+def read_stdout(st):
+    # run the reader with stdout piped (private to this process) and take its one JSON line. None when it failed
+    if READER_CMD:
+        cmd = list(json.loads(READER_CMD))
+    else:
+        cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", READER_PS1]
+    started = time.monotonic()
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+    st["proc"] = proc
+    box = []
+    got = threading.Event()
+
+    def pump():
+        try:
+            box.append(proc.stdout.readline(65537))
+        except Exception:
+            box.append(b"")
+        got.set()
+
+    threading.Thread(target=pump, daemon=True).start()
+    while not got.wait(0.2):
+        if st["cancel"].is_set() or time.monotonic() - started > READER_TOTAL_S:
+            kill_quietly(proc)
+            return None
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        kill_quietly(proc)
+        return None
+    if proc.returncode != 0:
+        return None
+    try:
+        obj = json.loads(box[0])
+    except ValueError:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
 def read_code(rid, st):
     # one read: launch the reader, take one answer over a one-shot socket, send it to the extension. the code lives only here
     def reply(**kw):
@@ -192,17 +255,28 @@ def read_code(rid, st):
     proc = None
     locked = False
     try:
-        if WINDOWS or (sys.platform != "darwin" and not READER_CMD):
+        if not WINDOWS and sys.platform != "darwin" and not READER_CMD:
             return reply(ok=False, error="mac_only")
         if not reader_lock.acquire(timeout=2):
             return reply(ok=False, error="busy")
         locked = True
         if st["cancel"].is_set():
             return reply(ok=False, error="reader_failed")
-        if not READER_CMD and not os.path.isdir(READER_APP):
-            return reply(ok=False, error="reader_missing")
+        use_stdout = WINDOWS or (bool(READER_CMD) and READER_STDOUT)
+        if not READER_CMD:
+            if WINDOWS:
+                if not (os.path.isfile(READER_PS1) and os.path.isfile(READER_JSON)):
+                    return reply(ok=False, error="reader_missing")
+            elif not os.path.isdir(READER_APP):
+                return reply(ok=False, error="reader_missing")
         os.makedirs(APPDIR, exist_ok=True)
-        os.chmod(APPDIR, 0o700)
+        if not WINDOWS:
+            os.chmod(APPDIR, 0o700)
+        if use_stdout:
+            result = read_stdout(st)
+            if result is None or st["cancel"].is_set():
+                return reply(ok=False, error="reader_failed")
+            return reply_result(reply, result)
         nonce = secrets.token_hex(16)
         path = os.path.join(APPDIR, "reader-%s.sock" % secrets.token_hex(8))
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -266,13 +340,7 @@ def read_code(rid, st):
                 return reply(ok=False, error="reader_failed")
         if st["cancel"].is_set():
             return reply(ok=False, error="reader_failed")
-        if result.get("ok") is True:
-            code = str(result.get("code", "")).replace(" ", "")
-            if not CODE_RE.match(code):
-                return reply(ok=False, error="reader_failed")
-            return reply(ok=True, code=code)
-        err = result.get("error")
-        return reply(ok=False, error=err if err in READER_ERRORS else "reader_failed")
+        return reply_result(reply, result)
     except Exception:
         try:
             reply(ok=False, error="reader_failed")
@@ -286,6 +354,8 @@ def read_code(rid, st):
         if path:
             unlink_quietly(path)
             unlink_quietly(path + ".nonce")
+        if st.get("proc") is not None:
+            kill_quietly(st["proc"])
         if proc is not None:
             try:
                 proc.wait(timeout=1)
@@ -298,7 +368,7 @@ def read_code(rid, st):
 
 
 def start_read(rid):
-    st = {"cancel": threading.Event(), "srv": None, "conn": None}
+    st = {"cancel": threading.Event(), "srv": None, "conn": None, "proc": None}
     with reads_lock:
         reads[rid] = st
     threading.Thread(target=read_code, args=(rid, st), daemon=True).start()
@@ -313,6 +383,8 @@ def cancel_code(rid=None):
         for k in ("conn", "srv"):
             if st.get(k):
                 close_quietly(st[k])
+        if st.get("proc") is not None:
+            kill_quietly(st["proc"])
 
 
 def listen():
