@@ -40,6 +40,8 @@ export class FakeHelper {
   auth: string;
   authPrompts: number;
   codesShown: string[];
+  /** how many handshakes have ended paired, ever (a connection that closes does not lower it) */
+  pairings: number;
   saved: any[];
   launched: any[];
   conns: Set<Conn>;
@@ -52,6 +54,7 @@ export class FakeHelper {
     this.auth = "approve";
     this.authPrompts = 0;
     this.codesShown = [];
+    this.pairings = 0;
     this.saved = [];
     this.launched = [];
     this.conns = new Set();
@@ -180,7 +183,10 @@ export class FakeHelper {
     // a code is good once: a failed or late verify burns the challenge
     const good = conn.live && Buffer.compare(conn.server.M, this._unwire(pake.M)) === 0;
     conn.live = false;
-    if (good) conn.paired = true;
+    if (good) {
+      conn.paired = true;
+      this.pairings++;
+    }
     if (good) return reply({ MSG: this._msg(3), HAMK: this._wire(conn.server.HAMK), ErrCode: 0 });
     // Windows answers a bad code with TID and ErrCode only; macOS keeps MSG
     return reply(this.win ? { ErrCode: 5 } : { MSG: 3, ErrCode: 1 });

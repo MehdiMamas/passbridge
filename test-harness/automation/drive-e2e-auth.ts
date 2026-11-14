@@ -72,7 +72,7 @@ async function run(platform: "mac" | "win") {
   const again = await ctx.newPage();
   await again.goto(url, { waitUntil: "domcontentloaded" });
   const codes = helper.codesShown.length;
-  ok(t("paired again with a new code"), (await pairFromMenu(again, helper)) && helper.codesShown.length > codes, `codes ${codes} -> ${helper.codesShown.length}`);
+  ok(t("paired again with a new code"), (await pairFromMenu(again, helper)) && helper.codesShown.length === codes + 1, `codes ${codes} -> ${helper.codesShown.length}`);
   await again.focus('input[name="username"]');
   await clickMenuWhenShown(again, "deny@pb-e2e.invalid");
   await waitFor(async () => (await pw(again)) === "deny-Pass", 10000);
