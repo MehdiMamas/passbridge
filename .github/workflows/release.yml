@@ -8,7 +8,70 @@ permissions:
   contents: write
 
 jobs:
+  # signed, notarized verification code reader; without the signing secrets the release goes out without it
+  code-reader:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the signing secrets
+        id: secrets
+        run: |
+          for v in MACOS_CERT_P12 MACOS_CERT_PASSWORD MACOS_SIGN_IDENTITY NOTARY_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER; do
+            eval "val=\${$v}"
+            if [ -z "$val" ]; then
+              echo "::warning::$v is not set; this release has no verification code reader"
+              echo "have=no" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "have=yes" >> "$GITHUB_OUTPUT"
+      - name: Import the certificate
+        if: steps.secrets.outputs.have == 'yes'
+        run: |
+          KC="$RUNNER_TEMP/build.keychain-db"
+          KCPASS="$(uuidgen)"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KCPASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KCPASS" "$KC"
+          security list-keychains -d user -s "$KC" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+      - name: Build and sign
+        if: steps.secrets.outputs.have == 'yes'
+        run: |
+          echo "${GITHUB_REF_NAME#v}" > native/VERSION
+          sh native/code-reader/build.sh "$RUNNER_TEMP/reader" "$MACOS_SIGN_IDENTITY"
+      - name: Self-test
+        if: steps.secrets.outputs.have == 'yes'
+        run: '"$RUNNER_TEMP/reader/PassBridge Code Reader.app/Contents/MacOS/passbridge-code-reader" --self-test test-harness/code-reader-fixtures'
+      - name: Notarize and staple
+        if: steps.secrets.outputs.have == 'yes'
+        run: |
+          APP="$RUNNER_TEMP/reader/PassBridge Code Reader.app"
+          echo "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" --wait
+          rm -f "$RUNNER_TEMP/notary.p8"
+          xcrun stapler staple "$APP"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/code-reader.zip"
+      - uses: actions/upload-artifact@v4
+        if: steps.secrets.outputs.have == 'yes'
+        with:
+          name: code-reader
+          path: ${{ runner.temp }}/code-reader.zip
+
   zip:
+    needs: code-reader
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +87,11 @@ jobs:
           PASSBRIDGE_RELEASE: "1"
       - run: cd dist && zip -r ../passbridge.zip .
       # the helper install and uninstall scripts, each next to the policy, agent and updater helpers it copies
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: code-reader
+          path: helpers/passbridge-macos-helper
       - run: |
           mkdir -p helpers/passbridge-macos-helper helpers/passbridge-windows-helper
           cp native/install.sh native/uninstall.sh native/passbridge-policy.py native/passbridge-agent.py native/passbridge-agent-cli.py native/passbridge-updater.py helpers/passbridge-macos-helper/

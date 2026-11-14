@@ -45,3 +45,19 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -I test-harness/automation/agent-relay.test.py
+
+  # the Swift verification code reader: build ad-hoc, run its fixture self-test, and check install.sh builds it once and then reports it up to date
+  code-reader:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh native/code-reader/build.sh "$RUNNER_TEMP/reader"
+      - run: "$RUNNER_TEMP/reader/PassBridge Code Reader.app/Contents/MacOS/passbridge-code-reader" --self-test test-harness/code-reader-fixtures
+      - name: install.sh builds, then reports up to date
+        run: |
+          export HOME="$(mktemp -d)"
+          sh native/install.sh | tee first.txt
+          grep -q "Code reader built from source" first.txt
+          sh native/install.sh | tee second.txt
+          grep -q "Code reader up to date" second.txt
