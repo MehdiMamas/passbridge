@@ -351,6 +351,14 @@ await main(async () => {
     const rsw = real.serviceWorkers()[0] || (await real.waitForEvent("serviceworker", { timeout: 10000 }));
     const rUrl = new URL("options.html", rsw.url()).href;
     const rp = await real.newPage();
+    // the rows are locked without the helper, so answer the policy host as the helped page does
+    await rp.addInitScript(() => {
+      const send = chrome.runtime.sendNativeMessage.bind(chrome.runtime);
+      chrome.runtime.sendNativeMessage = (((host: string, msg: any, cb: (response: any) => void) => {
+        if (host !== "com.passbridge.policy") return send(host, msg, cb);
+        setTimeout(() => cb({ ok: true, hidden: false }), 0);
+      }) as any);
+    });
     const codeRow = rp.locator(`[data-row="${CODE_ROW}"]`);
     const codeSwitch = codeRow.locator('[role="switch"]');
     const localValue = () => rsw.evaluate(() => chrome.storage.local.get("agentCodeReader").then((o) => o.agentCodeReader));
