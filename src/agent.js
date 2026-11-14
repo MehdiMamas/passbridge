@@ -512,6 +512,8 @@ export function initAgent(deps) {
   let port = null;
   // the helper says on active/standby whether it can read codes (an older helper does not)
   let relayCode = false;
+  // an older relay ignores kind and would press Allow on a code prompt: only a relay that says pin:true gets a pin read
+  let relayPin = false;
   /** @type {{ rid: string, resolve: (r: { ok: boolean, code?: string, error?: string }) => void, timer: ReturnType<typeof setTimeout> } | null} */
   let codeRead = null;
 
@@ -529,6 +531,7 @@ export function initAgent(deps) {
   /** @returns {Promise<{ ok: boolean, code?: string, error?: string }>} */
   function readCode(/** @type {"pin" | undefined} */ kind) {
     if (codeRead) return Promise.resolve({ ok: false, error: "busy" });
+    if (kind === "pin" && !relayPin) return Promise.resolve({ ok: false, error: "reader_missing" });
     if (!port || !relayCode) return Promise.resolve({ ok: false, error: port ? "reader_missing" : "reader_failed" });
     const p = port;
     return new Promise((resolve) => {
@@ -599,6 +602,7 @@ export function initAgent(deps) {
           if (codeRead && m.rid === codeRead.rid) finishRead({ ok: m.ok === true, code: m.code, error: m.error });
         } else if (ev) {
           relayCode = m.code === true;
+          relayPin = m.pin === true;
           setRelay(ev);
         } else onRequest(p, m);
       });

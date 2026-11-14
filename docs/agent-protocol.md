@@ -64,6 +64,7 @@ Every request has an `id` (any non-empty string, echoed back) and an `op`.
 | `pair_start` | none | asks Apple's Passwords to show a pairing code. Replies `{"ok":true,"state":"paired"}` when already paired, else `{"ok":true,"state":"needs_pin"}` (a new code, or the one already on screen) |
 | `pair_pin` | `pin` (string, exactly 6 digits) | checks the code shown on the Mac. Replies `{"ok":true,"state":"paired"}`, or `wrong_pin` |
 | `verify_code` | `tabId` (number), `site` (optional string) | macOS and Windows. Presses Allow on Apple's sign-in prompt on this computer, reads the 6-digit code and enters it in that tab. The reply holds no digits (see Verification codes below) |
+| `unlock` | none | Windows only. Pairs a locked store (`paired:false`) with no person: asks Apple's Passwords for a code, reads it on this computer and enters it. Replies `{"ok":true,"state":"paired"}` (also when already paired, with nothing read). See Unlock below |
 | `save` | `tabId` (number) or `url` (string, `https://`), not both; `username` (string), `password` (string), `site` (optional string) | adds a new login for the tab's site, or for the site of `url` when no tab is named. Add-only: if that username already has a login for the site, the reply is `exists` and nothing changes |
 
 `pair_start` and `pair_pin` need Allow agent sign-in but no tab and no allowlist, and both count toward the rate limit. After 5 wrong codes in a row, `pair_pin` answers `locked` until a `pair_start` issues a fresh code. The pin is never in a reply or the Activity list.
@@ -99,6 +100,14 @@ Residual limit: PassBridge is not a barrier against other programs running as th
 
 Between the extension and the relay (not seen by clients) the relay's `active` and `standby` events carry `"code":true` when it supports the reader. The extension sends `{"cmd":"read_code","rid":"…"}` and `{"cmd":"cancel_code","rid":"…"}`; the relay answers with `{"event":"code","rid":"…",…}` events and the extension ignores any whose `rid` does not match. Without `"code":true` (an old relay), `verify_code` replies `reader_missing` at once.
 
+## Unlock (Windows)
+
+Off by default. It uses the same switch as the code reader (Settings, Agents tab, Allow agents to read verification codes and verify for you; per browser profile, never synced) and only does anything while Allow agent sign-in is on. Mac is not supported yet: it answers `not_allowed` with `reason: "win_only"` and starts nothing.
+
+`unlock` takes no tab and no site, so the allowlist does not apply. Order: the switch is on, else `not_allowed` / `code_reader_off`; the platform is Windows, else `not_allowed` / `win_only`; already paired answers `paired` and reads nothing; after 5 wrong codes in a row it answers `locked` until a `pair_start`; more than 3 `unlock` requests in 10 minutes is `rate_limited`. Then it asks Apple for a code, the relay runs `read-pair-code.ps1` from the app folder (a UI Automation read of iCloud for Windows' window, retried for up to 20 s), and the extension passes the 6 digits to the pairing step. Errors: `no_prompt` (no code window appeared), `reader_missing` (script or relay support missing; a relay older than this version never gets the request, since it would not know the request is for a pairing code), `busy`, `reader_failed`, `wrong_pin`. The digits stay in the relay and in one variable of the extension: never in a reply, the Activity list, storage or a log. Switching the setting off during a read cancels it.
+
+Trade-off: Apple's pairing code is a proof that a person is at the computer. With this switch on, a program running as the same user can have the code read and entered without a person, so it can unlock the store (each later password read is still approved in Apple's Passwords). That is why it is off by default, per profile, and rate limited. `read-pair-code.ps1` takes the first window text of the iCloud helper that looks like 6 digits.
+
 ## Allow every site (*)
 
 Off by default. In Settings, on the Agents tab, the user can turn on Allow every site (*). The switch only does anything while Allow agent sign-in is on. Listed sites behave as before. For any other site:
@@ -131,7 +140,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | error | meaning |
 |---|---|
 | `not_enabled` | agent sign-in is off in Settings |
-| `unknown_op` | the op isn't `status`, `pair_start`, `pair_pin`, `logins`, `sign_in`, `save` or `verify_code` |
+| `unknown_op` | the op isn't `status`, `pair_start`, `pair_pin`, `unlock`, `logins`, `sign_in`, `save` or `verify_code` |
 | `bad_request` | the line isn't a JSON object, or `id` or `op` is missing, or `save` has no `username` or `password`, or `save` names both or neither of `tabId` and `url`, or `url` does not parse, or `logins` or `sign_in` has a `url` |
 | `bad_pin` | `pair_pin`: `pin` is not exactly 6 digits |
 | `wrong_pin` | `pair_pin`: Apple rejected the code |
@@ -145,7 +154,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `choose_login` | several logins and no `username` given; pick one from `usernames` |
 | `fill_failed` | no sign-in form was found or the fill didn't take (`verify_code`: the code was read but not entered) |
 | `no_field` | `verify_code`: the tab has no code field |
-| `busy`, `no_prompt`, `several_prompts`, `not_configured`, `reader_missing`, `reader_failed` | `verify_code`: see Verification codes (macOS and Windows) |
+| `busy`, `no_prompt`, `several_prompts`, `not_configured`, `reader_missing`, `reader_failed` | `verify_code`: see Verification codes (macOS and Windows); `unlock` shares `busy`, `no_prompt`, `reader_missing` and `reader_failed`, see Unlock (Windows) |
 | `timeout` | the extension didn't answer within 90 s (sent by the host) |
 | `extension_gone` | the browser or extension went away mid-request (sent by the host) |
 

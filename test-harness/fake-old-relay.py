@@ -5,7 +5,7 @@ import os
 
 SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "native", "passbridge-agent.py")
 with open(SRC, encoding="utf-8") as f:
-    code = f.read().replace(', "code": True', "")
+    code = f.read().replace(', "code": True', "").replace(', "pin": True', "")
 ns = {"__name__": "old_relay", "__file__": SRC}
 exec(compile(code, SRC, "exec"), ns)
 ns["main"]()

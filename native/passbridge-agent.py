@@ -268,6 +268,8 @@ def read_pin(st):
             cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
         )
         st["proc"] = proc
+        if st["cancel"].is_set():
+            kill_quietly(proc)
         try:
             out, _ = proc.communicate(timeout=10)
         except subprocess.TimeoutExpired:
@@ -444,9 +446,9 @@ def listen():
     while not own_lock():
         if not standby:
             standby = True
-            send_ext({"event": "standby", "code": True})
+            send_ext({"event": "standby", "code": True, "pin": True})
         time.sleep(5)
-    send_ext({"event": "active", "code": True})
+    send_ext({"event": "active", "code": True, "pin": True})
     if WINDOWS:
         listen_pipe()
         return
