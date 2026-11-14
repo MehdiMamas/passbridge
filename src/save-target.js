@@ -47,22 +47,24 @@ export function pickSaveTarget({ existing = [], detected = "", generated = false
  * Only a new login with a known username and a password, and only when the user opted in.
  * Updates could overwrite a good password with a typo; an empty username needs the user to name it.
  *
- * @param {{ enabled?: boolean, update?: boolean, target?: string | null, password?: string }} p
+ * A failed lookup of the saved logins (lookedUp false) never auto-saves: the login may already exist.
+ *
+ * @param {{ enabled?: boolean, update?: boolean, lookedUp?: boolean, target?: string | null, password?: string }} p
  * @returns {boolean}
  */
-export function canAutoSave({ enabled = false, update = false, target = "", password = "" }) {
-  return enabled === true && !update && !!target && !!password;
+export function canAutoSave({ enabled = false, update = false, lookedUp = false, target = "", password = "" }) {
+  return enabled === true && lookedUp === true && !update && !!target && !!password;
 }
 
 /**
  * Saves without the bar when allowed. Any failure (settings read, save) returns false so the caller shows the bar.
  *
- * @param {{ getEnabled: () => Promise<boolean>, update: boolean, target: string | null, password: string, save: () => Promise<unknown> }} p
+ * @param {{ getEnabled: () => Promise<boolean>, update: boolean, lookedUp?: boolean, target: string | null, password: string, save: () => Promise<unknown> }} p
  * @returns {Promise<boolean>} true when the login was saved
  */
-export async function tryAutoSave({ getEnabled, update, target, password, save }) {
+export async function tryAutoSave({ getEnabled, update, lookedUp, target, password, save }) {
   try {
-    if (!canAutoSave({ enabled: await getEnabled(), update, target, password })) return false;
+    if (!canAutoSave({ enabled: await getEnabled(), update, lookedUp, target, password })) return false;
     await save();
     return true;
   } catch {
