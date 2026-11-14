@@ -41,3 +41,15 @@ export function pickSaveTarget({ existing = [], detected = "", generated = false
   if (generated) return "";
   return null;
 }
+
+/**
+ * Does this offer need no decision, so it can be saved without the bar?
+ * Only a new login with a known username and a password, and only when the user opted in.
+ * Updates could overwrite a good password with a typo; an empty username needs the user to name it.
+ *
+ * @param {{ enabled?: boolean, update?: boolean, target?: string | null, password?: string }} p
+ * @returns {boolean}
+ */
+export function canAutoSave({ enabled = false, update = false, target = "", password = "" }) {
+  return enabled === true && !update && !!target && !!password;
+}

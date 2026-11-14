@@ -125,6 +125,8 @@
   "httpHelp": { "message": "HTTP pages are unencrypted and can be spoofed. Keep this off unless you need it." },
   "askSave": { "message": "Ask to save new logins" },
   "askSaveHelp": { "message": "Offers to save a login PassBridge doesn't have yet, after you sign in." },
+  "autoSave": {"message": "Save new logins without asking"},
+  "autoSaveHelp": {"message": "Saves a new login with a known username right after you sign in, with no prompt. Changed passwords and logins with no username still ask."},
   "askUpdate": { "message": "Ask to update changed passwords" },
   "askUpdateHelp": { "message": "Offers to update a saved login when you sign in with a new password." },
   "neverSave": { "message": "Never-save sites" },

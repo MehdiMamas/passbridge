@@ -126,6 +126,8 @@
   "httpHelp": { "message": "HTTP 页面未加密且可能被伪造。除非需要，否则请保持关闭。" },
   "askSave": { "message": "询问保存当新登录时" },
   "askSaveHelp": { "message": "在你登录后，提示保存 PassBridge 还没有的登录。" },
+  "autoSave": {"message": "不询问直接保存新登录"},
+  "autoSaveHelp": {"message": "登录后，已知用户名的新登录会直接保存，不再提示。更改的密码和没有用户名的登录仍会询问。"},
   "askUpdate": { "message": "询问更新已更改的密码" },
   "askUpdateHelp": { "message": "当你用新密码登录时，提示更新已保存的登录。" },
   "neverSave": { "message": "永不保存的网站" },

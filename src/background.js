@@ -12,7 +12,7 @@ import { passwordSearchSteps } from "./session/password-search.js";
 import { listOtpEntries } from "./session/otp-list.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { orderByUse, recordUse } from "./session/mru.js";
-import { pickSaveTarget } from "./save-target.js";
+import { canAutoSave, pickSaveTarget } from "./save-target.js";
 import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-allow.js";
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
@@ -629,6 +629,15 @@ async function presentSaveOffer({ tabId, frameUrl, target, password, host, updat
     generated: !!generated,
     at: Date.now(),
   });
+  // opt-in: a new login whose username is known needs no decision, so it saves without the bar
+  if (canAutoSave({ enabled: (await getSettings()).autoSaveLogins === true, update, target, password })) {
+    try {
+      await client.saveLogin(tabId, frameUrl, target, password);
+      saveOffers.delete(tabId);
+      chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t("agentSavedLogin", [host || hostnameOf(frameUrl) || "", target]) });
+      return { ok: true, saved: true, auto: true };
+    } catch {}
+  }
   let offered = false;
   try {
     const resp = await chrome.tabs.sendMessage(
