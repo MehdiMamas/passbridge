@@ -2,7 +2,7 @@
 // and when the helper asks to sign in again: it stays usable, asks to unlock, and pairs again with the new code.
 // Both platforms, run side by side because the unanswered approval has to outlast the extension's own wait.
 
-import { BASE, clickMenu, main, menuText, ok } from "./lib.ts";
+import { BASE, clickMenuWhenShown, main, menuText, ok, waitFor } from "./lib.ts";
 import { PLATFORMS, pairFromMenu, startE2E } from "./e2e-lib.ts";
 import { seedVault } from "../fake-apple-helper/helper.ts";
 
@@ -24,7 +24,6 @@ async function run(platform: "mac" | "win") {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(300);
     await page.focus('input[name="username"]');
-    await page.waitForTimeout(900);
     return page;
   };
   const pw = (page: import("playwright-core").Page) => page.inputValue('input[name="password"]');
@@ -38,28 +37,27 @@ async function run(platform: "mac" | "win") {
   helper.auth = "deny";
   let page = await fresh();
   const asked = helper.authPrompts;
-  await clickMenu(page, "deny@pb-e2e.invalid");
-  await page.waitForTimeout(1500);
+  await clickMenuWhenShown(page, "deny@pb-e2e.invalid");
+  await waitFor(() => helper.authPrompts > asked, 10000);
+  await page.waitForTimeout(1000);
   ok(t("a denied approval fills no password"), (await pw(page)) === "" && helper.authPrompts > asked, `pw="${await pw(page)}" prompts ${asked} -> ${helper.authPrompts}`);
   helper.auth = "approve";
   await page.focus('input[name="username"]');
-  await page.waitForTimeout(600);
-  await clickMenu(page, "deny@pb-e2e.invalid");
-  await page.waitForTimeout(1500);
+  await clickMenuWhenShown(page, "deny@pb-e2e.invalid");
+  await waitFor(async () => (await pw(page)) === "deny-Pass", 10000);
   ok(t("after the denial, an approved try fills"), (await pw(page)) === "deny-Pass", `pw="${await pw(page)}"`);
   await page.close();
 
   // never answered: the extension gives up on its own and stays usable
   helper.auth = "timeout";
   page = await fresh();
-  await clickMenu(page, "slow@pb-e2e.invalid");
+  await clickMenuWhenShown(page, "slow@pb-e2e.invalid");
   await page.waitForTimeout(125000);
   ok(t("an approval nobody answers fills nothing"), (await pw(page)) === "", `pw="${await pw(page)}"`);
   helper.auth = "approve";
   await page.focus('input[name="username"]');
-  await page.waitForTimeout(800);
-  await clickMenu(page, "slow@pb-e2e.invalid");
-  await page.waitForTimeout(1500);
+  await clickMenuWhenShown(page, "slow@pb-e2e.invalid");
+  await waitFor(async () => (await pw(page)) === "slow-Pass", 10000);
   ok(t("after the wait ran out, an approved try fills"), (await pw(page)) === "slow-Pass", `pw="${await pw(page)}"`);
   await page.close();
 
@@ -67,6 +65,7 @@ async function run(platform: "mac" | "win") {
   helper.setState("relogin");
   await new Promise((r) => setTimeout(r, 800));
   page = await fresh();
+  await waitFor(async () => /Unlock to autofill/i.test(await menuText(page)), 10000);
   ok(t("relogin needed: the menu asks to unlock"), /Unlock to autofill/i.test(await menuText(page)), await menuText(page));
   helper.setState("ok");
   await page.close();
@@ -75,9 +74,8 @@ async function run(platform: "mac" | "win") {
   const codes = helper.codesShown.length;
   ok(t("paired again with a new code"), (await pairFromMenu(again, helper)) && helper.codesShown.length > codes, `codes ${codes} -> ${helper.codesShown.length}`);
   await again.focus('input[name="username"]');
-  await again.waitForTimeout(800);
-  await clickMenu(again, "deny@pb-e2e.invalid");
-  await again.waitForTimeout(1500);
+  await clickMenuWhenShown(again, "deny@pb-e2e.invalid");
+  await waitFor(async () => (await pw(again)) === "deny-Pass", 10000);
   ok(t("and fills again"), (await pw(again)) === "deny-Pass", `pw="${await pw(again)}"`);
 }
 
