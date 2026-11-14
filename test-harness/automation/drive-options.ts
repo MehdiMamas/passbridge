@@ -24,7 +24,7 @@ const BROWSER_ROWS = [
   "Hide the browser's password manager",
   "The browser's saved passwords",
 ];
-const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allow agents to save new logins", "Allow agents to read verification codes and verify for you", "Allowed sites", "Activity"];
+const AGENT_ROWS = ["Allow agent sign-in", "Allow every site (*)", "Allow agents to save new logins", "Auto-fill verification codes (you and agents)", "Allowed sites", "Activity"];
 const HELPER_NOTICE = "Greyed-out settings need the PassBridge helper.";
 
 function hasHoverRule(el: Element) {
@@ -345,7 +345,7 @@ await main(async () => {
   ok("options: allowed sites save when the page closes without a blur", (await savedAllowlist()).includes("example.net"), await savedAllowlist());
 
   // the code reader row: the real builds report their own platform
-  const CODE_ROW = "Allow agents to read verification codes and verify for you";
+  const CODE_ROW = "Auto-fill verification codes (you and agents)";
   for (const platform of ["mac", "win"] as const) {
     const real = await launchExtension(build(`real-${platform}`, `OP_EXT_${platform.toUpperCase()}`));
     const rsw = real.serviceWorkers()[0] || (await real.waitForEvent("serviceworker", { timeout: 10000 }));
@@ -366,11 +366,11 @@ await main(async () => {
       await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: false }));
       await rp.goto(`${rUrl}#agents`);
       await codeSwitch.waitFor();
-      ok("options: code reader locked while sign-in off", (await codeSwitch.isDisabled()) && (await codeRow.locator("[data-help]").innerText()).includes("Accessibility access"));
+      ok("options: code reader stays enabled while agent sign-in is off", !(await codeSwitch.isDisabled()) && (await codeRow.locator("[data-help]").innerText()).includes("Accessibility access"));
       await rsw.evaluate(() => chrome.storage.sync.set({ agentSignIn: true }));
       await rp.reload();
       await codeSwitch.waitFor();
-      await rp.waitForFunction(() => !document.querySelector(`[data-row="Allow agents to read verification codes and verify for you"] [role="switch"]`)?.hasAttribute("disabled"), null, { timeout: 5000 }).catch(() => {});
+      await rp.waitForFunction(() => !document.querySelector(`[data-row="Auto-fill verification codes (you and agents)"] [role="switch"]`)?.hasAttribute("disabled"), null, { timeout: 5000 }).catch(() => {});
       ok("options: code reader is off by default", !(await codeSwitch.isChecked()) && (await localValue()) !== true);
       await codeSwitch.click();
       await rp.waitForTimeout(500);

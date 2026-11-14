@@ -161,6 +161,70 @@ await main(async () => {
     await added.page.close();
   }
   {
+    // your own sign-ins: agent sign-in off, no allowlist, the same switch and reader
+    for (const platform of ["mac", "win"] as const) {
+      const t = (n: string) => `${platform} own sign-in: ${n}`;
+      const { sw, appDir, open, home, ctx } = await setup(platform);
+      await sw.evaluate(() => chrome.storage.sync.set({ agentSignIn: false, agentAllowlist: [] }));
+      await home.waitForTimeout(1500);
+      const boxesOf = async (page: import("playwright").Page) => {
+        const v = [];
+        for (let i = 1; i <= 6; i++) v.push(await page.inputValue(`input[name="code${i}"]`));
+        return v.join("");
+      };
+      const started = () => existsSync(join(appDir, "fake-reader-argv"));
+      await scenario(appDir, "ok");
+      const mine = await open("code");
+      await mine.page.focus('input[name="code1"]');
+      for (let i = 0; i < 60 && (await boxesOf(mine.page)) !== CODE; i++) await home.waitForTimeout(200);
+      ok(t("focus fills the 6 boxes with agent sign-in off"), (await boxesOf(mine.page)) === CODE, await boxesOf(mine.page));
+      const notes = (await sw.evaluate(() => (globalThis as any).__notes)) as string[];
+      ok(t("one notification naming the host, never the code"), notes.length === 1 && notes[0].includes("idmsa.apple.com") && !notes[0].includes(CODE), JSON.stringify(notes));
+      const log = (await sw.evaluate(async () => (await chrome.storage.session.get("agentLog")).agentLog ?? [])) as any[];
+      ok(t("no Activity row for your own read"), log.length === 0, JSON.stringify(log));
+      const stored = JSON.stringify(await sw.evaluate(async () => ({ l: await chrome.storage.local.get(null), s: await chrome.storage.session.get(null), y: await chrome.storage.sync.get(null) })));
+      ok(t("the code is in no storage area"), !stored.includes(CODE));
+
+      // a field that already has a digit asks for nothing
+      await scenario(appDir, "ok");
+      const filledAlready = await open("code");
+      await filledAlready.page.fill('input[name="code1"]', "7");
+      await filledAlready.page.focus('input[name="code1"]');
+      await home.waitForTimeout(1500);
+      ok(t("given the field already has digits -> the reader is not started"), !started());
+      await filledAlready.page.close();
+
+      // not an Apple sign-in host
+      await ctx.route("https://sign-in.example.test/**", (r) => r.fulfill({ contentType: "text/html", body: CODE_PAGE }));
+      const other = await ctx.newPage();
+      await other.goto("https://sign-in.example.test/", { waitUntil: "domcontentloaded" });
+      await other.focus('input[name="code1"]');
+      await home.waitForTimeout(1500);
+      ok(t("given a host that is not an Apple sign-in host -> the reader is not started"), !started() && (await boxesOf(other)) === "");
+      await other.close();
+
+      // no prompt: silent
+      await scenario(appDir, "no_prompt");
+      const quiet = await open("code");
+      await quiet.page.focus('input[name="code1"]');
+      for (let i = 0; i < 40 && !started(); i++) await home.waitForTimeout(100);
+      await home.waitForTimeout(1000);
+      const notes2 = (await sw.evaluate(() => (globalThis as any).__notes)) as string[];
+      ok(t("given no Apple prompt -> nothing filled and no new notification"), (await boxesOf(quiet.page)) === "" && notes2.length === 1, `${await boxesOf(quiet.page)} ${notes2.length}`);
+      await quiet.page.close();
+
+      // switch off: nothing
+      await sw.evaluate(() => chrome.storage.local.set({ agentCodeReader: false }));
+      await scenario(appDir, "ok");
+      const off = await open("code");
+      await off.page.focus('input[name="code1"]');
+      await home.waitForTimeout(1500);
+      ok(t("given the switch is off -> the reader is not started and nothing is filled"), !started() && (await boxesOf(off.page)) === "");
+      await off.page.close();
+      await mine.page.close();
+    }
+  }
+  {
     const t = (n: string) => `mac: ${n}`;
     const { appDir, open, home } = await setup("mac", { relay: "old" });
     const field = await open("code");
