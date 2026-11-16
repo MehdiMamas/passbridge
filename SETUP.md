@@ -67,7 +67,7 @@ P="$HOME/Library/Application Support/PassBridge"
 
 Apple's Passwords asks for Touch ID every time a password is read (except within 15 s of the last read), so each agent sign-in needs one Touch ID approval; when no saved login exists the agent gets `no_login` and the person signs in themselves.
 
-Errors you may see: `not_enabled`, `bad_pin`, `wrong_pin`, `locked`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
+Errors you may see: `not_enabled`, `bad_pin`, `wrong_pin`, `locked`, `no_tab`, `not_allowed`, `no_login`, `choose_login`, `username_mismatch`, `rate_limited` (10 per 10 minutes), `needs_user` (pair the extension or approve Touch ID), `fill_failed`. Requests are logged on the Agents tab of the settings page.
 
 ### Verification codes (macOS and Windows)
 

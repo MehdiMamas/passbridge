@@ -2081,6 +2081,14 @@ const agent = initAgent({
     }
   },
   vaultCode: vaultCodeForAgent,
+  pageUsername: async (tab) => {
+    try {
+      const r = await chrome.tabs.sendMessage(tab.id ?? 0, { type: "pageUsername" }, { frameId: 0 });
+      return typeof r?.username === "string" ? { username: r.username.slice(0, 320), fixed: r.fixed === true } : null;
+    } catch {
+      return null;
+    }
+  },
   notifyCode: (host, filled) =>
     chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t(filled ? "agentCodeFilled" : "agentCodeNotFilled", [host]) }),
   notifySaved: (host, username) =>
