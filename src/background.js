@@ -9,7 +9,7 @@ import { generateAlphanumericPassword, generateApplePassword } from "./password-
 import { otpAuthSecret, parseOtpAuth } from "./otpauth.js";
 import { parseSetupInput, totpHandoff, withAccount } from "./totp-setup.js";
 import { passwordSearchSteps } from "./session/password-search.js";
-import { listOtpEntries } from "./session/otp-list.js";
+import { listOtpEntries, totpRowMatches } from "./session/otp-list.js";
 import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 import { orderByUse, recordUse } from "./session/mru.js";
 import { pickSaveTarget, tryAutoSave } from "./save-target.js";
@@ -17,7 +17,7 @@ import { addToAllowlist, agentHostFor, agentOfferFor } from "./session/agent-all
 import { frameUrlsFor } from "./session/frame-urls.js";
 import { orderByPageUsername } from "./session/username-match.js";
 import { scrubUrl } from "./report-scrub.js";
-import { initAgent, loginSavedFor, pickAllowedFrames, pickCodeFrames } from "./agent.js";
+import { initAgent, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, pickCodeFrames } from "./agent.js";
 import { UPDATE_PAGE, availableUpdate, checkForUpdate, dismissUpdate, takeUpdatedTo } from "./update/check.js";
 import { getEffectiveSettings } from "./managed.js";
 import { reloadIfStale } from "./update/stale.js";
@@ -2001,6 +2001,51 @@ async function submitPin(pin) {
   return { ok: true, state };
 }
 
+// agent verify_code on a non-Apple site: the code Apple Passwords offers for this tab, picked here; the value goes only to the caller's fill
+/**
+ * @param {{ id?: number, url?: string }} tab
+ * @param {{ frameId: number, host: string }} frame
+ * @param {string} [username]
+ * @returns {Promise<{ ok: boolean, code?: string, source?: string, usernames?: string[], error?: string }>}
+ */
+async function vaultCodeForAgent(tab, frame, username) {
+  if (!client.ready || tab.id == null || !tab.url) return { ok: false, error: "needs_user" };
+  const host = frame.host;
+  /** @type {any[]} */
+  let entries;
+  try {
+    const r = await listOtpEntries(client, { tabId: tab.id, frameId: frame.frameId, frameUrls: frameUrlsFor({ url: tab.url, tab }), platform: await platformReady });
+    entries = r.entries;
+    if (!entries.length && r.requiresAuth) return { ok: false, error: "needs_user" };
+  } catch {
+    return { ok: false, error: "needs_user" };
+  }
+  // a row with no domain does not count for a totp
+  const totps = entries.filter((e) => e.source === "totp" && e.domain && onSiteOrSubdomain(host, String(e.domain).toLowerCase().replace(/^www\./, "")));
+  /** @type {any} */
+  let pick = null;
+  if (totps.length) {
+    if (username) pick = totps.find((e) => totpRowMatches(e, username));
+    else if (totps.length === 1) pick = totps[0];
+    if (!pick) return username ? { ok: false, error: "no_code" } : { ok: false, error: "several_codes", usernames: totps.map((e) => e.username) };
+  } else {
+    const others = entries.filter((e) => e.source !== "totp" && (!e.domain || onSiteOrSubdomain(host, String(e.domain).toLowerCase().replace(/^www\./, ""))));
+    if (others.length > 1) return { ok: false, error: "several_codes" };
+    if (!others.length) return { ok: false, error: "no_code" };
+    return typeof others[0].code === "string" ? { ok: true, code: others[0].code, source: "messages" } : { ok: false, error: "reader_failed" };
+  }
+  // the value rotates: read it now
+  try {
+    const fresh = await client.readOneTimeCode(tab.id, frame.frameId, frameUrlsFor({ url: tab.url, tab }), pick.username);
+    const hit =
+      fresh.find((/** @type {any} */ e) => e.source === "totp" && e.username === pick.username && e.domain === pick.domain) || fresh.find((/** @type {any} */ e) => e.source === "totp");
+    if (!hit?.code) return { ok: false, error: "no_code" };
+    return { ok: true, code: hit.code, source: "totp" };
+  } catch {
+    return { ok: false, error: "needs_user" };
+  }
+}
+
 const agent = initAgent({
   client,
   pairStart: startPairing,
@@ -2035,6 +2080,7 @@ const agent = initAgent({
       return false;
     }
   },
+  vaultCode: vaultCodeForAgent,
   notifyCode: (host, filled) =>
     chrome.notifications?.create({ type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: t("extensionName"), message: t(filled ? "agentCodeFilled" : "agentCodeNotFilled", [host]) }),
   notifySaved: (host, username) =>

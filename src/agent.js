@@ -25,6 +25,7 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(tabId: number, frames: { frameId: number, host: string }[]) => Promise<{ frameId: number, host: string } | null>} [probeCodeField]
  * @property {(tabId: number, frame: { frameId: number, host: string }, code: string) => Promise<boolean>} [fillCode]
  * @property {(kind?: "pin") => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode] kind "pin" reads the pairing code shown for an unlock
+ * @property {(tab: any, frame: { frameId: number, host: string }, username?: string) => Promise<{ ok: boolean, code?: string, source?: string, usernames?: string[], error?: string }>} [vaultCode] the one-time code Apple Passwords offers for this tab (other sites than Apple sign-in)
  * @property {(host: string, filled: boolean) => void} [notifyCode]
  */
 
@@ -36,6 +37,7 @@ export const PIN_FAILS_MAX = 5;
 export const RATE_MAX = 10;
 export const RATE_WINDOW_MS = 10 * 60 * 1000;
 export const CODE_RATE_MAX = 3;
+const NO_CODE_HINT = "No code for this site in Apple Passwords. Emailed and SMS codes: use Keytray.";
 export const UNLOCK_RATE_MAX = 3;
 // Apple sign-in hosts that may receive a verification code, matched exactly (no subdomains)
 export const CODE_HOSTS = ["appleid.apple.com", "account.apple.com", "idmsa.apple.com", "www.icloud.com", "icloud.com"];
@@ -322,14 +324,24 @@ async function verifyCode(msg, deps, limiter, now, settings, base, done) {
     if (!host || !want || !onSiteOrSubdomain(host, want)) return done(fail("not_allowed", { reason: "site_mismatch" }));
   }
   if (!host || hostBlocked(host, settings.blockedDomains)) return done(fail("not_allowed"));
-  // the every-site path never applies here
-  if (!hostAllowed(host, settings.agentAllowlist) || !(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
-  if (!isCodeHost(host)) return done(fail("not_allowed", { reason: "not_apple_site" }));
+  const apple = isCodeHost(host);
+  if (apple) {
+    // Apple's own prompt reader: allowlist only, the every-site path never applies here
+    if (!hostAllowed(host, settings.agentAllowlist) || !(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
+  } else if (hostAllowed(host, settings.agentAllowlist)) {
+    if (!(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
+  } else if (settings.agentAllowAll === true && /^https:\/\//i.test(tab.url) && !deps.isLocalDevHost(host)) {
+    if (!(await deps.isFillUrlAllowed(tab.url))) return done(fail("not_allowed"));
+  } else {
+    return done(fail("not_allowed"));
+  }
   if (!limiter.peek(now, "verify_code", CODE_RATE_MAX)) return done(fail("rate_limited"));
-  const frames = (await deps.codeFrames?.(tab)) || [];
+  // other sites: the top frame only, on the tab's own host
+  const frames = apple ? (await deps.codeFrames?.(tab)) || [] : [{ frameId: 0, host }];
   const frame = await deps.probeCodeField?.(tab.id, frames);
   if (!frame) return done(fail("no_field"));
   if (!limiter.take(now, "verify_code", CODE_RATE_MAX)) return done(fail("rate_limited"));
+  if (!apple) return verifyVaultCode(msg, deps, tab, frame, host, done);
   try {
     const r = await deps.readCode?.();
     if (!r?.ok) {
@@ -345,6 +357,38 @@ async function verifyCode(msg, deps, limiter, now, settings, base, done) {
     deps.notifyCode?.(host, !!filled);
     if (!filled) return done(fail("fill_failed"));
     return done({ ok: true, domain: host, filled: true });
+  } catch {
+    return done(fail("reader_failed"));
+  }
+}
+
+// any other site: the one-time code Apple Passwords offers for this tab. readCode (Apple's prompt) is never used here
+/**
+ * @param {any} msg
+ * @param {AgentDeps} deps
+ * @param {any} tab
+ * @param {{ frameId: number, host: string }} frame
+ * @param {string} host
+ * @param {(reply: any, extra?: Record<string, unknown>) => any} done
+ */
+async function verifyVaultCode(msg, deps, tab, frame, host, done) {
+  if (!deps.vaultCode) return done(fail("reader_missing"));
+  try {
+    const r = await deps.vaultCode(tab, frame, typeof msg.username === "string" ? msg.username : undefined);
+    if (!r?.ok) {
+      const e = r?.error;
+      if (e === "no_code") return done(fail("no_code", { hint: NO_CODE_HINT }));
+      if (e === "several_codes") return done(fail("several_codes", Array.isArray(r.usernames) ? { usernames: r.usernames } : undefined));
+      if (e === "needs_user") return done(fail("needs_user"));
+      if (e === "not_apple_site" || e === "code_reader_off" || e === "mac_only" || e === "site_mismatch") return done(fail("not_allowed", { reason: e }));
+      return done(fail("reader_failed"));
+    }
+    if (typeof r.code !== "string" || !/^\d{4,10}$/.test(r.code)) return done(fail("reader_failed"));
+    if (!(await deps.codeReaderOn?.())) return done(fail("not_allowed", { reason: "code_reader_off" }));
+    const filled = await deps.fillCode?.(tab.id, frame, r.code);
+    deps.notifyCode?.(host, !!filled);
+    if (!filled) return done(fail("fill_failed"));
+    return done({ ok: true, domain: host, filled: true, source: r.source === "messages" ? "messages" : "totp" });
   } catch {
     return done(fail("reader_failed"));
   }
