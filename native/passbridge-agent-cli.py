@@ -9,8 +9,9 @@ import sys
 import time
 import uuid
 
-USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> [--site <host>] [--wait <seconds>] | sign_in <tabId> [username] [--site <host>] [--wait <seconds>] | save <tabId> <username> | verify-code <tabId> [site] [username] | unlock | save --url <https-url> <username>  (save reads the password from stdin)"
+USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> [--site <host>] [--wait <seconds, max 600>] | sign_in <tabId> [username] [--site <host>] [--wait <seconds, max 600>] | save <tabId> <username> | verify-code <tabId> [site] [username] | unlock | save --url <https-url> <username>  (save reads the password from stdin)"
 
+MAX_WAIT = 600
 WINDOWS = os.name == "nt"
 if WINDOWS:
     _default = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "PassBridge")
@@ -97,7 +98,8 @@ def main(argv):
             a = argv[i]
             if i >= 2 and a in ("--site", "--wait"):
                 val = argv[i + 1] if i + 1 < len(argv) else None
-                if val is None or (a == "--wait" and not val.isdigit()) or (a == "--site" and not val):
+                bad_wait = a == "--wait" and not (val and val.isascii() and val.isdigit() and int(val) <= MAX_WAIT)
+                if val is None or bad_wait or (a == "--site" and not val):
                     print(USAGE, file=sys.stderr)
                     return 2
                 if a == "--wait":
@@ -145,7 +147,10 @@ def main(argv):
     ask = ask_pipe if WINDOWS else ask_socket
     if wait:
         # a login saved on another device can take minutes to reach this Mac: poll the username list until it shows up
-        step = float(os.environ.get("PASSBRIDGE_WAIT_STEP") or 10)
+        try:
+            step = max(0.05, float(os.environ.get("PASSBRIDGE_WAIT_STEP") or 10))
+        except ValueError:
+            step = 10.0
         want = req.get("username")
         probe = dict(req, op="logins")
         probe.pop("username", None)
@@ -167,6 +172,10 @@ def main(argv):
         # logins prints its last reply; a failed read stops before any sign_in is sent
         if req["op"] == "logins" or not r.get("ok"):
             return finish(raw)
+        if not found:
+            # time ran out: the last logins reply says what was looked up; no sign_in is sent
+            print(raw.decode().strip())
+            return 1
         req["id"] = uuid.uuid4().hex
     return finish(ask(req))
 
@@ -178,8 +187,13 @@ def finish(line):
     if not line:
         print(json.dumps({"ok": False, "error": "no_reply"}))
         return 1
+    try:
+        reply = json.loads(line)
+    except ValueError:
+        print(json.dumps({"ok": False, "error": "no_reply"}))
+        return 1
     print(line.decode().strip())
-    return 0 if json.loads(line).get("ok") else 1
+    return 0 if isinstance(reply, dict) and reply.get("ok") else 1
 
 
 if __name__ == "__main__":

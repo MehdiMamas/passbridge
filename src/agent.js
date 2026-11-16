@@ -29,6 +29,7 @@ import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
  * @property {(kind?: "pin") => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode] kind "pin" reads the pairing code shown for an unlock
  * @property {(tab: any, frame: { frameId: number, host: string }, username?: string) => Promise<{ ok: boolean, code?: string, source?: string, usernames?: string[], error?: string }>} [vaultCode] the one-time code Apple Passwords offers for this tab (other sites than Apple sign-in)
  * @property {(host: string, filled: boolean) => void} [notifyCode]
+ * @property {{ take: (now?: number) => boolean }} [probeLimiter] budget for typo probes (tests); a module limiter otherwise
  * @property {(tabId: number | undefined, hosts: string[]) => Promise<string[]>} [probeLoginHosts] the hosts (of those asked) that have at least one non-passkey login; names only
  * @property {(tab: any) => Promise<{ username?: string, fixed?: boolean } | null>} [pageUsername] the account the page already shows; fixed when the fill cannot change it
  */
@@ -235,6 +236,9 @@ export function typoHosts(host) {
   return [...bare, ...bare.map((b) => `www.${b}`)].slice(0, 12);
 }
 
+// typo probes on a miss: at most 3 per 10 minutes, apart from the sign_in budget
+const probeLimiter = createLimiter(3);
+
 /**
  * What to tell a caller whose lookup found nothing: the hosts asked, sibling logins that were not offered, and
  * misspelled sites that do have a login. Names only, never a password.
@@ -243,8 +247,11 @@ export function typoHosts(host) {
  * @param {any[]} all every login found, before the every-site filter
  * @param {any[]} kept the logins that were offered
  * @param {AgentDeps} deps
+ * @param {any} settings
+ * @param {boolean} everySite
+ * @param {number} now
  */
-async function missInfo(host, tab, all, kept, deps) {
+async function missInfo(host, tab, all, kept, deps, settings, everySite, now) {
   /** @type {Record<string, unknown>} */
   const out = { lookedUp: siteLookupHosts(host) };
   const reg = registrableDomain(host);
@@ -252,16 +259,19 @@ async function missInfo(host, tab, all, kept, deps) {
   const near = [];
   for (const l of all) {
     if (kept.includes(l)) continue;
-    const site = siteHosts(l.saved).map((s) => String(s).toLowerCase()).find((s) => reg && registrableDomain(s) === reg);
+    const site = siteHosts(l.saved).map((s) => String(s).toLowerCase()).find((s) => reg && registrableDomain(s) === reg && !hostBlocked(s, settings.blockedDomains));
     if (!site) continue;
     let g = near.find((n) => n.site === site);
     if (!g) near.push((g = { site, usernames: [] }));
     if (!g.usernames.some((u) => same(u, l.username))) g.usernames.push(l.username);
   }
   if (near.length) out.near = near;
-  if (deps.probeLoginHosts) {
+  // only hosts the agent could be served on anyway: never a blocked or dev host, and on the allowlist unless every-site is on.
+  // its own budget, so a caller looping on misses cannot keep Apple's helper busy
+  const probe = typoHosts(host).filter((h) => !hostBlocked(h, settings.blockedDomains) && !deps.isLocalDevHost(h) && (everySite || hostAllowed(h, settings.agentAllowlist)));
+  if (deps.probeLoginHosts && probe.length && (deps.probeLimiter || probeLimiter).take(now)) {
     try {
-      const hits = await deps.probeLoginHosts(tab.id, typoHosts(host));
+      const hits = await deps.probeLoginHosts(tab.id, probe);
       if (Array.isArray(hits) && hits.length) out.nearSites = hits.filter((h) => typeof h === "string");
     } catch {}
   }
@@ -588,11 +598,11 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
     }
     if (op === "logins") {
       if (names.length) return done({ ok: true, domain: host, usernames: names });
-      return done({ ok: true, domain: host, usernames: names, ...(await missInfo(host, tab, all, found, deps)) });
+      return done({ ok: true, domain: host, usernames: names, ...(await missInfo(host, tab, all, found, deps, settings, everySite, now)) });
     }
 
     if (op === "sign_in") {
-      if (!names.length) return done(fail("no_login", await missInfo(host, tab, all, found, deps)));
+      if (!names.length) return done(fail("no_login", await missInfo(host, tab, all, found, deps, settings, everySite, now)));
       // a page that shows a fixed account (a password-only step) only gets that account's password
       let fixedName = "";
       try {
@@ -607,7 +617,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
         username = pool[0];
       } else {
         const hit = names.find((n) => same(n, username));
-        if (!hit) return done(fail("no_login", { usernames: names, ...(await missInfo(host, tab, all, found, deps)) }));
+        if (!hit) return done(fail("no_login", { usernames: names, ...(await missInfo(host, tab, all, found, deps, settings, everySite, now)) }));
         if (fixedName && !usernameMatchesPage(hit, fixedName)) return done(fail("username_mismatch", { usernames: names }));
         username = hit;
       }

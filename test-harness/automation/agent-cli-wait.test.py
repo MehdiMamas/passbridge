@@ -68,9 +68,17 @@ ok("logins --wait stops at once on a non-ok reply", code == 1 and len(sent) == 1
 
 code, out, sent = run(["sign_in", "7", "--wait", "1"], [EMPTY, EMPTY])
 cli_wait = len(sent)
-ok("--wait that runs out still sends sign_in once", sent[-1]["op"] == "sign_in" and [s["op"] for s in sent].count("sign_in") == 1, [s["op"] for s in sent])
+ok("--wait that runs out sends no sign_in and prints the last logins reply, exit 1", code == 1 and len(sent) > 0 and all(s["op"] == "logins" for s in sent) and json.loads(out)["usernames"] == [], ([s["op"] for s in sent], code, out))
 
-for bad in (["logins", "7", "--wait"], ["logins", "7", "--wait", "x"], ["logins", "7", "--wait", "-1"], ["sign_in", "7", "--site"]):
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    junk = cli.finish(b"not json\n")
+ok("a reply that is not JSON is no_reply, exit 1, no crash", junk == 1 and json.loads(buf.getvalue())["error"] == "no_reply", buf.getvalue())
+
+code, out, sent = run(["sign_in", "7"], [EMPTY])
+ok("no --wait: a miss still sends one sign_in", [s["op"] for s in sent] == ["sign_in"], sent)
+
+for bad in (["logins", "7", "--wait"], ["logins", "7", "--wait", "x"], ["logins", "7", "--wait", "-1"], ["logins", "7", "--wait", "601"], ["logins", "7", "--wait", "²"], ["sign_in", "7", "--site"]):
     code, out, sent = run(bad, [HAVE])
     ok("bad flag " + " ".join(bad[2:]) + " is a usage error, nothing sent", code == 2 and not sent, (code, sent))
 

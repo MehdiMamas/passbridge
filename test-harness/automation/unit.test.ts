@@ -677,6 +677,7 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
         siteLogins: async () => sibling,
         fillLoginOnTab: async () => ((filledCalls += 1), { filled: true, username: "x" }),
         probeLoginHosts: async (_t: any, hosts: string[]) => ((probed = hosts), ["www.exmaple.com"]),
+        probeLimiter: createLimiter(100),
         ...over,
       });
     const lg = await run({ op: "logins", tabId: 1 }, miss());
@@ -695,6 +696,19 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
     ok("agent miss: no probe dep leaves out nearSites", !("nearSites" in noProbe.reply) && noProbe.reply.lookedUp.length > 0);
     const emptyProbe = await run({ op: "logins", tabId: 1 }, miss({ probeLoginHosts: async () => [] }));
     ok("agent miss: an empty probe result leaves out nearSites", !("nearSites" in emptyProbe.reply));
+    probed = [];
+    const blockedRun = await run({ op: "logins", tabId: 1 }, miss({ getSettings: async () => ({ ...(await everyOpts.getSettings()), blockedDomains: ["exmaple.com"] }) }));
+    ok("agent miss: a blocked spelling is never probed", blockedRun.reply.ok && probed.length > 0 && !probed.some((h) => h === "exmaple.com" || h.endsWith(".exmaple.com")));
+    probed = [];
+    const devRun = await run({ op: "logins", tabId: 1 }, miss({ isLocalDevHost: (h: string) => h === "exmaple.com" }));
+    ok("agent miss: a local dev spelling is never probed", devRun.reply.ok && probed.length > 0 && !probed.includes("exmaple.com"));
+    probed = [];
+    const listOnly = await run({ op: "logins", tabId: 1 }, miss({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["example.com", "exmaple.com"] }), siteLogins: async () => [] }));
+    ok("agent miss: in allowlist mode only allowlisted spellings are probed", listOnly.reply.ok && probed.length > 0 && probed.every((h) => h === "exmaple.com" || h.endsWith(".exmaple.com")));
+    let probeCalls = 0;
+    const capped = createLimiter(3);
+    for (let i = 0; i < 5; i++) await run({ op: "logins", tabId: 1 }, miss({ probeLimiter: capped, probeLoginHosts: async () => ((probeCalls += 1), ["www.exmaple.com"]) }));
+    ok("agent miss: typo probes stop after 3 misses in the window", probeCalls === 3);
     probed = [];
     const hit = await run({ op: "logins", tabId: 1 }, deps({ probeLoginHosts: async (_t: any, h: string[]) => ((probed = h), ["x.com"]) }));
     ok("agent miss: a success carries none of the miss fields and probes nothing", hit.reply.usernames.length === 2 && !("lookedUp" in hit.reply) && !("near" in hit.reply) && !("nearSites" in hit.reply) && probed.length === 0);
