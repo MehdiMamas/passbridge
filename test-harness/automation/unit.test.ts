@@ -257,7 +257,7 @@ ok("isCodeHost: exact sign-in hosts only", ["appleid.apple.com", "account.apple.
 }
 ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync leaves it", !("agentCodeReader" in SETTINGS_DEFAULTS) && !String(migrateSettingsToSync).includes("agentCodeReader"));
 {
-  const calls: any = { read: 0, probe: 0, fill: [] as any[], notify: [] as any[] };
+  const calls: any = { vault: [] as any[], read: 0, probe: 0, fill: [] as any[], notify: [] as any[] };
   const frame = { frameId: 3, host: "idmsa.apple.com" };
   const base = (over: any = {}) => ({
     client: { ready: false },
@@ -289,11 +289,59 @@ ok("settings: agentCodeReader not in SETTINGS_DEFAULTS, so migrateSettingsToSync
   r = await vc({}, { platform: async () => "mac" });
   ok("verify_code: platform() resolves mac -> the read runs", r.ok === true && calls.read === 1);
   r = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"], agentAllowAll: true }) });
-  ok("verify_code: not allowlisted, allowAll on -> not_allowed", r.error === "not_allowed" && !r.reason && calls.probe === 0 && calls.read === 0);
-  r = await vc({}, { getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }), getTab: async () => ({ id: 1, url: "https://github.com/login" }) });
-  ok("verify_code: allowlisted non-Apple host -> not_apple_site", r.error === "not_allowed" && r.reason === "not_apple_site" && calls.read === 0);
-  r = await vc({}, { getTab: async () => ({ id: 1, url: "https://support.apple.com/" }) });
-  ok("verify_code: allowlisted support.apple.com -> not_apple_site, probe not called", r.reason === "not_apple_site" && calls.probe === 0);
+  ok("verify_code: Apple host not allowlisted, allowAll on -> not_allowed (Apple hosts keep the allowlist)", r.error === "not_allowed" && !r.reason && calls.probe === 0 && calls.read === 0);
+  const all = { agentSignIn: true, agentAllowlist: [], agentAllowAll: true };
+  const gh = { getTab: async () => ({ id: 1, url: "https://github.com/sessions/verified-device" }) };
+  const vault = (over: any = {}) => ({ ...gh, getSettings: async () => all, vaultCode: async (...a: any[]) => { calls.vault.push(a); return { ok: true, code: "704129", source: "totp" }; }, ...over });
+  calls.vault = [];
+  r = await vc({}, vault({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["github.com"] }) }));
+  ok("verify_code: allowlisted non-Apple host -> vault path, readCode never called", r.ok === true && r.domain === "github.com" && r.source === "totp" && r.filled === true && calls.read === 0 && calls.vault.length === 1 && calls.fill[0][2] === "704129" && !JSON.stringify(r).includes("704129"));
+  let probed: any = null;
+  r = await vc({}, vault({ probeCodeField: async (_t: any, f: any) => { probed = f; return f[0]; } }));
+  ok("verify_code: allowAll, non-Apple https host -> vault path, probes the top frame only", r.ok === true && calls.read === 0 && calls.fill.length === 1 && JSON.stringify(probed) === JSON.stringify([{ frameId: 0, host: "github.com" }]));
+  calls.vault = [];
+  r = await vc({}, vault({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: [] }) }));
+  ok("verify_code: non-Apple host not allowlisted, allowAll off -> not_allowed", r.error === "not_allowed" && !r.reason && calls.probe === 0 && calls.vault.length === 0);
+  r = await vc({}, vault({ getTab: async () => ({ id: 1, url: "http://github.com/" }) }));
+  const loc = await vc({}, vault({ getTab: async () => ({ id: 1, url: "https://localhost:3000/" }), isLocalDevHost: () => true }));
+  const blk = await vc({}, vault({ getSettings: async () => ({ ...all, blockedDomains: ["github.com"] }) }));
+  const nofill = await vc({}, vault({ isFillUrlAllowed: async () => false }));
+  ok("verify_code: allowAll refuses http, local dev host, blocked domain, fill-disallowed url", [r, loc, blk, nofill].every((x) => x.error === "not_allowed") && calls.vault.length === 0 && calls.probe === 0);
+  r = await vc({}, vault({ getTab: async () => ({ id: 1, url: "https://support.apple.com/" }) }));
+  ok("verify_code: support.apple.com (not an Apple sign-in host) -> vault path, readCode not called", r.ok === true && calls.read === 0 && calls.vault.length === 1);
+  r = await vc({}, vault({ vaultCode: undefined }));
+  ok("verify_code: no vaultCode dep -> reader_missing", r.error === "reader_missing" && calls.read === 0);
+  r = await vc({}, vault({ vaultCode: async () => ({ ok: false, error: "no_code" }) }));
+  ok("verify_code: no_code carries a Keytray hint", r.error === "no_code" && /Keytray/.test(r.hint) && calls.fill.length === 0);
+  r = await vc({}, vault({ vaultCode: async () => ({ ok: false, error: "several_codes", usernames: ["a@x.com", "b@x.com"] }) }));
+  ok("verify_code: several_codes lists usernames, no values", r.error === "several_codes" && r.usernames.length === 2 && !/\d{4}/.test(JSON.stringify(r)));
+  calls.vault = [];
+  r = await vc({ username: "b@x.com" }, vault());
+  ok("verify_code: username reaches vaultCode", calls.vault[0][2] === "b@x.com" && r.ok === true);
+  calls.vault = [];
+  r = await vc({}, vault());
+  ok("verify_code: no username -> undefined", calls.vault[0][2] === undefined);
+  r = await vc({}, vault({ vaultCode: async () => ({ ok: false, error: "needs_user" }) }));
+  ok("verify_code: vault needs_user passes through", r.error === "needs_user");
+  r = await vc({}, vault({ vaultCode: async () => ({ ok: false, error: "weird" }) }));
+  ok("verify_code: other vault error -> reader_failed", r.error === "reader_failed");
+  const bad = [];
+  for (const c of ["123", "12345678901", "12ab56"]) bad.push(await vc({}, vault({ vaultCode: async () => ({ ok: true, code: c, source: "totp" }) })));
+  ok("verify_code: vault code not 4-10 digits -> reader_failed, fillCode not called", bad.every((x) => x.error === "reader_failed") && calls.fill.length === 0);
+  r = await vc({}, vault({ vaultCode: async () => ({ ok: true, code: "0481", source: "messages" }) }));
+  ok("verify_code: messages source and 4 digits accepted", r.ok === true && r.source === "messages" && calls.fill[0][2] === "0481");
+  calls.vault = [];
+  r = await vc({}, vault({ probeCodeField: async () => null }));
+  ok("verify_code: vault path no field -> no_field, vaultCode not called", r.error === "no_field" && calls.vault.length === 0);
+  {
+    const lim2 = createLimiter();
+    calls.vault = [];
+    const x = [await vc({}, vault(), lim2, 0), await vc({}, {}, lim2, 1), await vc({}, vault(), lim2, 2)];
+    r = await vc({}, vault(), lim2, 3);
+    ok("verify_code: Apple and vault paths share the 3 per 10 min limit", x.every((y) => y.ok) && r.error === "rate_limited" && calls.vault.length === 2);
+  }
+  r = await vc({}, vault({ codeReaderOn: async () => calls.vault.length === 0 }));
+  ok("verify_code: switch off before fill (vault path) -> code dropped", r.reason === "code_reader_off" && calls.fill.length === 0);
   r = await vc({ site: "github.com" });
   ok("verify_code: site mismatch", r.error === "not_allowed" && r.reason === "site_mismatch" && calls.read === 0);
   ok("verify_code: site match passes", (await vc({ site: "apple.com" })).ok === true);
