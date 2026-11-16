@@ -500,7 +500,7 @@ onChrome(chrome.runtime.onMessage, (/** @type {any} */ msg, /** @type {chrome.ru
     case "pageUsername": {
       if (window !== window.top) return false;
       const f = anchorPwField(document) || document.querySelector('input[type="password"]');
-      sendResponse({ username: f ? findPageUsername(f) : "" });
+      sendResponse(f ? pageUsernameInfo(f) : { username: "", fixed: false });
       return true;
     }
     case "qrImageRect": {
@@ -1266,6 +1266,12 @@ const EMAIL_RE = /[^\s@<>()"',;:]+@[^\s@<>()"',;:]+\.[^\s@<>()"',;:]+/;
 
 // the username this page is for: a filled username input, a hidden identifier, or an email shown near the password field
 function findPageUsername(/** @type {HTMLInputElement} */ field) {
+  return pageUsernameInfo(field).username;
+}
+
+// fixed: the page shows the account and the fill cannot change it (hidden or read-only input, account chip, text)
+/** @returns {{ username: string, fixed: boolean }} */
+function pageUsernameInfo(/** @type {HTMLInputElement} */ field) {
   try {
     const scopes = /** @type {ParentNode[]} */ ([field?.form, document].filter(Boolean));
     for (const scope of scopes) {
@@ -1274,15 +1280,15 @@ function findPageUsername(/** @type {HTMLInputElement} */ field) {
         const v = (el.value || "").trim();
         if (!v || v.length > 320) continue;
         if (el.type === "hidden") {
-          if (/^(identifier|username|email|login)$/i.test(el.name || "") || /^(identifier|username|email|login)$/i.test(el.id || "")) return v;
+          if (/^(identifier|username|email|login)$/i.test(el.name || "") || /^(identifier|username|email|login)$/i.test(el.id || "")) return { username: v, fixed: true };
         } else if (el.type === "email" || (isUsernameField(el) && isVisible(el))) {
-          return v;
+          return { username: v, fixed: el.readOnly || el.disabled };
         }
       }
     }
     // an account chip (Google's 2-step page) carries the address in data-email
     const chip = (document.querySelector("[data-email]")?.getAttribute("data-email") || "").trim();
-    if (chip && chip.length <= 320 && EMAIL_RE.test(chip)) return chip;
+    if (chip && chip.length <= 320 && EMAIL_RE.test(chip)) return { username: chip, fixed: true };
     /** @type {HTMLElement | null} */
     let node = field;
     for (let i = 0; node && i < 6; i++) {
@@ -1290,10 +1296,10 @@ function findPageUsername(/** @type {HTMLInputElement} */ field) {
       if (!node) break;
       const text = (node.innerText || "").slice(0, 2000);
       const m = text.match(EMAIL_RE);
-      if (m) return m[0];
+      if (m) return { username: m[0], fixed: true };
     }
   } catch {}
-  return "";
+  return { username: "", fixed: false };
 }
 
 function pageUsernameQuery(/** @type {HTMLInputElement} */ field) {

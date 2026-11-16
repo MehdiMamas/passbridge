@@ -643,6 +643,23 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
   await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), lim);
   ok("agent: the second fill in the window is rate_limited", (await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), lim)).reply.error === "rate_limited");
   ok("agent: fill_code is gone", (await run({ op: "fill_code", tabId: 1 })).reply.error === "unknown_op");
+  {
+    let filled = "";
+    const page = (username: string, fixed: boolean) =>
+      deps({ pageUsername: async () => ({ username, fixed }), fillLoginOnTab: async (_t: any, u: any) => ((filled = u), { filled: true, username: u }) });
+    filled = "";
+    const mm = await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, page("c@x.com", true));
+    ok("agent: a fixed page account that differs from the asked login is username_mismatch, nothing filled", mm.reply.error === "username_mismatch" && filled === "");
+    filled = "";
+    const none = await run({ op: "sign_in", tabId: 1 }, page("c@x.com", true));
+    ok("agent: no saved login for the fixed page account is username_mismatch with the saved list", none.reply.error === "username_mismatch" && none.reply.usernames.length === 2 && filled === "");
+    const pick = await run({ op: "sign_in", tabId: 1 }, page("B@x.com", true));
+    ok("agent: with no username, the login matching the fixed page account is picked", pick.reply.ok && filled === "b@x.com");
+    const free = await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, page("c@x.com", false));
+    ok("agent: an editable username field does not block the fill", free.reply.ok && filled === "a@x.com");
+    const failed = await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ pageUsername: async () => { throw new Error("no frame"); } }));
+    ok("agent: a page that cannot be asked still fills", failed.reply.ok);
+  }
   const fr = pickAllowedFrames(
     [
       { frameId: 0, url: "https://account.apple.com/" },

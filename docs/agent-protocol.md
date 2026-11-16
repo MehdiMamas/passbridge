@@ -135,6 +135,8 @@ Off by default. In Settings, on the Agents tab, the user can turn on Allow every
 
 If `username` is left out and the site has exactly one login, that login is used. With several logins, the reply is `choose_login` with the list. Usernames are matched without regard to case or surrounding spaces.
 
+When the page already shows a fixed account (a password-only step: a hidden or read-only username, an account chip or the address in the text near the password field), only that account is filled. With no `username`, the saved login matching it is picked; a `username` for a different account, or no saved login for it, is `username_mismatch` and nothing is filled.
+
 ## Replies
 
 Success:
@@ -147,7 +149,7 @@ Success:
 
 The three lines are `status`, `logins` and `sign_in`. `save` succeeds with `{"id":"…","ok":true,"domain":"github.com","username":"octocat"}`.
 
-Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries `usernames`. `not_allowed` may carry `reason`; the values are `site_mismatch` and `save_off`, and the Agents > Activity list shows it.
+Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` and `username_mismatch` also carry `usernames`. `not_allowed` may carry `reason`; the values are `site_mismatch` and `save_off`, and the Agents > Activity list shows it.
 
 | error | meaning |
 |---|---|
@@ -164,6 +166,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` also carries
 | `needs_user` | the user has to act: the extension isn't paired, or the Passwords approval (Touch ID) was refused or not given in time |
 | `no_login` | no saved login for the site, or none matching `username` |
 | `choose_login` | several logins and no `username` given; pick one from `usernames` |
+| `username_mismatch` | `sign_in`: the page shows a fixed account that differs from `username`, or no saved login matches it; `usernames` lists the saved ones. Go back on the page and enter the right account first |
 | `fill_failed` | no sign-in form was found or the fill didn't take (`verify_code`: the code was read but not entered) |
 | `no_field` | `verify_code`: the tab has no code field |
 | `no_code` | `verify_code` on a non-Apple site: Apple Passwords offers no code for it; carries `hint` (use Keytray for emailed and SMS codes) |

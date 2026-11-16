@@ -2,6 +2,7 @@
 // replies carry status and usernames only, never a password or a code.
 import { SETTINGS_AREA, getSettings, hostBlocked } from "./settings.js";
 import { hostOfSite, siteHosts } from "./session/password-search.js";
+import { usernameMatchesPage } from "./session/username-match.js";
 
 /**
  * Injected collaborators. Results are `any` where they are owned by background.js or the vault (shapes not typed there).
@@ -27,6 +28,7 @@ import { hostOfSite, siteHosts } from "./session/password-search.js";
  * @property {(kind?: "pin") => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode] kind "pin" reads the pairing code shown for an unlock
  * @property {(tab: any, frame: { frameId: number, host: string }, username?: string) => Promise<{ ok: boolean, code?: string, source?: string, usernames?: string[], error?: string }>} [vaultCode] the one-time code Apple Passwords offers for this tab (other sites than Apple sign-in)
  * @property {(host: string, filled: boolean) => void} [notifyCode]
+ * @property {(tab: any) => Promise<{ username?: string, fixed?: boolean } | null>} [pageUsername] the account the page already shows; fixed when the fill cannot change it
  */
 
 const HOST = "com.passbridge.agent";
@@ -526,13 +528,22 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
 
     if (op === "sign_in") {
       if (!names.length) return done(fail("no_login"));
+      // a page that shows a fixed account (a password-only step) only gets that account's password
+      let fixedName = "";
+      try {
+        const page = deps.pageUsername ? await deps.pageUsername(tab) : null;
+        if (page?.fixed === true && typeof page.username === "string") fixedName = page.username.trim().slice(0, 320);
+      } catch {}
       let username = msg.username;
       if (username == null || username === "") {
-        if (names.length > 1) return done(fail("choose_login", { usernames: names }));
-        username = names[0];
+        const pool = fixedName ? names.filter((n) => usernameMatchesPage(n, fixedName)) : names;
+        if (!pool.length) return done(fail("username_mismatch", { usernames: names }));
+        if (pool.length > 1) return done(fail("choose_login", { usernames: pool }));
+        username = pool[0];
       } else {
         const hit = names.find((n) => same(n, username));
         if (!hit) return done(fail("no_login"));
+        if (fixedName && !usernameMatchesPage(hit, fixedName)) return done(fail("username_mismatch", { usernames: names }));
         username = hit;
       }
       base.username = username;
