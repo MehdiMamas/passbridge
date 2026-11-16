@@ -6,9 +6,10 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 import uuid
 
-USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> | sign_in <tabId> [username] | save <tabId> <username> | verify-code <tabId> [site] [username] | unlock | save --url <https-url> <username>  (save reads the password from stdin)"
+USAGE = "usage: passbridge-agent-cli.py status | pair-start | pair-pin (pin on stdin) | logins <tabId> [--site <host>] [--wait <seconds>] | sign_in <tabId> [username] [--site <host>] [--wait <seconds>] | save <tabId> <username> | verify-code <tabId> [site] [username] | unlock | save --url <https-url> <username>  (save reads the password from stdin)"
 
 WINDOWS = os.name == "nt"
 if WINDOWS:
@@ -86,7 +87,31 @@ def main(argv):
         code = wsl_reexec(argv)
         if code is not None:
             return code
+    wait = 0
+    site = None
+    if argv[0] in ("logins", "sign_in"):
+        # --site <host> and --wait <seconds> may come anywhere after the tabId
+        rest = []
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if i >= 2 and a in ("--site", "--wait"):
+                val = argv[i + 1] if i + 1 < len(argv) else None
+                if val is None or (a == "--wait" and not val.isdigit()) or (a == "--site" and not val):
+                    print(USAGE, file=sys.stderr)
+                    return 2
+                if a == "--wait":
+                    wait = int(val)
+                else:
+                    site = val
+                i += 2
+                continue
+            rest.append(a)
+            i += 1
+        argv = rest
     req = {"id": uuid.uuid4().hex, "op": argv[0].replace("-", "_")}
+    if site:
+        req["site"] = site
     pairing = argv[0] in ("pair-start", "pair-pin", "unlock")
     if argv[0] == "pair-pin":
         req["pin"] = sys.stdin.readline().strip()
@@ -117,7 +142,36 @@ def main(argv):
         if not req["password"]:
             print("the password must come on stdin", file=sys.stderr)
             return 2
-    line = (ask_pipe if WINDOWS else ask_socket)(req)
+    ask = ask_pipe if WINDOWS else ask_socket
+    if wait:
+        # a login saved on another device can take minutes to reach this Mac: poll the username list until it shows up
+        step = float(os.environ.get("PASSBRIDGE_WAIT_STEP") or 10)
+        want = req.get("username")
+        probe = dict(req, op="logins")
+        probe.pop("username", None)
+        start = time.monotonic()
+        while True:
+            probe["id"] = uuid.uuid4().hex
+            raw = ask(probe)
+            try:
+                r = json.loads(raw) if raw else None
+            except ValueError:
+                r = None
+            if r is None:
+                return finish(raw)
+            names = [str(n).strip().lower() for n in (r.get("usernames") or [])]
+            found = bool(names) and (not want or str(want).strip().lower() in names)
+            if not r.get("ok") or found or time.monotonic() - start >= wait:
+                break
+            time.sleep(step)
+        # logins prints its last reply; a failed read stops before any sign_in is sent
+        if req["op"] == "logins" or not r.get("ok"):
+            return finish(raw)
+        req["id"] = uuid.uuid4().hex
+    return finish(ask(req))
+
+
+def finish(line):
     if line is None:
         print(json.dumps({"ok": False, "error": "no_host"}))
         return 1

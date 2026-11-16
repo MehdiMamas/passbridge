@@ -3,6 +3,7 @@
 import { SETTINGS_AREA, getSettings, hostBlocked } from "./settings.js";
 import { hostOfSite, siteHosts } from "./session/password-search.js";
 import { usernameMatchesPage } from "./session/username-match.js";
+import { registrableDomain, siteLookupHosts } from "./session/site-domain.js";
 
 /**
  * Injected collaborators. Results are `any` where they are owned by background.js or the vault (shapes not typed there).
@@ -28,6 +29,7 @@ import { usernameMatchesPage } from "./session/username-match.js";
  * @property {(kind?: "pin") => Promise<{ ok: boolean, code?: string, error?: string }>} [readCode] kind "pin" reads the pairing code shown for an unlock
  * @property {(tab: any, frame: { frameId: number, host: string }, username?: string) => Promise<{ ok: boolean, code?: string, source?: string, usernames?: string[], error?: string }>} [vaultCode] the one-time code Apple Passwords offers for this tab (other sites than Apple sign-in)
  * @property {(host: string, filled: boolean) => void} [notifyCode]
+ * @property {(tabId: number | undefined, hosts: string[]) => Promise<string[]>} [probeLoginHosts] the hosts (of those asked) that have at least one non-passkey login; names only
  * @property {(tab: any) => Promise<{ username?: string, fixed?: boolean } | null>} [pageUsername] the account the page already shows; fixed when the fill cannot change it
  */
 
@@ -206,6 +208,66 @@ export function sanitizeReply(value) {
  * @param {unknown} b
  */
 const same = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+// near-miss hosts: the registrable domain with its main label mistyped (one swap or one letter dropped), bare and www.
+// at most 12, all derived from the tab host. only used to tell the caller a login may be saved under another spelling
+/**
+ * @param {unknown} host
+ * @returns {string[]}
+ */
+export function typoHosts(host) {
+  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  const reg = registrableDomain(h);
+  if (!reg || !reg.includes(".") || /^\d{1,3}(\.\d{1,3}){3}$/.test(reg) || reg.includes(":") || reg.startsWith("[")) return [];
+  const dot = reg.indexOf(".");
+  const main = reg.slice(0, dot);
+  const suffix = reg.slice(dot + 1);
+  /** @type {string[]} */
+  const variants = [];
+  const add = (/** @type {string} */ v) => {
+    if (v && v !== main && !variants.includes(v)) variants.push(v);
+  };
+  for (let i = 0; i < main.length - 1; i++) add(main.slice(0, i) + main[i + 1] + main[i] + main.slice(i + 2));
+  for (let i = 0; i < main.length; i++) {
+    const v = main.slice(0, i) + main.slice(i + 1);
+    if (v.length >= 2 && !v.startsWith("-") && !v.endsWith("-")) add(v);
+  }
+  const bare = variants.map((v) => `${v}.${suffix}`);
+  return [...bare, ...bare.map((b) => `www.${b}`)].slice(0, 12);
+}
+
+/**
+ * What to tell a caller whose lookup found nothing: the hosts asked, sibling logins that were not offered, and
+ * misspelled sites that do have a login. Names only, never a password.
+ * @param {string} host
+ * @param {any} tab
+ * @param {any[]} all every login found, before the every-site filter
+ * @param {any[]} kept the logins that were offered
+ * @param {AgentDeps} deps
+ */
+async function missInfo(host, tab, all, kept, deps) {
+  /** @type {Record<string, unknown>} */
+  const out = { lookedUp: siteLookupHosts(host) };
+  const reg = registrableDomain(host);
+  /** @type {{ site: string, usernames: string[] }[]} */
+  const near = [];
+  for (const l of all) {
+    if (kept.includes(l)) continue;
+    const site = siteHosts(l.saved).map((s) => String(s).toLowerCase()).find((s) => reg && registrableDomain(s) === reg);
+    if (!site) continue;
+    let g = near.find((n) => n.site === site);
+    if (!g) near.push((g = { site, usernames: [] }));
+    if (!g.usernames.some((u) => same(u, l.username))) g.usernames.push(l.username);
+  }
+  if (near.length) out.near = near;
+  if (deps.probeLoginHosts) {
+    try {
+      const hits = await deps.probeLoginHosts(tab.id, typoHosts(host));
+      if (Array.isArray(hits) && hits.length) out.nearSites = hits.filter((h) => typeof h === "string");
+    } catch {}
+  }
+  return out;
+}
+
 /**
  * @param {string} error
  * @param {Record<string, unknown>} [extra]
@@ -511,8 +573,8 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
   if (!deps.client.ready) return done(fail("needs_user"));
 
   try {
-    let found = await deps.siteLogins(tab.id, tab.url);
-    if (everySite) found = found.filter((l) => loginSavedFor(host, l.saved));
+    const all = await deps.siteLogins(tab.id, tab.url);
+    const found = everySite ? all.filter((l) => loginSavedFor(host, l.saved)) : all;
     const logins = deps.uniqueByUsername(found);
     const names = logins.map((l) => l.username);
     if (op === "save") {
@@ -524,10 +586,13 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
       deps.notifySaved?.(host, saveName);
       return done({ ok: true, domain: host, username: saveName });
     }
-    if (op === "logins") return done({ ok: true, domain: host, usernames: names });
+    if (op === "logins") {
+      if (names.length) return done({ ok: true, domain: host, usernames: names });
+      return done({ ok: true, domain: host, usernames: names, ...(await missInfo(host, tab, all, found, deps)) });
+    }
 
     if (op === "sign_in") {
-      if (!names.length) return done(fail("no_login"));
+      if (!names.length) return done(fail("no_login", await missInfo(host, tab, all, found, deps)));
       // a page that shows a fixed account (a password-only step) only gets that account's password
       let fixedName = "";
       try {
@@ -542,7 +607,7 @@ export async function handleAgentRequest(msg, deps, limiter, now = Date.now()) {
         username = pool[0];
       } else {
         const hit = names.find((n) => same(n, username));
-        if (!hit) return done(fail("no_login"));
+        if (!hit) return done(fail("no_login", { usernames: names, ...(await missInfo(host, tab, all, found, deps)) }));
         if (fixedName && !usernameMatchesPage(hit, fixedName)) return done(fail("username_mismatch", { usernames: names }));
         username = hit;
       }
