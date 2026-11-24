@@ -3,6 +3,7 @@
 import { SETTINGS_AREA, getSettings, hostBlocked } from "./settings.js";
 import { hostOfSite, siteHosts } from "./session/password-search.js";
 import { usernameMatchesPage } from "./session/username-match.js";
+import { totpRowMatches } from "./session/otp-list.js";
 
 /**
  * Injected collaborators. Results are `any` where they are owned by background.js or the vault (shapes not typed there).
@@ -54,6 +55,28 @@ export const hostAllowed = hostBlocked;
  */
 export function onSiteOrSubdomain(host, site) {
   return host === site || (site.includes(".") && host.endsWith("." + site));
+}
+
+// agent verify_code: which code fits this host. Every row must name this site or a subdomain;
+// a row with no site never counts, so a code is only filled where it was issued for.
+/**
+ * @param {any[]} entries rows from listOtpEntries
+ * @param {string} host
+ * @param {string} [username]
+ * @returns {{ totp: any } | { ok: boolean, code?: string, source?: string, usernames?: string[], error?: string }}
+ */
+export function pickAgentCode(entries, host, username) {
+  const onHost = (/** @type {any} */ e) => !!e.domain && onSiteOrSubdomain(host, String(e.domain).toLowerCase().replace(/^www\./, ""));
+  const totps = entries.filter((e) => e.source === "totp" && onHost(e));
+  if (totps.length) {
+    const pick = username ? totps.find((e) => totpRowMatches(e, username)) : totps.length === 1 ? totps[0] : null;
+    if (pick) return { totp: pick };
+    return username ? { ok: false, error: "no_code" } : { ok: false, error: "several_codes", usernames: totps.map((e) => e.username) };
+  }
+  const others = entries.filter((e) => e.source !== "totp" && onHost(e));
+  if (others.length > 1) return { ok: false, error: "several_codes" };
+  if (!others.length) return { ok: false, error: "no_code" };
+  return typeof others[0].code === "string" ? { ok: true, code: others[0].code, source: "messages" } : { ok: false, error: "reader_failed" };
 }
 
 // a login is saved for this host: a saved site, a subdomain of it, or the saved www. host without its www.
