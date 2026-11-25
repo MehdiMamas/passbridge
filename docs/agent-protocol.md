@@ -126,7 +126,7 @@ Off by default. In Settings, on the Agents tab, the user can turn on Allow every
 
 - the tab must be `https:`; plain HTTP is refused even if Fill and save on HTTP pages is on, and so are `localhost`, `127.0.0.1`, `[::1]`, `.localhost` and `.test` hosts;
 - a site in the user's blocked domains is refused (on listed sites too);
-- `logins` and `sign_in` only see logins saved for the tab's own site, a subdomain of it, or its `www.` form. A login saved only for another domain, such as a college's SSO domain, is not offered;
+- `logins` and `sign_in` only see logins saved for the tab's own site, a subdomain of it, or its `www.` form. A login saved only for another domain, such as a college's SSO domain, is not offered. A login saved for a sibling host on the same site (for example `billing.example.com` when the tab is on `auth.example.com`) is not offered either; on a miss it is listed in `near`, for information only, and never filled;
 - the password is read fresh each time and refused (`not_allowed`) unless the record read is itself saved for the site;
 - only the page's own frames on the same origin are filled, never an allowlisted frame from another site;
 - each password read still needs the user's approval in Apple's Passwords.
@@ -149,6 +149,16 @@ Success:
 
 The three lines are `status`, `logins` and `sign_in`. `save` succeeds with `{"id":"…","ok":true,"domain":"github.com","username":"octocat"}`.
 
+### Misses: `lookedUp`, `near`, `nearSites`
+
+When nothing is offered (`logins` with an empty `usernames`, or `sign_in` ending in `no_login`, whether the site has no login or none matches `username`), the reply may say why. These fields never appear on a success, never carry a password or code, and nothing named in them is ever filled:
+
+- `lookedUp`: the hosts PassBridge asked Apple about, the tab's host first.
+- `near`: with Allow every site (*), logins that were found but not offered because they are saved for another host of the same registrable domain, as `[{"site":"billing.example.com","usernames":["octocat"]}]`. Omitted when there are none.
+- `nearSites`: sites with a similar spelling (two letters swapped or one dropped in the site name, with and without `www.`) that do have a login. Site names only, no usernames. PassBridge makes at most 12 extra lookups for this, only on a miss, and each asks only for usernames. A spelling is only asked about when an agent could be served there anyway: never a blocked or local host, and only an allowlisted one unless Allow every site (*) is on. These lookups have their own budget of 3 misses per 10 minutes, apart from the `sign_in` limit; past it the reply has no `nearSites`. Omitted when there are none.
+
+`sign_in` with a `username` that is not saved, on a site that has other logins, also carries `usernames`.
+
 Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` and `username_mismatch` also carry `usernames`. `not_allowed` may carry `reason`; the values are `site_mismatch` and `save_off`, and the Agents > Activity list shows it.
 
 | error | meaning |
@@ -164,7 +174,7 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` and `usernam
 | `not_allowed` | the tab's site isn't on the allowlist (and Allow every site is off), or PassBridge refuses to fill there (for example plain HTTP, a blocked domain or a dev host), or `site` doesn't match the tab (`reason: "site_mismatch"`), or `save` while Allow agents to save new logins is off (`reason: "save_off"`), or `verify_code` with the setting off (`reason: "code_reader_off"`), on a platform other than macOS and Windows (`reason: "mac_only"`) or, on an Apple sign-in host, a site that is not on the allowlist (Allow every site does not apply there) |
 | `rate_limited` | more than 10 `sign_in` or `save` requests in 10 minutes, or more than 3 `verify_code` requests in 10 minutes (counted separately) |
 | `needs_user` | the user has to act: the extension isn't paired, or the Passwords approval (Touch ID) was refused or not given in time |
-| `no_login` | no saved login for the site, or none matching `username` |
+| `no_login` | no saved login for the site, or none matching `username`; may carry `lookedUp`, `near`, `nearSites` (see Misses) |
 | `choose_login` | several logins and no `username` given; pick one from `usernames` |
 | `username_mismatch` | `sign_in`: the page shows a fixed account that differs from `username`, or no saved login matches it; `usernames` lists the saved ones. Go back on the page and enter the right account first |
 | `fill_failed` | no sign-in form was found or the fill didn't take (`verify_code`: the code was read but not entered) |
@@ -177,6 +187,12 @@ Failure: `{"id":"…","ok":false,"error":"<code>"}`. `choose_login` and `usernam
 
 The reference CLI: `status`, `pair-start`, `pair-pin` (reads the 6 digits as one line from stdin, never from the command line, for example `printf '%s
 ' 123456 | python3 passbridge-agent-cli.py pair-pin`), `logins <tabId>`, `sign_in <tabId> [username]`, and `save <tabId> <username>` or `save --url <https-url> <username>`, which reads the password from stdin (never from the command line), for example `printf '%s' "$PW" | python3 passbridge-agent-cli.py save 12 octocat`, or `... save --url https://github.com/login octocat`. `verify-code <tabId> [site]` runs `verify_code` (macOS and Windows only).
+
+`logins` and `sign_in` also take, anywhere after the `tabId`, `--site <host>` (sent as `site`, so a tab that navigated away is refused) and `--wait <seconds>` (a whole number up to 600; a missing or bad value is a usage error, exit 2). With `--wait N`, `logins` asks again every 10 s (`PASSBRIDGE_WAIT_STEP` sets the step in seconds, for tests) until a username is listed or N seconds have passed, and prints the last reply. `sign_in --wait N` does the same with `logins` first, until some login is listed (or the named `username`, matched without regard to case), then sends `sign_in` once; if the time runs out first, it prints the last `logins` reply (with its miss fields), exit 1, and sends no `sign_in`. A `logins` reply that is not `ok` is printed at once, exit 1, and no `sign_in` is sent. Each request has its own `id`. Without `--wait` one request is sent.
+
+## Sync
+
+PassBridge keeps no copy of the login list: every lookup asks Apple's helper live. Apple syncs logins between devices on its own schedule and offers no way to trigger a sync or to read when one last ran, so a login saved on another device a few minutes ago can be missing here until Apple copies it. `--wait` covers that: it keeps asking until the login appears or the time is up.
 
 The reference CLI adds two codes of its own, without an `id`: `no_host`, when it can't connect, and `no_reply`, when the connection closed with no answer. Wait at least 90 s for a reply, because a Touch ID prompt can take that long. The CLI waits 100 s.
 

@@ -12,7 +12,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { canAutoSave, newPasswordContext, pickSaveTarget, tryAutoSave } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, handleUserCode, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAgentCode, pickAllowedFrames, relayEvent, sanitizeReply } from "../../src/agent.js";
+import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, handleUserCode, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAgentCode, pickAllowedFrames, relayEvent, sanitizeReply, typoHosts } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -659,6 +659,76 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
     ok("agent: an editable username field does not block the fill", free.reply.ok && filled === "a@x.com");
     const failed = await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ pageUsername: async () => { throw new Error("no frame"); } }));
     ok("agent: a page that cannot be asked still fills", failed.reply.ok);
+  }
+  // a miss says what was looked up, what sits next to it and which misspelled sites have a login; never a password
+  {
+    const SECRET = "Sup3r-secret-pw";
+    const everyOpts = { isLocalDevHost: () => false, getSettings: async () => ({ agentSignIn: true, agentAllowlist: [], agentAllowAll: true }), getTab: async () => ({ id: 1, url: "https://auth.example.com/login" }) };
+    const sibling = [
+      { username: "Octocat", saved: ["billing.example.com"], password: SECRET },
+      { username: "octocat", saved: ["billing.example.com"] },
+      { username: "hubot", saved: ["other-site.example.org"] },
+    ];
+    let filledCalls = 0;
+    let probed: string[] = [];
+    const miss = (over = {}) =>
+      deps({
+        ...everyOpts,
+        siteLogins: async () => sibling,
+        fillLoginOnTab: async () => ((filledCalls += 1), { filled: true, username: "x" }),
+        probeLoginHosts: async (_t: any, hosts: string[]) => ((probed = hosts), ["www.exmaple.com"]),
+        probeLimiter: createLimiter(100),
+        ...over,
+      });
+    const lg = await run({ op: "logins", tabId: 1 }, miss());
+    ok("agent miss: logins with nothing offered is still ok and says what was looked up", lg.reply.ok === true && lg.reply.usernames.length === 0 && lg.reply.lookedUp.includes("auth.example.com") && lg.reply.lookedUp.includes("www.example.com"));
+    ok("agent miss: a sibling-host login is listed in near (deduped), not offered", lg.reply.near.length === 1 && lg.reply.near[0].site === "billing.example.com" && lg.reply.near[0].usernames.length === 1);
+    ok("agent miss: a login for an unrelated domain is not in near", !JSON.stringify(lg.reply).includes("hubot"));
+    ok("agent miss: nearSites comes from the probe, derived from the tab host only, at most 12", lg.reply.nearSites[0] === "www.exmaple.com" && probed.length > 0 && probed.length <= 12 && probed.every((h) => h.endsWith(".com") && /^(www\.)?[a-z]+\.com$/.test(h)));
+    const si = await run({ op: "sign_in", tabId: 1, username: "octocat" }, miss());
+    ok("agent miss: sign_in does not fill a near login and says no_login with the miss fields", si.reply.error === "no_login" && filledCalls === 0 && si.reply.near?.length === 1 && si.reply.lookedUp.length > 0);
+    ok("agent miss: no reply holds a password", ![lg, si].some((x) => JSON.stringify(x).includes(SECRET) || /"password"/i.test(JSON.stringify(x))));
+    const named = await run({ op: "sign_in", tabId: 1, username: "nobody" }, miss({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["example.com"] }), siteLogins: async () => [{ username: "a@x.com", saved: ["example.com"] }] }));
+    ok("agent miss: a username that is not saved is no_login with the saved names and the miss fields", named.reply.error === "no_login" && named.reply.usernames[0] === "a@x.com" && Array.isArray(named.reply.lookedUp) && filledCalls === 0);
+    const thrown = await run({ op: "logins", tabId: 1 }, miss({ probeLoginHosts: async () => { throw new Error("x"); } }));
+    ok("agent miss: a probe that throws leaves out nearSites", thrown.reply.ok && !("nearSites" in thrown.reply));
+    const noProbe = await run({ op: "logins", tabId: 1 }, miss({ probeLoginHosts: undefined }));
+    ok("agent miss: no probe dep leaves out nearSites", !("nearSites" in noProbe.reply) && noProbe.reply.lookedUp.length > 0);
+    const emptyProbe = await run({ op: "logins", tabId: 1 }, miss({ probeLoginHosts: async () => [] }));
+    ok("agent miss: an empty probe result leaves out nearSites", !("nearSites" in emptyProbe.reply));
+    probed = [];
+    const blockedRun = await run({ op: "logins", tabId: 1 }, miss({ getSettings: async () => ({ ...(await everyOpts.getSettings()), blockedDomains: ["exmaple.com"] }) }));
+    ok("agent miss: a blocked spelling is never probed", blockedRun.reply.ok && probed.length > 0 && !probed.some((h) => h === "exmaple.com" || h.endsWith(".exmaple.com")));
+    probed = [];
+    const devRun = await run({ op: "logins", tabId: 1 }, miss({ isLocalDevHost: (h: string) => h === "exmaple.com" }));
+    ok("agent miss: a local dev spelling is never probed", devRun.reply.ok && probed.length > 0 && !probed.includes("exmaple.com"));
+    probed = [];
+    const listOnly = await run({ op: "logins", tabId: 1 }, miss({ getSettings: async () => ({ agentSignIn: true, agentAllowlist: ["example.com", "exmaple.com"] }), siteLogins: async () => [] }));
+    ok("agent miss: in allowlist mode only allowlisted spellings are probed", listOnly.reply.ok && probed.length > 0 && probed.every((h) => h === "exmaple.com" || h.endsWith(".exmaple.com")));
+    let probeCalls = 0;
+    const capped = createLimiter(3);
+    for (let i = 0; i < 5; i++) await run({ op: "logins", tabId: 1 }, miss({ probeLimiter: capped, probeLoginHosts: async () => ((probeCalls += 1), ["www.exmaple.com"]) }));
+    ok("agent miss: typo probes stop after 3 misses in the window", probeCalls === 3);
+    probed = [];
+    const hit = await run({ op: "logins", tabId: 1 }, deps({ probeLoginHosts: async (_t: any, h: string[]) => ((probed = h), ["x.com"]) }));
+    ok("agent miss: a success carries none of the miss fields and probes nothing", hit.reply.usernames.length === 2 && !("lookedUp" in hit.reply) && !("near" in hit.reply) && !("nearSites" in hit.reply) && probed.length === 0);
+    const okSign = await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps({ probeLoginHosts: async () => ["x.com"] }));
+    ok("agent miss: a filled sign_in carries none of the miss fields", okSign.reply.ok && !("lookedUp" in okSign.reply) && !("nearSites" in okSign.reply));
+    const taken = createLimiter(1, 1000);
+    await run({ op: "sign_in", tabId: 1, username: "a@x.com" }, deps(), taken);
+    const before = taken.take(5);
+    ok("agent miss: sanity, the limiter is spent", before === false);
+    const lgLim = await run({ op: "logins", tabId: 1 }, miss(), taken, 5);
+    ok("agent miss: the lookups take no rate-limit token", lgLim.reply.ok === true && lgLim.reply.lookedUp.length > 0);
+    const th = typoHosts("auth.example.com");
+    ok("typoHosts: swaps come first, then deletions, never the original, capped at 12", th[0] === "xeample.com" && th.includes("exmaple.com") && !th.includes("example.com") && th.length === 12);
+    const sh = typoHosts("login.a-bc.com");
+    ok("typoHosts: bare hosts come before www hosts", sh.length > 0 && sh.findIndex((h) => h.startsWith("www.")) === sh.filter((h) => !h.startsWith("www.")).length);
+    ok("typoHosts: a deletion that starts with a dash is skipped, the others are kept", !sh.includes("-bc.com") && sh.includes("abc.com") && sh.includes("a-c.com") && sh.includes("a-b.com"));
+    ok("typoHosts: a deletion shorter than 2 characters is skipped", !typoHosts("ab.com").some((h) => h.replace(/^www\./, "").split(".")[0].length < 2));
+    ok("typoHosts: capped at 12 and all end in the registrable suffix", typoHosts("a.very-long-main-label.co.uk").length === 12 && typoHosts("a.very-long-main-label.co.uk").every((h) => h.endsWith(".co.uk")));
+    ok("typoHosts: a two-letter label gives just its swap", typoHosts("ab.com").join() === "ba.com,www.ba.com");
+    ok("typoHosts: an IP, a bare label and nothing give none", typoHosts("192.168.0.1").length === 0 && typoHosts("localhost").length === 0 && typoHosts("").length === 0 && typoHosts("[::1]").length === 0);
   }
   const fr = pickAllowedFrames(
     [

@@ -2045,6 +2045,18 @@ const agent = initAgent({
   isFillUrlAllowed,
   isLocalDevHost,
   siteLogins,
+  // usernames only, one lookup per host, never a password
+  probeLoginHosts: async (tabId, hosts) => {
+    /** @type {string[]} */
+    const out = [];
+    for (const h of hosts) {
+      try {
+        const list = await client.getLoginNamesForURL(tabId, `https://${h}/`);
+        if ((list || []).some((/** @type {any} */ l) => !isPasskeyLogin(l))) out.push(h);
+      } catch {}
+    }
+    return out;
+  },
   uniqueByUsername,
   fillLoginOnTab,
   saveLogin: (tabId, url, username, password) => client.saveLogin(tabId, url, username, password, { reportTimeout: true }),
