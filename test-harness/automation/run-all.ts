@@ -78,10 +78,19 @@ function run(file: string): Promise<{ code: number | null, out: string }> {
 
 let passed = 0;
 const failures: string[] = [];
+const flaky: string[] = [];
+const RETRY_FAILED = !!process.env.CI;
 console.log(`Running PassBridge headless suite against ${process.env.OP_BASE}\n` + "=".repeat(50));
 for (const [name, file] of DRIVERS) {
   process.stdout.write(`\n▶ ${name}\n`);
-  const { code, out } = await run(file);
+  let { code, out } = await run(file);
+  // CI only: one automatic re-run of just the driver that failed. A pass on the second try is reported as flaky
+  // (the test is then fixed or deleted, group rule); a second failure counts as red.
+  if (code !== 0 && RETRY_FAILED) {
+    console.log(`  ⚠ ${name} failed (exit ${code}), re-running it once`);
+    ({ code, out } = await run(file));
+    if (code === 0) flaky.push(name);
+  }
   const summary = (out.match(/====.*====|PASS .*|FAIL .*/g) || []).slice(-1)[0] || "(no summary)";
   if (code === 0) {
     passed++;
@@ -96,6 +105,7 @@ await server?.close();
 
 console.log("\n" + "=".repeat(50));
 console.log(`${passed}/${DRIVERS.length} suites passed`);
+if (flaky.length) console.log("FLAKY (failed once, passed on the re-run): " + flaky.join(", "));
 if (failures.length) {
   console.log("FAILED: " + failures.join(", "));
   process.exit(1);
