@@ -19,7 +19,7 @@ const ASKS_FOR_INPUT = ["addLogin", "addCode", "newLoginInPasswords", "createLog
 const OPENS_ONLY = ["settings", "openInPasswords", "searchUserInPasswords", "pmOpen", "passkeysBtn", "checkNow", "viewRelease", "whatsNew"];
 const SAME_IN_EVERY_LANGUAGE = ["extensionName", "menuRoot", "pinPlaceholder", "codePlaceholder", "fieldsSummary"];
 // words that are spelled the same as in English
-const SAME_AS_EN: Record<string, string[]> = { tr: ["colSite"] };
+const SAME_AS_EN: Record<string, string[]> = { tr: ["colSite"], es: ["frameError"] };
 const ZH_ONE_NAME: Record<string, [RegExp, string][]> = { zh_TW: [[/通行金鑰|密碼金鑰/, "通行密鑰"]] };
 
 // every shipped catalog has exactly the en keys and follows the language-neutral copy rules
@@ -91,6 +91,7 @@ for (const [re, rule] of STYLE) {
 ok("normalize: zh-CN and zh map to zh_CN", normalizeLocale("zh-CN") === "zh_CN" && normalizeLocale("zh") === "zh_CN");
 ok("normalize: en-US and en map to en", normalizeLocale("en-US") === "en" && normalizeLocale("en") === "en");
 ok("normalize: tr and tr-TR map to tr", normalizeLocale("tr") === "tr" && normalizeLocale("tr-TR") === "tr");
+ok("normalize: es, es-ES and es-419 map to es", normalizeLocale("es") === "es" && normalizeLocale("es-ES") === "es" && normalizeLocale("es-419") === "es");
 ok("normalize: an unsupported language is null", normalizeLocale("fr") === null && normalizeLocale("pt-BR") === null);
 ok("normalize: empty or garbage is null", normalizeLocale("") === null && normalizeLocale(undefined) === null);
 ok("resolveLocale falls back to en without chrome", await resolveLocale() === "en");
@@ -136,6 +137,26 @@ ok("tr: passkeys keep Apple's name", tr.passkeys.message === "Geçiş anahtarlar
 ok("tr: iCloud Passwords keeps Apple's name", tr.connectingApple.message.includes("iCloud Parolaları"));
 ok("tr: the Passwords app keeps Apple's name", tr.noHelperMac.message.includes("Parolalar uygulaması"));
 ok("tr: iCloud for Windows keeps Apple's name", tr.noHelperWin.message.includes("Windows için iCloud"));
+ok("es: picker shows its own name", LOCALE_NAMES.es === "Español");
+const es = JSON.parse(readFileSync(new URL("../../_locales/es/messages.json", import.meta.url), "utf8"));
+const esEntries = Object.entries<{ message: string }>(es);
+const esKeysWhere = (test: (message: string) => boolean) => esEntries.filter(([, v]) => test(v.message)).map(([k]) => k);
+setLocale("es");
+ok("t: es value", t("unlock") === "Desbloquear");
+ok("t: es placeholder filled", t("menuFillName", ["ada@example.com"]) === "Rellenar ada@example.com");
+ok("es: most messages are actually translated", esEntries.filter(([k, v]) => v.message !== en[k].message).length >= Object.keys(en).length * 0.9);
+const esLostSlots = Object.keys(en).filter((k) => slots(en[k].message) !== slots(es[k].message));
+ok("es: every $N slot kept", esLostSlots.length === 0, esLostSlots.join(", ") || undefined);
+ok("es: no exclamation marks, opening ¡ included", esKeysWhere((m) => /[!¡]/.test(m)).length === 0);
+ok("es: every ¿ has its ?", esKeysWhere((m) => (m.match(/¿/g) || []).length !== (m.match(/\?/g) || []).length).length === 0);
+ok("es: the pairing code is the unlock code", unlockCodeKeys.every((k) => es[k].message.toLowerCase().includes("código de desbloqueo")));
+ok("es: the pairing code is never the verification code", unlockCodeKeys.every((k) => !es[k].message.toLowerCase().includes("código de verificación")));
+ok("es: verification code keeps Apple's name", es.codeTotp.message === "Código de verificación");
+ok("es: passkeys keep Apple's name", es.passkeys.message === "Llaves de acceso");
+ok("es: iCloud Passwords keeps Apple's name", es.connectingApple.message.includes("Contraseñas de iCloud"));
+ok("es: the Passwords app keeps Apple's name", es.noHelperMac.message.includes("app Contraseñas"));
+ok("es: iCloud for Windows keeps Apple's name", es.noHelperWin.message.includes("iCloud para Windows"));
+ok("es: the description fits the manifest's 132 characters", es.extensionDescription.message.length <= 132);
 setLocale((null as any));
 ok("t: unresolved locale falls back to en", t("unlock") === "Unlock");
 
@@ -192,6 +213,8 @@ setLocale("zh_CN");
 ok("errorText: a known message reads in zh_CN", errorText("This file is not JSON.") === t("err_notJson") && errorText("This file is not JSON.") !== "This file is not JSON.");
 setLocale("tr");
 ok("errorText: a known message reads in tr", errorText("not unlocked") === t("err_notUnlocked") && errorText("not unlocked") !== "not unlocked");
+setLocale("es");
+ok("errorText: a known message reads in es", errorText("not unlocked") === t("err_notUnlocked") && errorText("not unlocked") !== "not unlocked");
 setLocale("en");
 ok("errorText: a known message reads as the plain en text", errorText("This file is not JSON.") === "This file is not JSON." && errorText("no frame") === en.err_noFrame.message);
 setLocale("zh_CN");
