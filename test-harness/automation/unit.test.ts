@@ -1033,7 +1033,7 @@ const NOW = Date.UTC(2026, 9, 25);
   const content = readFileSync(new URL("../../src/content.js", import.meta.url), "utf8");
   ok("managed: content.js does not import managed.js", !/managed\.js/.test(content));
   const opts = readFileSync(new URL("../../src/ui/options.jsx", import.meta.url), "utf8");
-  ok("managed: the options page saves only the changed key and never writes the clamped copy", /function persist\(partial\) \{\n    setSettings\(\(s\) => \(\{ \.\.\.s, \.\.\.partial \}\)\);\n    queueSettings\(partial\);/.test(opts) && !/settingsStore\(\)\.set\(shown/.test(opts));
+  ok("managed: the options page saves only the changed key and never writes the clamped copy", /function persist\(partial\) \{\r?\n    setSettings\(\(s\) => \(\{ \.\.\.s, \.\.\.partial \}\)\);\r?\n    queueSettings\(partial\);/.test(opts) && !/settingsStore\(\)\.set\(shown/.test(opts));
 }
 {
   const env = fakeUpdateEnv({}, (new Error("offline") as any));

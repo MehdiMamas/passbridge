@@ -1,0 +1,8 @@
+# Runs before every push. Install once per clone: pnpm exec lefthook install
+pre-push:
+  parallel: false
+  commands:
+    typecheck:
+      run: pnpm typecheck
+    unit:
+      run: pnpm test:unit

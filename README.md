@@ -84,3 +84,6 @@ Contributors:
 See [NOTICE](NOTICE). License: GPL-3.0, see [LICENSE](LICENSE).
 
 "Apple", "iCloud", and "Passwords" are trademarks of Apple Inc. "Bitwarden" is a trademark of Bitwarden Inc.
+
+## Development
+Run `pnpm exec lefthook install` once per clone. It adds a pre-push hook that runs `pnpm typecheck` and `pnpm test:unit` (about 30 seconds). Build and test details are in `AGENTS.md`.
