@@ -12,7 +12,7 @@ import { orderByPageUsername, usernameMatchesPage } from "../../src/session/user
 import { canAutoSave, newPasswordContext, pickSaveTarget, tryAutoSave } from "../../src/save-target.js";
 import { confirmLoginAdded, useNewLoginSheet } from "../../src/session/add-login-check.js";
 import { frameUrlsFor } from "../../src/session/frame-urls.js";
-import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, handleUserCode, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAllowedFrames, relayEvent, sanitizeReply, typoHosts } from "../../src/agent.js";
+import { agentSaveAllowed, createLimiter, initAgent, isCodeHost, pickCodeFrames, handleAgentRequest, handleUserCode, logEntry, hostAllowed, loginSavedFor, onSiteOrSubdomain, pickAgentCode, pickAllowedFrames, relayEvent, sanitizeReply, typoHosts } from "../../src/agent.js";
 import { reportIssueUrl, reportText, scrubAttr, scrubText, scrubUrl } from "../../src/report-scrub.js";
 import { UPDATE_CHECK_MS, availableUpdate, checkForUpdate, dismissUpdate, isNewerVersion, markUpdatedTo, takeUpdatedTo } from "../../src/update/check.js";
 import { REPLACED_EVENT, createLifecycle, isInvalidated, reinjectContentScripts } from "../../src/reload-recovery.js";
@@ -936,6 +936,19 @@ ok("agent: an empty allowlist refuses everything", !hostAllowed("github.com", []
 
   ok("site helpers: onSiteOrSubdomain", onSiteOrSubdomain("a.b.com", "b.com") && onSiteOrSubdomain("b.com", "b.com") && !onSiteOrSubdomain("ab.com", "b.com") && !onSiteOrSubdomain("a.com", "com") && onSiteOrSubdomain("localhost", "localhost"));
   ok("site helpers: loginSavedFor", loginSavedFor("x.org", ["https://www.x.org/"]) && loginSavedFor("sub.x.org", ["x.org"]) && !loginSavedFor("x.org", ["evilx.org"]) && !loginSavedFor("x.org", []) && !loginSavedFor("x.org", undefined) && !loginSavedFor("www.x.org", ["y.org"]));
+  {
+    const totp = (domain: string, username: string) => ({ source: "totp", domain, username });
+    const msg = (domain?: string, code = "123456") => ({ source: "messages", domain, code });
+    const pick = (...a: Parameters<typeof pickAgentCode>): any => pickAgentCode(...a);
+    ok("agent code: a totp for the parent site is picked", pick([totp("WWW.GitHub.com", "a")], "gist.github.com").totp?.username === "a");
+    ok("agent code: two totps and no username asks which", pick([totp("x.org", "a"), totp("x.org", "b")], "x.org").error === "several_codes");
+    ok("agent code: the username picks among totps", pick([totp("x.org", "a"), totp("x.org", "b")], "x.org", "b").totp?.username === "b");
+    ok("agent code: a username with no totp is no_code", pick([totp("x.org", "a")], "x.org", "c").error === "no_code");
+    ok("agent code: a totp for another site is not used", pick([totp("y.org", "a"), msg("y.org")], "x.org").error === "no_code");
+    ok("agent code: a message code for this site is used", pick([msg("x.org", "654321")], "login.x.org").code === "654321");
+    ok("agent code: a message code that names no site is not used", pick([msg(""), msg(undefined)], "x.org").error === "no_code");
+    ok("agent code: a totp with no site is not used", pick([totp("", "a")], "x.org").error === "no_code");
+  }
 }
 ok("update: a higher release tag is newer", isNewerVersion("v1.4.0", "1.3.1") && isNewerVersion("1.3.10", "1.3.9"));
 ok("update: the same or an older release is not newer", !isNewerVersion("v1.3.1", "1.3.1") && !isNewerVersion("1.3", "1.3.0") && !isNewerVersion("v1.2.9", "1.3.0"));
@@ -1090,7 +1103,7 @@ const NOW = Date.UTC(2026, 9, 25);
   const content = readFileSync(new URL("../../src/content.js", import.meta.url), "utf8");
   ok("managed: content.js does not import managed.js", !/managed\.js/.test(content));
   const opts = readFileSync(new URL("../../src/ui/options.jsx", import.meta.url), "utf8");
-  ok("managed: the options page saves only the changed key and never writes the clamped copy", /function persist\(partial\) \{\n    setSettings\(\(s\) => \(\{ \.\.\.s, \.\.\.partial \}\)\);\n    queueSettings\(partial\);/.test(opts) && !/settingsStore\(\)\.set\(shown/.test(opts));
+  ok("managed: the options page saves only the changed key and never writes the clamped copy", /function persist\(partial\) \{\r?\n    setSettings\(\(s\) => \(\{ \.\.\.s, \.\.\.partial \}\)\);\r?\n    queueSettings\(partial\);/.test(opts) && !/settingsStore\(\)\.set\(shown/.test(opts));
 }
 {
   const env = fakeUpdateEnv({}, (new Error("offline") as any));
